@@ -234,51 +234,50 @@ onHideKeyboard = {
                                 keyTextColor = keyTextColor,
                                 specialKeyBackgroundColor = specialKeyBgColor,
                                 showBottomButtons = showBottomButtons,
-onHideKeyboard = {
-                        onHideKeyboard?.invoke()
-                        keyboardMode = KeyboardMode.FULL
-                        showMenu = false
-                        showCandidatePage = false
-                        showClipboard = false
-                        showEmoji = false
-                        isShifted = false
-                        
-                    },
+                                onHideKeyboard = {
+                                    onHideKeyboard?.invoke()
+                                    keyboardMode = KeyboardMode.FULL
+                                    showMenu = false
+                                    showCandidatePage = false
+                                    showClipboard = false
+                                    showEmoji = false
+                                    isShifted = false
+                                },
                                 onSwitchKeyboard = onSwitchKeyboard,
                                 onKeyPressDown = onKeyPressDown
                             )
                         }
                         KeyboardMode.NUMBER -> {
-                            NumberKeyboardLayout(
-                                onKeyPress = { key ->
-                                    when (key) {
-                                        "abc" -> keyboardMode = KeyboardMode.FULL
-                                        "symbol" -> keyboardMode = KeyboardMode.SYMBOL
-                                        "emoji" -> showEmoji = true
-                                        else -> onKeyPress(key, false)
-                                    }
-                                },
-                                keyBackgroundColor = keyBgColor,
-                                keyTextColor = keyTextColor,
-                                specialKeyBackgroundColor = specialKeyBgColor,
-                                onKeyPressDown = onKeyPressDown
-                            )
-                        }
-                        KeyboardMode.SYMBOL -> {
-                            SymbolKeyboardLayout(
-                                onKeyPress = { key ->
-                                    when (key) {
-                                        "abc" -> keyboardMode = KeyboardMode.FULL
-                                        "123" -> keyboardMode = KeyboardMode.NUMBER
-                                        else -> onKeyPress(key, false)
-                                    }
-                                },
-                                keyBackgroundColor = keyBgColor,
-                                keyTextColor = keyTextColor,
-                                specialKeyBackgroundColor = specialKeyBgColor,
-                                onKeyPressDown = onKeyPressDown
-                            )
-                        }
+                                NumberKeyboardLayout(
+                                    onKeyPress = { key ->
+                                        when (key) {
+                                            "abc" -> keyboardMode = KeyboardMode.FULL
+                                            "symbol" -> keyboardMode = KeyboardMode.SYMBOL
+                                            "emoji" -> showEmoji = true
+                                            else -> onKeyPress(key, false)
+                                        }
+                                    },
+                                    keyBackgroundColor = keyBgColor,
+                                    keyTextColor = keyTextColor,
+                                    specialKeyBackgroundColor = specialKeyBgColor,
+                                    onKeyPressDown = onKeyPressDown
+                                )
+                            }
+                            KeyboardMode.SYMBOL -> {
+                                SymbolKeyboardLayout(
+                                    onKeyPress = { key ->
+                                        when (key) {
+                                            "abc" -> keyboardMode = KeyboardMode.FULL
+                                            "123" -> keyboardMode = KeyboardMode.NUMBER
+                                            else -> onKeyPress(key, false)
+                                        }
+                                    },
+                                    keyBackgroundColor = keyBgColor,
+                                    keyTextColor = keyTextColor,
+                                    specialKeyBackgroundColor = specialKeyBgColor,
+                                    onKeyPressDown = onKeyPressDown
+                                )
+                            }
                     }
                 }
             }
