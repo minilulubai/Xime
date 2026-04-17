@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.kingzcheung.kime.clipboard.ClipboardItem
+import com.kingzcheung.kime.plugin.api.RecognitionState
 import com.kingzcheung.kime.ui.theme.CandidateBarBackground
 import com.kingzcheung.kime.ui.theme.CandidateBarBackgroundDark
 import com.kingzcheung.kime.ui.theme.CandidateTextColor
@@ -65,6 +66,9 @@ fun KeyboardView(
     voiceLeftActive: Boolean = false,
     voiceRightActive: Boolean = false,
     onVoiceModeChange: ((Boolean) -> Unit)? = null,
+    voicePluginName: String = "",
+    voiceRecognitionState: RecognitionState = RecognitionState.IDLE,
+    voiceRecognizedText: String = "",
     modifier: Modifier = Modifier
 ) {
     var isShifted by remember { mutableStateOf(false) }
@@ -145,7 +149,10 @@ onHideKeyboard = {
                         modifier = Modifier.weight(1f),
                         bottomActive = voiceBottomActive,
                         leftActive = voiceLeftActive,
-                        rightActive = voiceRightActive
+                        rightActive = voiceRightActive,
+                        pluginName = voicePluginName,
+                        recognitionState = voiceRecognitionState,
+                        recognizedText = voiceRecognizedText
                     )
                 }
                 showMenu -> {
