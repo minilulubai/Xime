@@ -24,7 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kingzcheung.kime.plugin.api.RecognitionState
 import kotlin.math.sqrt
 
 @Composable
@@ -52,9 +56,12 @@ fun VoiceKeyboardLayout(
     modifier: Modifier = Modifier,
     bottomActive: Boolean = false,
     leftActive: Boolean = false,
-    rightActive: Boolean = false
+    rightActive: Boolean = false,
+    pluginName: String = "",
+    recognitionState: RecognitionState = RecognitionState.IDLE,
+    recognizedText: String = ""
 ) {
-    val inactiveColor = Color.Gray.copy(alpha = 0.5f)  // 灰色背景+透明度
+    val inactiveColor = Color.Gray.copy(alpha = 0.5f)
     
     Column(
         modifier = modifier
@@ -62,7 +69,6 @@ fun VoiceKeyboardLayout(
             .background(specialKeyBackgroundColor.copy(alpha = 0.3f)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 顶部：语音可视化区域
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -73,30 +79,71 @@ fun VoiceKeyboardLayout(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 音频频谱动画
+                if (pluginName.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "语音",
+                            tint = keyTextColor.copy(alpha = 0.6f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = pluginName,
+                            color = keyTextColor.copy(alpha = 0.6f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                }
+                
                 AudioSpectrumAnimation(
-                    modifier = Modifier.size(120.dp, 80.dp)
+                    modifier = Modifier.size(120.dp, 80.dp),
+                    isActive = recognitionState == RecognitionState.LISTENING || 
+                               recognitionState == RecognitionState.PROCESSING
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
+                val statusText = when (recognitionState) {
+                    RecognitionState.IDLE -> "点击开始说话"
+                    RecognitionState.LISTENING -> "正在聆听..."
+                    RecognitionState.PROCESSING -> "正在识别..."
+                    RecognitionState.ERROR -> "识别出错"
+                }
+                
                 Text(
-                    text = "正在聆听...",
+                    text = statusText,
                     color = keyTextColor.copy(alpha = 0.8f),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center
                 )
+                
+                if (recognizedText.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = recognizedText,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
             }
         }
         
-// 中间：左右两个等边三角形按钮（中间角是大圆角）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp)
         ) {
-// 左按钮：等边三角形，左侧垂直边贴合左边缘，中间角大圆角
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -141,7 +188,6 @@ fun VoiceKeyboardLayout(
                     )
                 }
                 
-                // 文本标签（放在三角形中心偏左位置）
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -157,7 +203,6 @@ fun VoiceKeyboardLayout(
                 }
             }
             
-            // 右按钮：等边三角形，右侧垂直边贴合右边缘，中间角大圆角
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -201,7 +246,6 @@ fun VoiceKeyboardLayout(
                     )
                 }
                 
-                // 文本标签（放在三角形中心偏右位置）
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -218,7 +262,6 @@ fun VoiceKeyboardLayout(
             }
         }
         
-        // 底部按钮 Canvas（独立）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -249,15 +292,14 @@ fun VoiceKeyboardLayout(
                     close()
                 }
                 
-                // 渐变：从弧形顶部（白色/浅灰色 80%透明）到完全透明（底部边缘）
                 val baseColor = if (bottomActive) Color.White else inactiveColor
                 drawPath(
                     path = bottomPath,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            baseColor.copy(alpha = 0.8f),  // 顶部：80%透明
-                            baseColor.copy(alpha = 0.5f),  // 中间：50%透明
-                            baseColor.copy(alpha = 0.0f)   // 底部边缘：完全透明
+                            baseColor.copy(alpha = 0.8f),
+                            baseColor.copy(alpha = 0.5f),
+                            baseColor.copy(alpha = 0.0f)
                         ),
                         startY = 0f,
                         endY = canvasHeight
@@ -279,7 +321,8 @@ fun VoiceKeyboardLayout(
 
 @Composable
 fun AudioSpectrumAnimation(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isActive: Boolean = true
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "spectrum")
     
@@ -290,7 +333,7 @@ fun AudioSpectrumAnimation(
             targetValue = 0.8f - index * 0.03f,
             animationSpec = infiniteRepeatable(
                 animation = tween(
-                    durationMillis = 300 + index * 50,
+                    durationMillis = if (isActive) 300 + index * 50 else 1000,
                     easing = FastOutSlowInEasing
                 ),
                 repeatMode = RepeatMode.Reverse
@@ -300,13 +343,13 @@ fun AudioSpectrumAnimation(
     }
     
     val colors = listOf(
-        Color(0xFFFF6B6B),  // 红
-        Color(0xFFFF9F43),  // 橙
-        Color(0xFFFFEAA7),  // 黄
-        Color(0xFF55EFC4),  // 绿
-        Color(0xFF54A0FF),  // 蓝
-        Color(0xFF5F27CD),  // 紫
-        Color(0xFFFF6B6B),  // 红（循环）
+        Color(0xFFFF6B6B),
+        Color(0xFFFF9F43),
+        Color(0xFFFFEAA7),
+        Color(0xFF55EFC4),
+        Color(0xFF54A0FF),
+        Color(0xFF5F27CD),
+        Color(0xFFFF6B6B),
     )
     
     Canvas(modifier = modifier) {
@@ -316,13 +359,13 @@ fun AudioSpectrumAnimation(
         
         animations.forEachIndexed { index, animatable ->
             val animatedHeight by animatable
-            val barHeight = maxHeight * animatedHeight
+            val barHeight = maxHeight * (if (isActive) animatedHeight else 0.2f)
             
             val x = spacing + index * (barWidth + spacing)
             val y = (maxHeight - barHeight) / 2f
             
             drawRoundRect(
-                color = colors[index].copy(alpha = 0.7f + animatedHeight * 0.3f),
+                color = colors[index].copy(alpha = if (isActive) 0.7f + animatedHeight * 0.3f else 0.3f),
                 topLeft = Offset(x, y),
                 size = Size(barWidth, barHeight),
                 cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)

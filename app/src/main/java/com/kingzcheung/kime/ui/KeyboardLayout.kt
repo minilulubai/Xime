@@ -279,26 +279,28 @@ fun KeyboardLayout(
                                         Toast.makeText(context, "需要麦克风权限才能使用语音输入", Toast.LENGTH_SHORT).show()
                                         PermissionHelper.requestRecordAudioPermission(context)
                                     } else {
+                                        // 进入语音模式，VoiceKeyboardContainer 会处理录音
                                         isVoiceMode = true
                                         onVoiceModeChange?.invoke(true)
                                     }
                                 }
                                 
                                 // 等待手指抬起或取消
-                                val up = waitForUpOrCancellation()
+                                try {
+                                    waitForUpOrCancellation()
+                                } catch (e: Exception) {
+                                    // 手势取消
+                                }
                                 
                                 // 取消长按检测
                                 longPressJob.cancel()
                                 
                                 // 处理结果
-                                if (longPressTriggered && PermissionHelper.hasRecordAudioPermission(context)) {
-                                    // 长按触发后手指抬起，关闭语音模式
-                                    isVoiceMode = false
-                                    onVoiceModeChange?.invoke(false)
-                                } else if (!longPressTriggered) {
+                                if (!longPressTriggered) {
                                     // 普通点击
                                     onKeyPress("space")
                                 }
+                                // 长按触发后：VoiceKeyboardContainer 处理手指抬起停止录音
                             }
                         },
                     contentAlignment = Alignment.Center

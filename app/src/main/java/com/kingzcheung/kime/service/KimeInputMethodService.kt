@@ -52,6 +52,8 @@ import com.kingzcheung.kime.ui.KeysConfigHelper
 import com.kingzcheung.kime.ui.theme.KimeTheme
 import com.kingzcheung.kime.ui.KeyboardView
 import com.kingzcheung.kime.plugin.ExtensionManager
+import com.kingzcheung.kime.plugin.api.RecognitionState
+import com.kingzcheung.kime.speech.SpeechRecognitionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -73,7 +75,10 @@ data class InputUIState(
     val associationCandidates: Array<String> = emptyArray(),
     val associationEnabled: Boolean = false,
     val isVoiceMode: Boolean = false,
-    val voiceButtonState: VoiceButtonState = VoiceButtonState()
+    val voiceButtonState: VoiceButtonState = VoiceButtonState(),
+    val voicePluginName: String = "",
+    val voiceRecognitionState: RecognitionState = RecognitionState.IDLE,
+    val voiceRecognizedText: String = ""
 )
 
 data class VoiceButtonState(
@@ -125,20 +130,40 @@ class KimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     // 语音模式长按检测
     private var voiceLongPressTriggered = false
     private var isTrackingVoiceButtons = false  // 是否在跟踪语音按钮状态
+    private var voiceRecordingStarted = false   // 录音是否已开始
     private val voiceLongPressHandler = Handler(Looper.getMainLooper())
     private val voiceLongPressRunnable = Runnable {
         voiceLongPressTriggered = true
-        isTrackingVoiceButtons = true  // 长按触发后开始跟踪按钮
-        Log.d("VoiceButtons", "Long press triggered! Setting isVoiceMode=true, bottomActive=true, isTrackingButtons=true")
+        Log.d("VoiceButtons", "Space key long press triggered!")
+        
+        // 进入语音模式，开始录音
         uiState.value = uiState.value.copy(
             isVoiceMode = true,
-            voiceButtonState = VoiceButtonState(bottomActive = true)
+            voiceButtonState = VoiceButtonState(),
+            voiceRecognizedText = ""
         )
         performVibration()
+        
+        // 开始录音
+        if (::speechRecognitionManager.isInitialized) {
+            val started = speechRecognitionManager.startRecognition()
+            Log.d("VoiceButtons", "Speech recognition started: $started")
+            voiceRecordingStarted = started
+            if (!started) {
+                Log.e(TAG, "Failed to start speech recognition")
+                uiState.value = uiState.value.copy(
+                    isVoiceMode = false,
+                    voiceRecognitionState = RecognitionState.ERROR
+                )
+            }
+        }
     }
     
     // 最近上屏的文本（用于联想）
     private var lastCommittedText = ""
+    
+    // 语音识别管理器
+    private lateinit var speechRecognitionManager: SpeechRecognitionManager
     
     // 音频和振动
     private val audioManager: AudioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
@@ -238,8 +263,64 @@ override fun onCreate() {
         initRimeEngine()
         initClipboardManager()
         initAssociationEngine()
+        initSpeechRecognition()
         
         FileLogger.i(TAG, "Service initialization completed")
+    }
+    
+    /**
+     * 初始化语音识别系统
+     */
+    private fun initSpeechRecognition() {
+        FileLogger.i(TAG, "Initializing speech recognition system")
+        
+        speechRecognitionManager = SpeechRecognitionManager(this)
+        
+        speechRecognitionManager.setCallbacks(
+            onResult = { text ->
+                handleSpeechResult(text)
+            },
+            onStateChange = { state ->
+                handleSpeechStateChange(state)
+            },
+            onError = { error ->
+                handleSpeechError(error)
+            }
+        )
+        
+        val plugins = speechRecognitionManager.getAvailablePlugins()
+        if (plugins.isNotEmpty()) {
+            val firstPlugin = plugins.first()
+            uiState.value = uiState.value.copy(voicePluginName = firstPlugin.name)
+            speechRecognitionManager.setCurrentPlugin(firstPlugin)
+            FileLogger.i(TAG, "Speech plugin available: ${firstPlugin.name}")
+        } else {
+            FileLogger.w(TAG, "No speech plugins available")
+        }
+    }
+    
+    private fun handleSpeechResult(text: String) {
+        Log.d(TAG, "Speech result: $text")
+        
+        if (text.isNotEmpty() && !text.startsWith("错误:")) {
+            currentInputConnection?.commitText(text, 1)
+            lastCommittedText = text
+            uiState.value = uiState.value.copy(voiceRecognizedText = text)
+        }
+    }
+    
+    private fun handleSpeechStateChange(state: RecognitionState) {
+        Log.d(TAG, "Speech state changed: $state")
+        uiState.value = uiState.value.copy(voiceRecognitionState = state)
+    }
+    
+    private fun handleSpeechError(error: String) {
+        Log.e(TAG, "Speech error: $error")
+        android.widget.Toast.makeText(this, error, android.widget.Toast.LENGTH_SHORT).show()
+        uiState.value = uiState.value.copy(
+            voiceRecognitionState = RecognitionState.ERROR,
+            voiceRecognizedText = ""
+        )
     }
     
 /**
@@ -396,6 +477,9 @@ private fun getPredictionFromPlugin(contextText: String) {
                             voiceBottomActive = state.voiceButtonState.bottomActive,
                             voiceLeftActive = state.voiceButtonState.leftActive,
                             voiceRightActive = state.voiceButtonState.rightActive,
+                            voicePluginName = state.voicePluginName,
+                            voiceRecognitionState = state.voiceRecognitionState,
+                            voiceRecognizedText = state.voiceRecognizedText,
                             onKeyPress = { key, isShifted ->
                                 handleKeyPress(key, isShifted)
                             },
@@ -475,12 +559,30 @@ private fun getPredictionFromPlugin(contextText: String) {
                                 }
                             },
                             onVoiceModeChange = { enabled ->
+                                Log.d("VoiceButtons", "onVoiceModeChange called: enabled=$enabled")
                                 uiState.value = uiState.value.copy(
                                     isVoiceMode = enabled,
-                                    voiceButtonState = if (enabled) VoiceButtonState(bottomActive = true) else VoiceButtonState()
+                                    voiceButtonState = if (enabled) VoiceButtonState(bottomActive = true) else VoiceButtonState(),
+                                    voiceRecognizedText = ""
                                 )
                                 if (enabled) {
                                     performVibration()
+                                    // 空格键长按触发，立即开始录音
+                                    if (::speechRecognitionManager.isInitialized) {
+                                        Log.d("VoiceButtons", "Starting speech recognition from onVoiceModeChange")
+                                        val started = speechRecognitionManager.startRecognition()
+                                        voiceRecordingStarted = started
+                                        Log.d("VoiceButtons", "Speech recognition started: $started")
+                                        if (!started) {
+                                            Log.e(TAG, "Failed to start speech recognition")
+                                            uiState.value = uiState.value.copy(
+                                                isVoiceMode = false,
+                                                voiceRecognitionState = RecognitionState.ERROR
+                                            )
+                                        }
+                                    } else {
+                                        Log.e(TAG, "speechRecognitionManager not initialized")
+                                    }
                                 }
                             }
                         )
@@ -510,113 +612,83 @@ private fun getPredictionFromPlugin(contextText: String) {
                         Log.d("VoiceButtons", "DOWN: isVoiceMode=$isVoiceMode, x=${it.x}, y=${it.y}")
                         
                         if (isVoiceMode) {
-                            // 语音键盘：检测弧形按钮区域（底部约 40% 区域）
+                            // 语音键盘已激活，检测底部区域按压
                             val yThreshold = height * 0.6f
                             
                             if (it.y > yThreshold) {
-                                isPressing = true
                                 isTrackingVoiceButtons = true
-                                isLongPressWaiting = true
-                                voiceLongPressTriggered = false
-                                voiceLongPressHandler.postDelayed(voiceLongPressRunnable, 400)
-                                // 底部按钮激活
                                 uiState.value = uiState.value.copy(
                                     voiceButtonState = VoiceButtonState(bottomActive = true)
                                 )
-                                Log.d("VoiceButtons", "DOWN in voice mode: setting bottomActive=true, isTrackingButtons=true")
+                                Log.d("VoiceButtons", "Pressed bottom area in voice mode")
                             }
-                        } else {
-                            // 普通键盘：不再在这里检测长按
-                            // 空格键的长按检测由 KeyboardLayout 内部处理
-                            // 这样可以精确只检测空格键区域，避免其他区域误触发
                         }
+                        // 普通键盘的空格键长按由 KeyboardLayout 处理
                     }
+                    
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                        val currentIsVoiceMode = uiState.value.isVoiceMode
+                        Log.d("VoiceButtons", "UP: isVoiceMode=${uiState.value.isVoiceMode}, voiceRecordingStarted=$voiceRecordingStarted")
                         
-                        if (voiceLongPressTriggered || currentIsVoiceMode) {
+                        // 如果正在录音，停止录音并退出语音模式
+                        if (voiceRecordingStarted && uiState.value.isVoiceMode) {
+                            Log.d("VoiceButtons", "Stopping recording and exiting voice mode")
+                            
+                            if (::speechRecognitionManager.isInitialized) {
+                                speechRecognitionManager.stopRecognition()
+                            }
+                            
+                            voiceRecordingStarted = false
                             voiceLongPressTriggered = false
-                            uiState.value = uiState.value.copy(
-                                isVoiceMode = false,
-                                voiceButtonState = VoiceButtonState()
-                            )
-                            // 处理按钮点击
+                            
+                            // 处理按钮操作
                             val state = uiState.value.voiceButtonState
                             if (state.leftActive) {
-                                // 撤回操作
                                 performUndo()
                             } else if (state.rightActive) {
-                                // 搜索操作
                                 performSearch()
                             }
-                        } else {
-                            // 重置所有按钮状态
+                            
                             uiState.value = uiState.value.copy(
-                                voiceButtonState = VoiceButtonState()
+                                isVoiceMode = false,
+                                voiceButtonState = VoiceButtonState(),
+                                voiceRecognitionState = RecognitionState.IDLE
                             )
                         }
-                        isPressing = false
-                        isLongPressWaiting = false
+                        
                         isTrackingVoiceButtons = false
                     }
+                    
                     MotionEvent.ACTION_MOVE -> {
                         val isVoiceMode = uiState.value.isVoiceMode
                         
                         if (isVoiceMode && isTrackingVoiceButtons) {
-                            // 语音键盘：始终跟踪手指位置，不受 isLongPressWaiting 限制
                             val yThreshold = height * 0.6f
                             val leftButtonEnd = width / 2f - width * 0.04f
                             val rightButtonStart = width / 2f + width * 0.04f
                             
-                            Log.d("VoiceButtons", "MOVE: x=${it.x}, y=${it.y}, yThreshold=$yThreshold, leftEnd=$leftButtonEnd, rightStart=$rightButtonStart")
-                            
                             if (it.y > yThreshold) {
-                                // 在底部按钮区域
-                                Log.d("VoiceButtons", "Setting bottomActive=true")
+                                // 底部区域 - 继续录音
                                 uiState.value = uiState.value.copy(
                                     voiceButtonState = VoiceButtonState(bottomActive = true)
                                 )
-                                // 重新开始长按等待（如果之前被取消了）
-                                if (!isLongPressWaiting && !voiceLongPressTriggered) {
-                                    isLongPressWaiting = true
-                                    voiceLongPressHandler.postDelayed(voiceLongPressRunnable, 400)
-                                }
                             } else if (it.x < leftButtonEnd) {
-                                // 在左按钮区域
-                                Log.d("VoiceButtons", "Setting leftActive=true")
+                                // 左按钮 - 撤回（停止录音并删除最后输入）
                                 uiState.value = uiState.value.copy(
                                     voiceButtonState = VoiceButtonState(leftActive = true)
                                 )
-                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                                isLongPressWaiting = false
                             } else if (it.x > rightButtonStart) {
-                                // 在右按钮区域
-                                Log.d("VoiceButtons", "Setting rightActive=true")
+                                // 右按钮 - 搜索（停止录音并发送 Enter）
                                 uiState.value = uiState.value.copy(
                                     voiceButtonState = VoiceButtonState(rightActive = true)
                                 )
-                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                                isLongPressWaiting = false
                             } else {
-                                // 在中间间隙区域，所有按钮都不激活
-                                Log.d("VoiceButtons", "Setting all inactive")
+                                // 中间区域
                                 uiState.value = uiState.value.copy(
                                     voiceButtonState = VoiceButtonState()
                                 )
-                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                                isLongPressWaiting = false
                             }
-                        } else if (!isVoiceMode && isLongPressWaiting) {
-                            // 普通键盘：检测是否移出空格键区域
-                            val yThreshold = height * 0.75f
-                            val xStart = width * 0.18f
-                            val xEnd = width * 0.82f
                             
-                            if (it.y < yThreshold || it.x < xStart || it.x > xEnd) {
-                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                                isLongPressWaiting = false
-                            }
+                            Log.d("VoiceButtons", "MOVE: bottom=${uiState.value.voiceButtonState.bottomActive}, left=${uiState.value.voiceButtonState.leftActive}, right=${uiState.value.voiceButtonState.rightActive}")
                         }
                     }
                 }
@@ -690,6 +762,9 @@ private fun getPredictionFromPlugin(contextText: String) {
     override fun onDestroy() {
         super.onDestroy()
         rimeEngine.destroy()
+        if (::speechRecognitionManager.isInitialized) {
+            speechRecognitionManager.release()
+        }
         ExtensionManager.release()
         serviceScope.cancel()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
