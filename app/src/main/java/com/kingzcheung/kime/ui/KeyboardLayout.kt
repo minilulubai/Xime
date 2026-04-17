@@ -1,5 +1,6 @@
 package com.kingzcheung.kime.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -45,6 +46,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kingzcheung.kime.util.PermissionHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -271,8 +273,15 @@ fun KeyboardLayout(
                                 val longPressJob = scope.launch {
                                     delay(400)
                                     longPressTriggered = true
-                                    isVoiceMode = true
-                                    onVoiceModeChange?.invoke(true)
+                                    
+                                    // 检查麦克风权限
+                                    if (!PermissionHelper.hasRecordAudioPermission(context)) {
+                                        Toast.makeText(context, "需要麦克风权限才能使用语音输入", Toast.LENGTH_SHORT).show()
+                                        PermissionHelper.requestRecordAudioPermission(context)
+                                    } else {
+                                        isVoiceMode = true
+                                        onVoiceModeChange?.invoke(true)
+                                    }
                                 }
                                 
                                 // 等待手指抬起或取消
@@ -282,11 +291,11 @@ fun KeyboardLayout(
                                 longPressJob.cancel()
                                 
                                 // 处理结果
-                                if (longPressTriggered) {
+                                if (longPressTriggered && PermissionHelper.hasRecordAudioPermission(context)) {
                                     // 长按触发后手指抬起，关闭语音模式
                                     isVoiceMode = false
                                     onVoiceModeChange?.invoke(false)
-                                } else {
+                                } else if (!longPressTriggered) {
                                     // 普通点击
                                     onKeyPress("space")
                                 }
