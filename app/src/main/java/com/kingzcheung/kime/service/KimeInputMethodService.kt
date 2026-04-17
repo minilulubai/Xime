@@ -72,7 +72,14 @@ data class InputUIState(
     val showBottomButtons: Boolean = false,
     val associationCandidates: Array<String> = emptyArray(),
     val associationEnabled: Boolean = false,
-    val isVoiceMode: Boolean = false
+    val isVoiceMode: Boolean = false,
+    val voiceButtonState: VoiceButtonState = VoiceButtonState()
+)
+
+data class VoiceButtonState(
+    val bottomActive: Boolean = false,  // 底部按钮是否激活（白色）
+    val leftActive: Boolean = false,    // 左按钮是否激活（白色）
+    val rightActive: Boolean = false    // 右按钮是否激活（白色）
 )
 
 /**
@@ -117,10 +124,16 @@ class KimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     
     // 语音模式长按检测
     private var voiceLongPressTriggered = false
+    private var isTrackingVoiceButtons = false  // 是否在跟踪语音按钮状态
     private val voiceLongPressHandler = Handler(Looper.getMainLooper())
     private val voiceLongPressRunnable = Runnable {
         voiceLongPressTriggered = true
-        uiState.value = uiState.value.copy(isVoiceMode = true)
+        isTrackingVoiceButtons = true  // 长按触发后开始跟踪按钮
+        Log.d("VoiceButtons", "Long press triggered! Setting isVoiceMode=true, bottomActive=true, isTrackingButtons=true")
+        uiState.value = uiState.value.copy(
+            isVoiceMode = true,
+            voiceButtonState = VoiceButtonState(bottomActive = true)
+        )
         performVibration()
     }
     
@@ -380,6 +393,9 @@ private fun getPredictionFromPlugin(contextText: String) {
                             quickSendItems = quickSendItemsState.value,
                             candidateComments = state.candidateComments,
                             isVoiceMode = state.isVoiceMode,
+                            voiceBottomActive = state.voiceButtonState.bottomActive,
+                            voiceLeftActive = state.voiceButtonState.leftActive,
+                            voiceRightActive = state.voiceButtonState.rightActive,
                             onKeyPress = { key, isShifted ->
                                 handleKeyPress(key, isShifted)
                             },
@@ -388,17 +404,6 @@ private fun getPredictionFromPlugin(contextText: String) {
                             },
                             onCandidateSelect = { index ->
                                 selectCandidate(index)
-                            },
-                            onVoiceUndo = {
-                                // 撤回最近输入
-                                sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
-                            },
-                            onVoiceSearch = {
-                                // 触发搜索
-                                val action = currentInputEditorInfo?.imeOptions ?: 0
-                                if ((action and EditorInfo.IME_MASK_ACTION) == EditorInfo.IME_ACTION_SEARCH) {
-                                    sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER)
-                                }
                             },
                             onToggleDarkMode = {
                                 toggleDarkMode()
@@ -493,6 +498,7 @@ private fun getPredictionFromPlugin(contextText: String) {
                 when (it.action) {
                     MotionEvent.ACTION_DOWN -> {
                         val isVoiceMode = uiState.value.isVoiceMode
+                        Log.d("VoiceButtons", "DOWN: isVoiceMode=$isVoiceMode, x=${it.x}, y=${it.y}")
                         
                         if (isVoiceMode) {
                             // 语音键盘：检测弧形按钮区域（底部约 40% 区域）
@@ -500,9 +506,15 @@ private fun getPredictionFromPlugin(contextText: String) {
                             
                             if (it.y > yThreshold) {
                                 isPressing = true
+                                isTrackingVoiceButtons = true
                                 isLongPressWaiting = true
                                 voiceLongPressTriggered = false
                                 voiceLongPressHandler.postDelayed(voiceLongPressRunnable, 400)
+                                // 底部按钮激活
+                                uiState.value = uiState.value.copy(
+                                    voiceButtonState = VoiceButtonState(bottomActive = true)
+                                )
+                                Log.d("VoiceButtons", "DOWN in voice mode: setting bottomActive=true, isTrackingButtons=true")
                             }
                         } else {
                             // 普通键盘：检测空格键区域（底部控制行中间）
@@ -515,6 +527,7 @@ private fun getPredictionFromPlugin(contextText: String) {
                                 isLongPressWaiting = true
                                 voiceLongPressTriggered = false
                                 voiceLongPressHandler.postDelayed(voiceLongPressRunnable, 400)
+                                Log.d("VoiceButtons", "DOWN in normal mode: starting long press wait")
                             }
                         }
                     }
@@ -522,33 +535,85 @@ private fun getPredictionFromPlugin(contextText: String) {
                         voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
                         if (voiceLongPressTriggered) {
                             voiceLongPressTriggered = false
-                            uiState.value = uiState.value.copy(isVoiceMode = false)
+                            uiState.value = uiState.value.copy(
+                                isVoiceMode = false,
+                                voiceButtonState = VoiceButtonState()
+                            )
+                            // 处理按钮点击
+                            val state = uiState.value.voiceButtonState
+                            if (state.leftActive) {
+                                // 撤回操作
+                                performUndo()
+                            } else if (state.rightActive) {
+                                // 搜索操作
+                                performSearch()
+                            }
+                        } else {
+                            // 重置所有按钮状态
+                            uiState.value = uiState.value.copy(
+                                voiceButtonState = VoiceButtonState()
+                            )
                         }
                         isPressing = false
                         isLongPressWaiting = false
+                        isTrackingVoiceButtons = false
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        if (isLongPressWaiting) {
-                            val isVoiceMode = uiState.value.isVoiceMode
+                        val isVoiceMode = uiState.value.isVoiceMode
+                        
+                        if (isVoiceMode && isTrackingVoiceButtons) {
+                            // 语音键盘：始终跟踪手指位置，不受 isLongPressWaiting 限制
+                            val yThreshold = height * 0.6f
+                            val leftButtonEnd = width / 2f - width * 0.04f
+                            val rightButtonStart = width / 2f + width * 0.04f
                             
-                            if (isVoiceMode) {
-                                // 语音键盘：检测是否移出弧形按钮区域
-                                val yThreshold = height * 0.6f
-                                
-                                if (it.y < yThreshold) {
-                                    voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                                    isLongPressWaiting = false
+                            Log.d("VoiceButtons", "MOVE: x=${it.x}, y=${it.y}, yThreshold=$yThreshold, leftEnd=$leftButtonEnd, rightStart=$rightButtonStart")
+                            
+                            if (it.y > yThreshold) {
+                                // 在底部按钮区域
+                                Log.d("VoiceButtons", "Setting bottomActive=true")
+                                uiState.value = uiState.value.copy(
+                                    voiceButtonState = VoiceButtonState(bottomActive = true)
+                                )
+                                // 重新开始长按等待（如果之前被取消了）
+                                if (!isLongPressWaiting && !voiceLongPressTriggered) {
+                                    isLongPressWaiting = true
+                                    voiceLongPressHandler.postDelayed(voiceLongPressRunnable, 400)
                                 }
+                            } else if (it.x < leftButtonEnd) {
+                                // 在左按钮区域
+                                Log.d("VoiceButtons", "Setting leftActive=true")
+                                uiState.value = uiState.value.copy(
+                                    voiceButtonState = VoiceButtonState(leftActive = true)
+                                )
+                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
+                                isLongPressWaiting = false
+                            } else if (it.x > rightButtonStart) {
+                                // 在右按钮区域
+                                Log.d("VoiceButtons", "Setting rightActive=true")
+                                uiState.value = uiState.value.copy(
+                                    voiceButtonState = VoiceButtonState(rightActive = true)
+                                )
+                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
+                                isLongPressWaiting = false
                             } else {
-                                // 普通键盘：检测是否移出空格键区域
-                                val yThreshold = height * 0.75f
-                                val xStart = width * 0.18f
-                                val xEnd = width * 0.82f
-                                
-                                if (it.y < yThreshold || it.x < xStart || it.x > xEnd) {
-                                    voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                                    isLongPressWaiting = false
-                                }
+                                // 在中间间隙区域，所有按钮都不激活
+                                Log.d("VoiceButtons", "Setting all inactive")
+                                uiState.value = uiState.value.copy(
+                                    voiceButtonState = VoiceButtonState()
+                                )
+                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
+                                isLongPressWaiting = false
+                            }
+                        } else if (!isVoiceMode && isLongPressWaiting) {
+                            // 普通键盘：检测是否移出空格键区域
+                            val yThreshold = height * 0.75f
+                            val xStart = width * 0.18f
+                            val xEnd = width * 0.82f
+                            
+                            if (it.y < yThreshold || it.x < xStart || it.x > xEnd) {
+                                voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
+                                isLongPressWaiting = false
                             }
                         }
                     }
@@ -556,6 +621,18 @@ private fun getPredictionFromPlugin(contextText: String) {
             }
             return super.dispatchTouchEvent(ev)
         }
+    }
+    
+    private fun performUndo() {
+        // 撤回操作：删除最后输入的字符
+        currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL))
+        currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL))
+    }
+    
+    private fun performSearch() {
+        // 搜索操作：发送 Enter 键
+        currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+        currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
     }
     
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {

@@ -61,8 +61,9 @@ fun KeyboardView(
     onSwitchKeyboard: (() -> Unit)? = null,
     onCommitImage: ((String) -> Unit)? = null,
     isVoiceMode: Boolean = false,
-    onVoiceUndo: (() -> Unit)? = null,
-    onVoiceSearch: (() -> Unit)? = null,
+    voiceBottomActive: Boolean = false,
+    voiceLeftActive: Boolean = false,
+    voiceRightActive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var isShifted by remember { mutableStateOf(false) }
@@ -141,8 +142,9 @@ onHideKeyboard = {
                         keyTextColor = keyTextColor,
                         specialKeyBackgroundColor = specialKeyBgColor,
                         modifier = Modifier.weight(1f),
-                        onUndo = onVoiceUndo,
-                        onSearch = onVoiceSearch
+                        bottomActive = voiceBottomActive,
+                        leftActive = voiceLeftActive,
+                        rightActive = voiceRightActive
                     )
                 }
                 showMenu -> {
