@@ -64,6 +64,7 @@ fun KeyboardView(
     voiceBottomActive: Boolean = false,
     voiceLeftActive: Boolean = false,
     voiceRightActive: Boolean = false,
+    onVoiceModeChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isShifted by remember { mutableStateOf(false) }
@@ -259,6 +260,7 @@ onHideKeyboard = {
                                     isShifted = false
                                 },
                                 onSwitchKeyboard = onSwitchKeyboard,
+                                onVoiceModeChange = onVoiceModeChange,
                                 onKeyPressDown = onKeyPressDown
                             )
                         }

@@ -15,7 +15,7 @@ object KeyboardDimensions {
     val BubbleSize = 48.dp  // 上滑气泡主体
     val BubbleWidthDown = 160.dp  // 下滑气泡宽度
     val BubbleHeightDown = 36.dp  // 下滑气泡主体高度
-    val BubbleCornerRadius = 6.dp
+    val BubbleCornerRadius = 8.dp
     
     // 气泡底部pointer（覆盖按键的部分）
     // 注意：按键实际宽度由weight决定，这里使用估算值

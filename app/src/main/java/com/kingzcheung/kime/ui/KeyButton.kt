@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
@@ -72,12 +73,23 @@ fun KeyButton(
     val bubbleShowThresholdUp = swipeUpThreshold * 0.3f
     val bubbleShowThresholdDown = swipeDownThreshold * 0.3f
     
+    // 辅助函数：生成更深的颜色（混合黑色）
+    fun darkenColor(color: Color, factor: Float = 0.15f): Color {
+        return Color(
+            red = (color.red * (1 - factor)).coerceIn(0f, 1f),
+            green = (color.green * (1 - factor)).coerceIn(0f, 1f),
+            blue = (color.blue * (1 - factor)).coerceIn(0f, 1f),
+            alpha = color.alpha
+        )
+    }
+    
     Box(
         modifier = modifier
             .height(44.dp)
-            .clip(RoundedCornerShape(4.dp))
+            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+            .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isPressed) backgroundColor.copy(alpha = 0.7f)
+                if (isPressed) darkenColor(backgroundColor, 0.2f)
                 else if (isHighlighted) backgroundColor.copy(alpha = 0.8f)
                 else backgroundColor
             )
@@ -214,10 +226,11 @@ fun SwipeableKeyButton(
     Box(
         modifier = modifier
             .height(44.dp)
+            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
             .onGloballyPositioned { coordinates ->
                 buttonBounds = coordinates.boundsInRoot()
             }
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 if (isPressed) backgroundColor.copy(alpha = 0.7f)
                 else if (isHighlighted) backgroundColor.copy(alpha = 0.8f)
@@ -379,12 +392,23 @@ fun IconKeyButton(
 ) {
     var isPressed by remember { mutableStateOf(false) }
     
+    // 辅助函数：生成更深的颜色（混合黑色）
+    fun darkenColor(color: Color, factor: Float = 0.15f): Color {
+        return Color(
+            red = (color.red * (1 - factor)).coerceIn(0f, 1f),
+            green = (color.green * (1 - factor)).coerceIn(0f, 1f),
+            blue = (color.blue * (1 - factor)).coerceIn(0f, 1f),
+            alpha = color.alpha
+        )
+    }
+    
     Box(
         modifier = modifier
             .height(44.dp)
-            .clip(RoundedCornerShape(4.dp))
+            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+            .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isPressed) backgroundColor.copy(alpha = 0.7f)
+                if (isPressed) darkenColor(backgroundColor, 0.05f)
                 else if (isHighlighted) backgroundColor.copy(alpha = 0.8f)
                 else backgroundColor
             )
@@ -445,12 +469,23 @@ fun SwipeableIconKeyButton(
         }
     }
     
+    // 辅助函数：生成更深的颜色（混合黑色）
+    fun darkenColor(color: Color, factor: Float = 0.15f): Color {
+        return Color(
+            red = (color.red * (1 - factor)).coerceIn(0f, 1f),
+            green = (color.green * (1 - factor)).coerceIn(0f, 1f),
+            blue = (color.blue * (1 - factor)).coerceIn(0f, 1f),
+            alpha = color.alpha
+        )
+    }
+    
     Box(
         modifier = modifier
             .height(44.dp)
-            .clip(RoundedCornerShape(4.dp))
+            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+            .clip(RoundedCornerShape(8.dp))
             .background(
-                if (isPressed) backgroundColor.copy(alpha = 0.7f)
+                if (isPressed) darkenColor(backgroundColor, 0.2f)
                 else if (isHighlighted) backgroundColor.copy(alpha = 0.8f)
                 else backgroundColor
             )

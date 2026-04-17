@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +59,8 @@ fun SpaceKeyButton(
     Box(
         modifier = modifier
             .height(44.dp)
-            .clip(RoundedCornerShape(4.dp))
+            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 if (isPressed) backgroundColor.copy(alpha = 0.7f)
                 else backgroundColor

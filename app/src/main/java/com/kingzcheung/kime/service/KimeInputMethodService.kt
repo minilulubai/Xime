@@ -473,6 +473,15 @@ private fun getPredictionFromPlugin(contextText: String) {
                                     ).show()
                                     clipboardManager.copyImageToSystemClipboard(imagePath)
                                 }
+                            },
+                            onVoiceModeChange = { enabled ->
+                                uiState.value = uiState.value.copy(
+                                    isVoiceMode = enabled,
+                                    voiceButtonState = if (enabled) VoiceButtonState(bottomActive = true) else VoiceButtonState()
+                                )
+                                if (enabled) {
+                                    performVibration()
+                                }
                             }
                         )
                     }
@@ -517,23 +526,16 @@ private fun getPredictionFromPlugin(contextText: String) {
                                 Log.d("VoiceButtons", "DOWN in voice mode: setting bottomActive=true, isTrackingButtons=true")
                             }
                         } else {
-                            // 普通键盘：检测空格键区域（底部控制行中间）
-                            val yThreshold = height * 0.75f
-                            val xStart = width * 0.18f
-                            val xEnd = width * 0.82f
-                            
-                            if (it.y > yThreshold && it.x > xStart && it.x < xEnd) {
-                                isPressing = true
-                                isLongPressWaiting = true
-                                voiceLongPressTriggered = false
-                                voiceLongPressHandler.postDelayed(voiceLongPressRunnable, 400)
-                                Log.d("VoiceButtons", "DOWN in normal mode: starting long press wait")
-                            }
+                            // 普通键盘：不再在这里检测长按
+                            // 空格键的长按检测由 KeyboardLayout 内部处理
+                            // 这样可以精确只检测空格键区域，避免其他区域误触发
                         }
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         voiceLongPressHandler.removeCallbacks(voiceLongPressRunnable)
-                        if (voiceLongPressTriggered) {
+                        val currentIsVoiceMode = uiState.value.isVoiceMode
+                        
+                        if (voiceLongPressTriggered || currentIsVoiceMode) {
                             voiceLongPressTriggered = false
                             uiState.value = uiState.value.copy(
                                 isVoiceMode = false,

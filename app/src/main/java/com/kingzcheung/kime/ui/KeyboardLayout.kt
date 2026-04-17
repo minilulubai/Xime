@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -61,6 +62,7 @@ fun KeyboardLayout(
     showBottomButtons: Boolean = false,
     onHideKeyboard: (() -> Unit)? = null,
     onSwitchKeyboard: (() -> Unit)? = null,
+    onVoiceModeChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onKeyPressDown: ((String) -> Unit)? = null
 ) {
@@ -256,7 +258,8 @@ fun KeyboardLayout(
                     modifier = Modifier
                         .weight(3f)
                         .height(44.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(keyBackgroundColor)
                         .pointerInput(Unit) {
                             awaitEachGesture {
@@ -269,6 +272,7 @@ fun KeyboardLayout(
                                     delay(400)
                                     longPressTriggered = true
                                     isVoiceMode = true
+                                    onVoiceModeChange?.invoke(true)
                                 }
                                 
                                 // 等待手指抬起或取消
@@ -281,6 +285,7 @@ fun KeyboardLayout(
                                 if (longPressTriggered) {
                                     // 长按触发后手指抬起，关闭语音模式
                                     isVoiceMode = false
+                                    onVoiceModeChange?.invoke(false)
                                 } else {
                                     // 普通点击
                                     onKeyPress("space")
@@ -468,7 +473,7 @@ private fun DummyKeyButton(
     Box(
         modifier = modifier
             .height(44.dp)
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(backgroundColor)
     )
 }

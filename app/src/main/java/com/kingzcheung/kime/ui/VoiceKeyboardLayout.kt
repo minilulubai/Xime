@@ -54,7 +54,7 @@ fun VoiceKeyboardLayout(
     leftActive: Boolean = false,
     rightActive: Boolean = false
 ) {
-    val inactiveColor = Color(0xFFE8E8E8)  // 统一的浅灰色
+    val inactiveColor = Color.Gray.copy(alpha = 0.5f)  // 灰色背景+透明度
     
     Column(
         modifier = modifier
