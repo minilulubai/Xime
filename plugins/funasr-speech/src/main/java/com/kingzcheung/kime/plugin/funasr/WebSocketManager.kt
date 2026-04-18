@@ -30,6 +30,9 @@ class WebSocketManager(
     private var state: State = State.IDLE
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
+    // 用于累积结果处理
+    private var lastResultText: String = ""
+    
     companion object {
         private const val TAG = "WebSocketManager"
         private const val WS_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference/"
@@ -41,6 +44,9 @@ class WebSocketManager(
     fun getState(): State = state
     
     fun connect(): Boolean {
+        // 重置累积结果
+        lastResultText = ""
+        
         if (state != State.IDLE) {
             Log.w(TAG, "Already connected or connecting, state: $state")
             return false
@@ -182,23 +188,58 @@ class WebSocketManager(
                     }
                     
                     "result-generated" -> {
+                        // 打印完整消息以便调试
+                        Log.d(TAG, "Full result message: $text")
+                        
                         val payload = message.getJSONObject("payload")
                         val output = payload.optJSONObject("output")
                         if (output != null) {
                             val sentence = output.optJSONObject("sentence")
                             if (sentence != null) {
+                                // 检查是否是心跳消息
+                                val heartbeat = sentence.optBoolean("heartbeat", false)
+                                if (heartbeat) {
+                                    Log.d(TAG, "Skipping heartbeat message")
+                                    return
+                                }
+                                
                                 val resultText = sentence.optString("text", "")
                                 val isFinal = sentence.optBoolean("sentence_end", false)
                                 val beginTime = sentence.optInt("begin_time", 0)
                                 val endTime = sentence.optInt("end_time", 0)
                                 
                                 Log.d(TAG, "Recognition result: '$resultText', isFinal: $isFinal, begin: $beginTime, end: $endTime")
+                                Log.d(TAG, "lastResultText: '$lastResultText', resultText.startsWith(lastResultText): ${resultText.startsWith(lastResultText)}")
                                 
                                 state = State.PROCESSING
                                 onStateChanged(state)
                                 
                                 if (resultText.isNotEmpty()) {
-                                    onResult(resultText, isFinal)
+                                    // FunASR 返回的是累积结果，需要提取增量部分
+                                    val incrementalText = if (lastResultText.isNotEmpty() && resultText.startsWith(lastResultText)) {
+                                        // 新结果是旧结果的扩展，提取新增部分
+                                        val delta = resultText.substring(lastResultText.length)
+                                        Log.d(TAG, "Incremental text: '$delta'")
+                                        delta
+                                    } else {
+                                        // 结果发生变化（可能是修正），返回完整新结果
+                                        Log.d(TAG, "Result changed, returning full text")
+                                        resultText
+                                    }
+                                    
+                                    // 只有在有增量内容时才回调
+                                    if (incrementalText.isNotEmpty()) {
+                                        onResult(incrementalText, isFinal)
+                                    }
+                                    
+                                    // 更新累积状态
+                                    if (isFinal) {
+                                        // 句子结束，重置累积状态
+                                        Log.d(TAG, "Sentence finalized, resetting lastResultText")
+                                        lastResultText = ""
+                                    } else {
+                                        lastResultText = resultText
+                                    }
                                 }
                             } else {
                                 Log.w(TAG, "No sentence in output")
