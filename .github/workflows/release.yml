@@ -123,6 +123,18 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
+          
+      - name: Sign FunAsr Speech Plugin APKs
+        uses: r0adkll/sign-android-release@v1
+        id: sign_funasr_plugin
+        with:
+          releaseDirectory: plugins/funasr-speech/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
         
       - name: Get version from tag
         id: get_version
@@ -135,11 +147,13 @@ jobs:
           EMOJI_APKS=$(find plugins/emoji-sticker/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
           KAOMOJI_APKS=$(find plugins/kaomoji/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
           PREDICTION_APKS=$(find plugins/prediction-onnx/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
+          FUNASR_APKS=$(find plugins/funasr-speech/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
           
           echo "main_apks=$MAIN_APKS" >> $GITHUB_OUTPUT
           echo "emoji_apks=$EMOJI_APKS" >> $GITHUB_OUTPUT
           echo "kaomoji_apks=$KAOMOJI_APKS" >> $GITHUB_OUTPUT
           echo "prediction_apks=$PREDICTION_APKS" >> $GITHUB_OUTPUT
+          echo "funasr_apks=$FUNASR_APKS" >> $GITHUB_OUTPUT
           
           echo "Main App APKs:"
           echo "$MAIN_APKS" | tr ',' '\n'
@@ -149,6 +163,8 @@ jobs:
           echo "$KAOMOJI_APKS" | tr ',' '\n'
           echo "Prediction Plugin APKs:"
           echo "$PREDICTION_APKS" | tr ',' '\n'
+          echo "FunAsr Plugin APKs:"
+          echo "$FUNASR_APKS" | tr ',' '\n'
           
           if [ -z "$MAIN_APKS" ]; then
             echo "::warning::No main app APKs found!"
@@ -186,6 +202,7 @@ jobs:
             - **emoji-sticker**: 恶搞兔表情包插件
             - **kaomoji**: 颜文字表情包插件
             - **prediction-onnx**: 智能联想插件
+            - **funasr-speech**: 语音识别插件（基于阿里云Fun-ASR）
             
             ### 更新说明
             ${{ steps.changelog.outputs.CHANGELOG }}
@@ -194,6 +211,7 @@ jobs:
             ${{ steps.find_apks.outputs.emoji_apks }}
             ${{ steps.find_apks.outputs.kaomoji_apks }}
             ${{ steps.find_apks.outputs.prediction_apks }}
+            ${{ steps.find_apks.outputs.funasr_apks }}
           draft: false
           prerelease: false
         env:
