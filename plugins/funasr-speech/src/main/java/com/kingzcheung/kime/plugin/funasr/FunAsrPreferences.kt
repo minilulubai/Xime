@@ -11,10 +11,10 @@ class FunAsrPreferences(private val context: Context) {
         private const val PREFS_NAME = "funasr_plugin_prefs"
         private const val KEY_API_KEY = "api_key"
         private const val CONFIG_FILE = "config.json"
+        private const val HOST_PACKAGE_NAME = "com.kingzcheung.kime"
         
-        fun getExternalConfigFile(pluginPackageName: String, context: Context): File {
-            // 使用插件的外部存储目录，其他应用可以访问
-            val externalDir = File("/sdcard/Android/data/$pluginPackageName/files")
+        fun getExternalConfigFile(): File {
+            val externalDir = File("/sdcard/Android/data/$HOST_PACKAGE_NAME/files")
             if (!externalDir.exists()) {
                 externalDir.mkdirs()
             }
@@ -56,7 +56,7 @@ class FunAsrPreferences(private val context: Context) {
     
     private fun saveToExternalStorage(apiKey: String) {
         try {
-            val configFile = getExternalConfigFile(context.packageName, context)
+            val configFile = getExternalConfigFile()
             configFile.writeText("{\"api_key\":\"$apiKey\"}")
             Log.d(TAG, "Saved to external storage: ${configFile.absolutePath}")
         } catch (e: Exception) {
@@ -66,7 +66,7 @@ class FunAsrPreferences(private val context: Context) {
     
     private fun readFromExternalStorage(): String {
         try {
-            val configFile = getExternalConfigFile(context.packageName, context)
+            val configFile = getExternalConfigFile()
             if (!configFile.exists()) {
                 Log.d(TAG, "External config file not exists: ${configFile.absolutePath}")
                 return ""
@@ -75,7 +75,6 @@ class FunAsrPreferences(private val context: Context) {
             val content = configFile.readText()
             Log.d(TAG, "Read from external storage: ${configFile.absolutePath}")
             
-            // 简单解析 JSON
             val apiKeyMatch = Regex("\"api_key\":\"([^\"]+)\"").find(content)
             return apiKeyMatch?.groupValues?.get(1) ?: ""
         } catch (e: Exception) {

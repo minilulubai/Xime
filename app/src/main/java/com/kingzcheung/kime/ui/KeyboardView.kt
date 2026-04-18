@@ -12,7 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.kingzcheung.kime.clipboard.ClipboardItem
-import com.kingzcheung.kime.plugin.api.RecognitionState
+import com.kingzcheung.kime.plugin.core.api.RecognitionState
 import com.kingzcheung.kime.ui.theme.CandidateBarBackground
 import com.kingzcheung.kime.ui.theme.CandidateBarBackgroundDark
 import com.kingzcheung.kime.ui.theme.CandidateTextColor

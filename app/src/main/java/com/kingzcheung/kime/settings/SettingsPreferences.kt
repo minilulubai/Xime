@@ -2,6 +2,7 @@ package com.kingzcheung.kime.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.kingzcheung.kime.plugin.core.runtime.PluginManager
 
 object SettingsPreferences {
     private const val PREFS_NAME = "kime_settings"
@@ -84,7 +85,15 @@ object SettingsPreferences {
     }
     
     fun isPluginEnabled(context: Context, pluginId: String): Boolean {
-        return getPrefs(context).getBoolean("plugin_enabled_$pluginId", false)
+        val prefs = getPrefs(context)
+        val key = "plugin_enabled_$pluginId"
+        
+        if (prefs.contains(key)) {
+            return prefs.getBoolean(key, false)
+        }
+        
+        val pluginInfo = PluginManager.getAllInstallPlugins().find { it.id == pluginId }
+        return pluginInfo?.enabled ?: true
     }
     
     fun setPluginEnabled(context: Context, pluginId: String, enabled: Boolean) {

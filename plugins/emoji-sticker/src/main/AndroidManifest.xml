@@ -23,8 +23,16 @@
         </activity>
         
         <meta-data
-            android:name="com.kingzcheung.kime.plugin.factory.class"
-            android:value="com.kingzcheung.kime.plugin.emoji.EmojiPluginFactory" />
+            android:name="plugin.entryClass"
+            android:value="com.kingzcheung.kime.plugin.emoji.EmojiStickerPlugin" />
+        
+        <meta-data
+            android:name="plugin.description"
+            android:value="提供8个恶搞兔表情包" />
+        
+        <meta-data
+            android:name="plugin.type"
+            android:value="emoji" />
         
     </application>
 

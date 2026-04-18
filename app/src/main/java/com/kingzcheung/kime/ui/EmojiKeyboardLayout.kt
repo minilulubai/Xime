@@ -25,10 +25,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.kingzcheung.kime.plugin.ExtensionManager
-import com.kingzcheung.kime.plugin.api.EmojiItem
+import com.kingzcheung.kime.plugin.core.api.EmojiItem
+import com.kingzcheung.kime.plugin.core.runtime.PluginManager
 import com.kingzcheung.kime.clipboard.ClipboardManager
 import com.kingzcheung.kime.settings.SettingsPreferences
 import kotlinx.coroutines.launch
@@ -76,7 +78,7 @@ object EmojiData {
             name = "动物",
             icon = "🐶",
             emojis = listOf(
-                "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
+                "🐶", "🐱", "🐭", "hamster", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
                 "🦁", "🐮", "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐒", "🐔",
                 "🐧", "🐦", "🐤", "🐣", "🐥", "🦆", "🦅", "🦉", "🦇", "🐺",
                 "🐗", "🐴", "🦄", "🐝", "🐛", "🦋", "🐌", "🐞", "🐜", "🦟",
@@ -89,35 +91,35 @@ object EmojiData {
             icon = "🍎",
             emojis = listOf(
                 "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈",
-                "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦",
+                "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "茄子", "🥑", "🥦",
                 "🥬", "🥒", "🌶️", "🫑", "🌽", "🥕", "🧄", "🧅", "🥔", "🍠",
-                "🥐", "🥯", "🍞", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞",
-                "🧇", "🥓", "🥩", "🍗", "🍖", "🦴", "🌭", "🍔", "🍟", "🍕",
-                "🫓", "🥪", "🌯", "🥗", "🌮", "🍙", "🍚", "🍲", "🥘", "🫕"
+                "🥐", "🥯", "bread", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞",
+                "🧇", "🥓", "🥩", "🍗", "🍖", "🦴", "hotdog", "汉堡", "🍟", "🍕",
+                "🫓", "🥪", "🌯", "🥗", "🌮", "🍙", "米饭", "🍲", "🥘", "🫕"
             )
         ),
         EmojiCategory(
             name = "活动",
             icon = "⚽",
             emojis = listOf(
-                "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱",
-                "🪀", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🥏", "🪃", "🥅",
+                "⚽", "🏀", "🏈", "棒球", "🥎", "🎾", "排球", "🏉", "🥏", "🎱",
+                "🪀", "🏓", "羽毛球", "🏒", "🏑", "🥍", "🏏", "🥏", "🪃", "🥅",
                 "⛳", "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼",
                 "🪂", "⛸️", "🥌", "⛷️", "🏂", "🎿", "🪂", "🏋️‍♂️", "🤼", "🤸",
                 "🤺", "🤾", "🥏", "🏌️", "🏇", "🧘", "🏄", "🏊", "🤽", "🚣",
-                "🧗", "🚵", "🚴", "🎖️", "🏆", "🥇", "🥈", "🥉", "🏅", "🎪"
+                "🧗", "🚵", "🚴", "🎖️", "🏆", "🥇", "🥈", "🥉", "🏅", " circus"
             )
         ),
         EmojiCategory(
             name = "物品",
             icon = "💻",
             emojis = listOf(
-                "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🖲️", "🕹️",
-                "🗜️", "💽", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥",
-                "📽️", "🎞️", "📞", "☎️", "📟", "📠", "📺", "📻", "🎙️", "🎚️",
-                "🎛️", "🧭", "⏱️", "⏲️", "⏰", "🕰️", "⏳", "⌛", "📡", "🔋",
-                "🔌", "💡", "🔦", "🕯️", "🪔", "🧯", "🛢️", "💸", "💵", "💴",
-                "💶", "💷", "💰", "💳", "💎", "⚖️", " toolbox", "🔧", "🔨", "⛏️"
+                "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "打印机", "🖱️", "🖲️", "🕹️",
+                "🗜️", "💽", "💾", "光盘", "📀", "📼", "📷", "📸", "📹", "🎥",
+                "📽️", "🎞️", "📞", "☎️", "pager", "传真", "电视", "📻", "🎙️", "🎚️",
+                "🎛️", "🧭", "⏱️", "⏲️", "⏰", "时钟", "⏳", "⌛", "📡", "🔋",
+                "🔌", "💡", "🔦", "🕯️", "🪔", "🧯", "🛢️", "💸", "💵", "日元",
+                "欧元", "英镑", "💰", "💳", "💎", "⚖️", " toolbox", "🔧", "🔨", "⛏️"
             )
         ),
         EmojiCategory(
@@ -127,8 +129,8 @@ object EmojiData {
                 "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
                 "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "♻️", "☮️",
                 "✝️", "☪️", "🕉️", "☸️", "✡️", "🔯", "🕎", "☯️", "☦️", "🛐",
-                "⛎", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐",
-                "♑", "♒", "♓", "🆔", "⚛️", "🉑", "☢️", "☣️", "📴", "📳",
+                "⛎", "♈", "♉", "♊", "♋", "狮子座", "♎", "♏", "射手座", "摩羯",
+                "水瓶座", "双鱼座", "🆔", "⚛️", "🉑", "☢️", "☣️", "📴", "📳",
                 "🈶", "🈚", "🈸", "🈺", "🈷️", "⭐", "🆚", "💮", "🉐", "㊙️"
             )
         )
@@ -149,66 +151,57 @@ fun EmojiKeyboardLayout(
     val clipboardManager = remember { ClipboardManager.getInstance(context) }
     
     var selectedCategoryIndex by remember { mutableStateOf(0) }
-    var allCategories by remember { mutableStateOf<List<EmojiCategory>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var allCategories by remember { mutableStateOf<List<EmojiCategory>>(emptyList()) }
     
-    LaunchedEffect(Unit) {
+    val pluginInstances by PluginManager.pluginInstancesFlow.collectAsStateWithLifecycle()
+    
+    LaunchedEffect(pluginInstances) {
+        if (pluginInstances.isEmpty()) {
+            allCategories = EmojiData.categories
+            isLoading = false
+            return@LaunchedEffect
+        }
+        
+        isLoading = true
         scope.launch {
+            Log.d("EmojiKeyboard", "Loading emoji from ${pluginInstances.size} plugins")
+            val pluginCategories = mutableListOf<EmojiCategory>()
+            
             try {
-                val pluginCategories = mutableListOf<EmojiCategory>()
+                val emojiPlugins = ExtensionManager.getEnabledEmojiPlugins(context)
+                Log.d("EmojiKeyboard", "Found ${emojiPlugins.size} emoji plugins")
                 
-                if (ExtensionManager.isInitialized()) {
-                    val emojiPlugins = ExtensionManager.getEnabledEmojiPlugins(context)
-                    Log.d("EmojiKeyboard", "Found ${emojiPlugins.size} emoji plugins")
+                emojiPlugins.forEach { (pluginId, plugin) ->
+                    val pluginInfo = ExtensionManager.getAllInstalledPlugins()
+                        .firstOrNull { it.id == pluginId }
                     
-                    emojiPlugins.forEach { plugin ->
-                        Log.d("EmojiKeyboard", "Loading emojis from: ${plugin.name}")
-                        
-                        try {
-                            val emojiItems = plugin.getEmojis(category = null, searchText = null, topK = 100)
-                            
-                            if (emojiItems.isNotEmpty()) {
-                                pluginCategories.add(
-                                    EmojiCategory(
-                                        name = plugin.name,
-                                        icon = "🎭",
-                                        emojis = emptyList(),
-                                        isPlugin = true,
-                                        pluginId = plugin.id,
-                                        emojiItems = emojiItems
-                                    )
+                    try {
+                        val emojiItems = plugin.getEmojis(category = null, searchText = null, topK = 100)
+                        if (emojiItems.isNotEmpty()) {
+                            pluginCategories.add(
+                                EmojiCategory(
+                                    name = pluginInfo?.name ?: "表情",
+                                    icon = "🎭",
+                                    emojis = emptyList(),
+                                    isPlugin = true,
+                                    pluginId = pluginId,
+                                    emojiItems = emojiItems
                                 )
-                                Log.d("EmojiKeyboard", "Loaded ${emojiItems.size} emojis from ${plugin.name}")
-                            }
-                        } catch (e: Exception) {
-                            Log.e("EmojiKeyboard", "Error loading emojis from ${plugin.name}", e)
+                            )
+                            Log.d("EmojiKeyboard", "Loaded ${emojiItems.size} from ${pluginInfo?.name}")
                         }
+                    } catch (e: Exception) {
+                        Log.e("EmojiKeyboard", "Error loading from ${pluginInfo?.name}", e)
                     }
                 }
-                
                 allCategories = pluginCategories + EmojiData.categories
-                Log.d("EmojiKeyboard", "Total categories: ${allCategories.size}, plugin categories: ${pluginCategories.size}")
-                
             } catch (e: Exception) {
                 Log.e("EmojiKeyboard", "Failed to load plugin emojis", e)
                 allCategories = EmojiData.categories
-            } finally {
-                isLoading = false
             }
+            isLoading = false
         }
-    }
-    
-    if (isLoading) {
-        Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(backgroundColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("加载表情...", color = textColor, fontSize = 16.sp)
-        }
-        return
     }
     
     Column(
@@ -224,81 +217,105 @@ fun EmojiKeyboardLayout(
                 .padding(horizontal = 4.dp)
                 .padding(bottom = 4.dp)
         ) {
-            val currentCategory = allCategories.getOrElse(selectedCategoryIndex) { allCategories[0] }
-            
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                if (currentCategory.isPlugin && currentCategory.emojiItems != null) {
-                    val hasImages = currentCategory.emojiItems.any { it.imageUrl != null }
-                    val columns = if (hasImages) 6 else 8
-                    
-                    currentCategory.emojiItems.chunked(columns).forEach { rowItems ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            rowItems.forEach { item ->
-                                PluginEmojiButton(
-                                    emojiItem = item,
-                                    onClick = {
-                                        val imageUrl = item.imageUrl
-                                        if (imageUrl != null && onImageEmojiSelect != null) {
-                                            onImageEmojiSelect(imageUrl)
-                                        } else if (imageUrl != null) {
-                                            val success = clipboardManager.copyImageToSystemClipboard(
-                                                imageUrl,
-                                                item.displayText
-                                            )
-                                            if (success) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "已复制表情，可粘贴发送",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
+            if (isLoading && allCategories.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "加载中...",
+                        color = textColor,
+                        fontSize = 14.sp
+                    )
+                }
+            } else if (allCategories.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "暂无表情",
+                        color = textColor,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                val currentCategory = allCategories.getOrElse(selectedCategoryIndex) { allCategories[0] }
+                
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (currentCategory.isPlugin && currentCategory.emojiItems != null) {
+                        val hasImages = currentCategory.emojiItems.any { it.imageUrl != null }
+                        val columns = if (hasImages) 6 else 8
+                        
+                        currentCategory.emojiItems.chunked(columns).forEach { rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                rowItems.forEach { item ->
+                                    PluginEmojiButton(
+                                        emojiItem = item,
+                                        onClick = {
+                                            val imageUrl = item.imageUrl
+                                            if (imageUrl != null && onImageEmojiSelect != null) {
+                                                onImageEmojiSelect(imageUrl)
+                                            } else if (imageUrl != null) {
+                                                val success = clipboardManager.copyImageToSystemClipboard(
+                                                    imageUrl,
+                                                    item.displayText
+                                                )
+                                                if (success) {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "已复制表情，可粘贴发送",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                } else {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "复制失败",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
                                             } else {
-                                                Toast.makeText(
-                                                    context,
-                                                    "复制失败",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
+                                                onEmojiSelect(item.insertText)
                                             }
-                                        } else {
-                                            onEmojiSelect(item.insertText)
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(if (hasImages) 60.dp else 40.dp)
-                                )
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(if (hasImages) 60.dp else 40.dp)
+                                    )
+                                }
+                                repeat(columns - rowItems.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
-                            repeat(columns - rowItems.size) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
-                    }
-                } else {
-                    val emojis = currentCategory.emojis
-                    val columns = 8
-                    
-                    emojis.chunked(columns).forEach { rowEmojis ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            rowEmojis.forEach { emoji ->
-                                EmojiButton(
-                                    emoji = emoji,
-                                    onClick = { onEmojiSelect(emoji) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                            repeat(columns - rowEmojis.size) {
-                                Spacer(modifier = Modifier.weight(1f))
+                    } else {
+                        val emojis = currentCategory.emojis
+                        val columns = 8
+                        
+                        emojis.chunked(columns).forEach { rowEmojis ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                rowEmojis.forEach { emoji ->
+                                    EmojiButton(
+                                        emoji = emoji,
+                                        onClick = { onEmojiSelect(emoji) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                repeat(columns - rowEmojis.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }

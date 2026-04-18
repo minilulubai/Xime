@@ -41,3 +41,6 @@ app/src/main/assets/association_model
 # Plugin module builds
 plugin-api/build
 plugins/prediction-onnx/build
+
+# Plugin APKs (development only, not packaged in main app)
+app/src/main/assets/plugins/*.apk

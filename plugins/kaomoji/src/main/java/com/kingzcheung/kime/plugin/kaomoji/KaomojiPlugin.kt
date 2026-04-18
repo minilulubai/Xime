@@ -1,19 +1,13 @@
 package com.kingzcheung.kime.plugin.kaomoji
 
 import android.content.Context
-import android.content.Intent
 import android.util.Log
-import com.kingzcheung.kime.plugin.api.EmojiItem
-import com.kingzcheung.kime.plugin.api.EmojiPlugin
-import com.kingzcheung.kime.plugin.api.PluginType
+import android.widget.Toast
+import com.kingzcheung.kime.plugin.core.api.EmojiItem
+import com.kingzcheung.kime.plugin.core.api.EmojiPlugin
+import com.kingzcheung.kime.plugin.core.model.PluginContext
 
 class KaomojiPlugin : EmojiPlugin {
-    
-    override val id = "kaomoji_plugin"
-    override val name = "Kime: 颜文字表情包"
-    override val description = "提供精选日式颜文字表情"
-    override val version = "1.0.1"
-    override val type = PluginType.EMOJI
     
     private var kaomojiList: List<EmojiItem> = emptyList()
     
@@ -21,54 +15,46 @@ class KaomojiPlugin : EmojiPlugin {
         private const val TAG = "KaomojiPlugin"
     }
     
-    override fun initialize(context: Context): Boolean {
-        try {
-            Log.d(TAG, "Initializing Kaomoji plugin")
-            
-            kaomojiList = KaomojiData.kaomojis.mapIndexed { index, kaomoji ->
-                EmojiItem(
-                    id = "kaomoji_$index",
-                    displayText = kaomoji,
-                    insertText = kaomoji,
-                    imageUrl = null,
-                    category = "颜文字"
-                )
-            }
-            
-            Log.d(TAG, "Loaded ${kaomojiList.size} kaomojis")
-            return true
-        } catch (e: Exception) {
-            Log.e(TAG, "Initialization failed", e)
-            return false
+    override fun onLoad(context: PluginContext) {
+        Log.d(TAG, "Plugin loaded: ${context.pluginInfo.id}")
+        
+        kaomojiList = KaomojiData.kaomojis.mapIndexed { index, kaomoji ->
+            EmojiItem(
+                id = "kaomoji_$index",
+                displayText = kaomoji,
+                insertText = kaomoji,
+                imageUrl = null,
+                category = "颜文字"
+            )
         }
+        Log.d(TAG, "Loaded ${kaomojiList.size} kaomojis")
+    }
+    
+    override fun onUnload() {
+        kaomojiList = emptyList()
+        Log.d(TAG, "Plugin unloaded")
     }
     
     override suspend fun getEmojis(category: String?, searchText: String?, topK: Int): List<EmojiItem> {
-        val filtered = if (searchText.isNullOrEmpty()) {
-            kaomojiList
-        } else {
-            kaomojiList.filter { it.displayText.contains(searchText) }
-        }
-        
+        val filtered = if (searchText.isNullOrEmpty()) kaomojiList
+        else kaomojiList.filter { it.displayText.contains(searchText) }
         return filtered.take(topK)
     }
     
-    override suspend fun getCategories(): List<String> {
-        return listOf("颜文字")
-    }
-    
-    override fun release() {
-        kaomojiList = emptyList()
-    }
+    override suspend fun getCategories(): List<String> = listOf("颜文字")
     
     override fun hasSettings(): Boolean = true
     
-    override fun createSettingsIntent(context: Context): Intent {
-        val intent = Intent()
-        intent.setClassName(
-            "com.kingzcheung.kime.plugin.kaomoji",
-            "com.kingzcheung.kime.plugin.kaomoji.PluginSettingsActivity"
-        )
-        return intent
+    override fun openSettings(context: Context) {
+        try {
+            val intent = android.content.Intent()
+            intent.setClassName(
+                "com.kingzcheung.kime.plugin.kaomoji",
+                "com.kingzcheung.kime.plugin.kaomoji.PluginSettingsActivity"
+            )
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "无法打开设置: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }

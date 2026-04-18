@@ -26,8 +26,16 @@
         
         <!-- 插件工厂类 -->
         <meta-data
-            android:name="com.kingzcheung.kime.plugin.factory.class"
-            android:value="com.kingzcheung.kime.plugin.prediction.PredictionPluginFactory" />
+            android:name="plugin.entryClass"
+            android:value="com.kingzcheung.kime.plugin.prediction.OnnxPredictionPlugin" />
+        
+        <meta-data
+            android:name="plugin.description"
+            android:value="基于 ONNX Runtime 的智能联想词预测，支持用户输入学习" />
+        
+        <meta-data
+            android:name="plugin.type"
+            android:value="prediction" />
         
     </application>
 

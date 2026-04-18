@@ -8,14 +8,14 @@ plugins {
 
 android {
     namespace = "com.kingzcheung.kime.plugin.funasr"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kingzcheung.kime.plugin.funasr"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -57,7 +57,7 @@ android.applicationVariants.all {
 }
 
 dependencies {
-    implementation(project(":plugin-api"))
+    compileOnly(project(":plugin-core"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     

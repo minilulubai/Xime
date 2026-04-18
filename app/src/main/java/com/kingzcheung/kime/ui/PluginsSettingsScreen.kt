@@ -20,8 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.kime.plugin.ExtensionManager
-import com.kingzcheung.kime.plugin.api.PluginMetadata
-import com.kingzcheung.kime.plugin.api.PluginType
+import com.kingzcheung.kime.plugin.core.model.PluginInfo
 import com.kingzcheung.kime.settings.SettingsPreferences
 import kotlinx.coroutines.launch
 
@@ -34,7 +33,7 @@ fun PluginsSettingsContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    var extensions by remember { mutableStateOf<List<PluginMetadata>>(emptyList()) }
+    var extensions by remember { mutableStateOf<List<PluginInfo>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     
@@ -44,7 +43,7 @@ fun PluginsSettingsContent(
         scope.launch {
             try {
                 val initSuccess = ExtensionManager.reload(context)
-                extensions = ExtensionManager.getAllPlugins()
+                extensions = ExtensionManager.getAllInstalledPlugins()
             } catch (e: Exception) {
                 e.printStackTrace()
                 errorMsg = e.message
@@ -157,11 +156,8 @@ fun PluginsSettingsContent(
                             extensions.forEachIndexed { index, extension ->
                                 ExtensionItem(
                                     extension = extension,
-                                    onClick = {
-                                        if (extension.hasSettings()) {
-                                            onNavigateToPluginSettings(extension.id)
-                                        }
-                                    }
+                                    pluginInstance = ExtensionManager.getPluginById(extension.id),
+                                    onClick = { onNavigateToPluginSettings(extension.id) }
                                 )
                                 if (index < extensions.size - 1) {
                                     HorizontalDivider(
@@ -192,20 +188,26 @@ fun PluginsSettingsContent(
 
 @Composable
 private fun ExtensionItem(
-    extension: PluginMetadata,
+    extension: PluginInfo,
+    pluginInstance: Any?,
     onClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var isEnabled by remember { mutableStateOf(SettingsPreferences.isPluginEnabled(context, extension.id)) }
     
+    val hasSettings = pluginInstance?.let { 
+        when (it) {
+            is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> it.hasSettings()
+            is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> it.hasSettings()
+            is com.kingzcheung.kime.plugin.core.api.PredictionPlugin -> it.hasSettings()
+            else -> false
+        }
+    } ?: false
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { 
-                if (extension.hasSettings()) {
-                    onClick()
-                }
-            }
+            .clickable { if (hasSettings) onClick() }
             .padding(16.dp)
     ) {
         Row(
@@ -223,7 +225,7 @@ private fun ExtensionItem(
                         fontWeight = FontWeight.Medium
                     )
                     
-                    if (extension.hasSettings()) {
+                    if (hasSettings) {
                         Icon(
                             Icons.Default.ChevronRight,
                             contentDescription = "点击查看设置",
@@ -248,7 +250,7 @@ private fun ExtensionItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                     Text(
-                        text = "v${extension.version}",
+                        text = "v${extension.versionName}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -310,18 +312,20 @@ private fun ExtensionItem(
     }
 }
 
-private fun getTypeName(type: PluginType): String {
-    return when (type) {
-        PluginType.PREDICTION -> "联想词"
-        PluginType.SPEECH -> "语音转文字"
-        PluginType.EMOJI -> "表情推荐"
+private fun getTypeName(type: String): String {
+    return when (type.lowercase()) {
+        "prediction" -> "联想词"
+        "speech" -> "语音转文字"
+        "emoji" -> "表情推荐"
+        else -> type
     }
 }
 
-private fun getTypeIcon(type: PluginType): ImageVector {
-    return when (type) {
-        PluginType.PREDICTION -> Icons.Default.AutoAwesome
-        PluginType.SPEECH -> Icons.Default.Mic
-        PluginType.EMOJI -> Icons.Default.Face
+private fun getTypeIcon(type: String): ImageVector {
+    return when (type.lowercase()) {
+        "prediction" -> Icons.Default.AutoAwesome
+        "speech" -> Icons.Default.Mic
+        "emoji" -> Icons.Default.Face
+        else -> Icons.Default.Extension
     }
 }

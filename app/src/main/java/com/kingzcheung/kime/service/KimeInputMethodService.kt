@@ -52,7 +52,7 @@ import com.kingzcheung.kime.ui.KeysConfigHelper
 import com.kingzcheung.kime.ui.theme.KimeTheme
 import com.kingzcheung.kime.ui.KeyboardView
 import com.kingzcheung.kime.plugin.ExtensionManager
-import com.kingzcheung.kime.plugin.api.RecognitionState
+import com.kingzcheung.kime.plugin.core.api.RecognitionState
 import com.kingzcheung.kime.speech.SpeechRecognitionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -290,10 +290,12 @@ override fun onCreate() {
         
         val plugins = speechRecognitionManager.getAvailablePlugins()
         if (plugins.isNotEmpty()) {
-            val firstPlugin = plugins.first()
-            uiState.value = uiState.value.copy(voicePluginName = firstPlugin.name)
-            speechRecognitionManager.setCurrentPlugin(firstPlugin)
-            FileLogger.i(TAG, "Speech plugin available: ${firstPlugin.name}")
+            val (pluginId, plugin) = plugins.first()
+            val pluginInfo = ExtensionManager.getAllInstalledPlugins()
+                .firstOrNull { it.id == pluginId }
+            uiState.value = uiState.value.copy(voicePluginName = pluginInfo?.name ?: "语音插件")
+            speechRecognitionManager.setCurrentPlugin(plugin)
+            FileLogger.i(TAG, "Speech plugin available: ${pluginInfo?.name ?: "unknown"}")
         } else {
             FileLogger.w(TAG, "No speech plugins available")
         }
@@ -1002,7 +1004,7 @@ private fun getPredictionFromPlugin(contextText: String) {
                 // 学习用户输入
                 if (ExtensionManager.hasPredictionPlugins(this@KimeInputMethodService) && selectedCandidate != null) {
                     if (lastCommittedText.isNotEmpty()) {
-                        val predictionPlugin = ExtensionManager.getEnabledPredictionPlugins(this@KimeInputMethodService).firstOrNull()
+                        val predictionPlugin = ExtensionManager.getEnabledPredictionPlugins(this@KimeInputMethodService).firstOrNull()?.second
                         
                         if (predictionPlugin != null) {
                             val lastChar = lastCommittedText.last().toString()
@@ -1173,7 +1175,7 @@ private fun commitText(text: String) {
         serviceScope.launch {
             try {
                 ExtensionManager.getEnabledPredictionPlugins(this@KimeInputMethodService)
-                    .forEach { it.learn(text) }
+                    .forEach { (_, plugin) -> plugin.learn(text) }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to learn from plugin", e)
             }

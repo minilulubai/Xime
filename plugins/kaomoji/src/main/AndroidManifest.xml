@@ -23,8 +23,16 @@
         </activity>
         
         <meta-data
-            android:name="com.kingzcheung.kime.plugin.factory.class"
-            android:value="com.kingzcheung.kime.plugin.kaomoji.KaomojiPluginFactory" />
+            android:name="plugin.entryClass"
+            android:value="com.kingzcheung.kime.plugin.kaomoji.KaomojiPlugin" />
+        
+        <meta-data
+            android:name="plugin.description"
+            android:value="提供精选日式颜文字表情" />
+        
+        <meta-data
+            android:name="plugin.type"
+            android:value="emoji" />
         
     </application>
 

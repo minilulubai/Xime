@@ -8,14 +8,14 @@ plugins {
 
 android {
     namespace = "com.kingzcheung.kime.plugin.kaomoji"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kingzcheung.kime.plugin.kaomoji"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -57,7 +57,7 @@ android.applicationVariants.all {
 }
 
 dependencies {
-    implementation(project(":plugin-api"))
+    compileOnly(project(":plugin-core"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     

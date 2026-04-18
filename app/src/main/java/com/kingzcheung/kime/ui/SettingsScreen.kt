@@ -987,11 +987,10 @@ fun PluginSettingsContent(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val extension = remember(pluginId) {
-        ExtensionManager.getPluginById(pluginId)
-    }
+    val pluginInstance = remember(pluginId) { ExtensionManager.getPluginById(pluginId) }
+    val pluginInfo = remember(pluginId) { ExtensionManager.getAllInstalledPlugins().find { it.id == pluginId } }
     
-    if (extension == null) {
+    if (pluginInstance == null || pluginInfo == null) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1023,14 +1022,21 @@ fun PluginSettingsContent(
         return
     }
     
-    if (!extension.hasSettings()) {
+    val hasSettings = when (pluginInstance) {
+is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> pluginInstance.hasSettings()
+            is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> pluginInstance.hasSettings()
+            is com.kingzcheung.kime.plugin.core.api.PredictionPlugin -> pluginInstance.hasSettings()
+        else -> false
+    }
+    
+    if (!hasSettings) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
             TopAppBar(
-                title = { Text(extension.name) },
+                title = { Text(pluginInfo.name) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -1055,16 +1061,17 @@ fun PluginSettingsContent(
         return
     }
     
-    val settingsIntent = extension.createSettingsIntent(context)
-    if (settingsIntent != null) {
-        LaunchedEffect(Unit) {
-            try {
-                context.startActivity(settingsIntent)
-                onBack()
-            } catch (e: Exception) {
-                android.widget.Toast.makeText(context, "无法打开插件设置: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                onBack()
+    LaunchedEffect(Unit) {
+        try {
+            when (pluginInstance) {
+                is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> pluginInstance.openSettings(context)
+                is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> pluginInstance.openSettings(context)
+                is com.kingzcheung.kime.plugin.core.api.PredictionPlugin -> pluginInstance.openSettings(context)
             }
+            onBack()
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(context, "无法打开插件设置: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            onBack()
         }
     }
 }

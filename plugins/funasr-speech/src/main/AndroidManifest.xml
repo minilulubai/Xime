@@ -32,8 +32,16 @@
         </provider>
         
         <meta-data
-            android:name="com.kingzcheung.kime.plugin.factory.class"
-            android:value="com.kingzcheung.kime.plugin.funasr.FunAsrPluginFactory" />
+            android:name="plugin.entryClass"
+            android:value="com.kingzcheung.kime.plugin.funasr.FunAsrPlugin" />
+        
+        <meta-data
+            android:name="plugin.description"
+            android:value="基于阿里云Fun-ASR的实时语音识别服务" />
+        
+        <meta-data
+            android:name="plugin.type"
+            android:value="speech" />
         
     </application>
 

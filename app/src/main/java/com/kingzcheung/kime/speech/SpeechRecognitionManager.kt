@@ -5,11 +5,11 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import com.kingzcheung.kime.plugin.api.AudioConfig
-import com.kingzcheung.kime.plugin.api.AudioEncoding
-import com.kingzcheung.kime.plugin.api.RecognitionState
-import com.kingzcheung.kime.plugin.api.SpeechPlugin
-import com.kingzcheung.kime.plugin.api.SpeechResult
+import com.kingzcheung.kime.plugin.core.api.AudioConfig
+import com.kingzcheung.kime.plugin.core.api.AudioEncoding
+import com.kingzcheung.kime.plugin.core.api.RecognitionState
+import com.kingzcheung.kime.plugin.core.api.SpeechPlugin
+import com.kingzcheung.kime.plugin.core.api.SpeechResult
 import com.kingzcheung.kime.plugin.ExtensionManager
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -40,7 +40,7 @@ class SpeechRecognitionManager(private val context: Context) {
     private var stateCallback: ((RecognitionState) -> Unit)? = null
     private var errorCallback: ((String) -> Unit)? = null
     
-    fun getAvailablePlugins(): List<SpeechPlugin> {
+    fun getAvailablePlugins(): List<Pair<String, SpeechPlugin>> {
         return ExtensionManager.getEnabledSpeechPlugins(context)
     }
     
@@ -69,20 +69,23 @@ class SpeechRecognitionManager(private val context: Context) {
             return false
         }
         
-        if (pluginId != null) {
-            currentPlugin = plugins.find { it.id == pluginId }
+        val selectedPair = if (pluginId != null) {
+            plugins.find { it.first == pluginId }
         } else {
-            currentPlugin = plugins.firstOrNull()
+            plugins.firstOrNull()
         }
         
-        if (currentPlugin == null) {
+        if (selectedPair == null) {
             Log.e(TAG, "Plugin not found: $pluginId")
             errorCallback?.invoke("插件未找到")
             return false
         }
         
+        currentPlugin = selectedPair.second
+        val pluginInfo = ExtensionManager.getAllInstalledPlugins().firstOrNull { it.id == selectedPair.first }
+        Log.d(TAG, "Using plugin: ${pluginInfo?.name ?: pluginId}")
+        
         val plugin = currentPlugin!!
-        Log.d(TAG, "Using plugin: ${plugin.name}")
         
         if (!plugin.supportsRealtime) {
             Log.e(TAG, "Plugin does not support realtime recognition")
@@ -98,7 +101,7 @@ class SpeechRecognitionManager(private val context: Context) {
         
         val config = AudioConfig(
             sampleRate = SAMPLE_RATE,
-            encoding = AudioEncoding.PCM16,
+            encoding = "pcm16",
             channels = 1
         )
         
@@ -138,7 +141,7 @@ class SpeechRecognitionManager(private val context: Context) {
             }
         }
         
-        Log.d(TAG, "Recognition started with plugin: ${plugin.name}")
+        Log.d(TAG, "Recognition started with plugin: ${pluginInfo?.name ?: "unknown"}")
         return true
     }
     

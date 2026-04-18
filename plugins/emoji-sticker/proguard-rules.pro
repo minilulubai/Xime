@@ -1,21 +1,8 @@
-# Emoji Sticker Plugin ProGuard rules
-
-# disable obfuscation
--dontobfuscate
-# disable optimizations
--dontoptimize
-
-# Keep Kotlin standard library
--keep class kotlin.** { *; }
--keep class kotlin.jvm.** { *; }
--keep class kotlin.collections.** { *; }
--keep class kotlin.coroutines.** { *; }
--keep class kotlin.reflect.** { *; }
-
-# CRITICAL: Keep plugin classes for discovery
--keep class com.kingzcheung.kime.plugin.emoji.PluginDeclaration { *; }
--keep class com.kingzcheung.kime.plugin.emoji.EmojiPluginFactory { *; }
+# Keep plugin entry class
 -keep class com.kingzcheung.kime.plugin.emoji.EmojiStickerPlugin { *; }
+
+# Keep all plugin classes
+-keep class com.kingzcheung.kime.plugin.emoji.** { *; }
 
 # Preserve line numbers for debugging
 -keepattributes SourceFile,LineNumberTable

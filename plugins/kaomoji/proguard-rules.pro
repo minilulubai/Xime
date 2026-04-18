@@ -1,19 +1,8 @@
-# disable obfuscation
--dontobfuscate
-# disable optimizations (keep all code paths)
--dontoptimize
-
-# Keep Kotlin standard library
--keep class kotlin.** { *; }
--keep class kotlin.jvm.** { *; }
--keep class kotlin.collections.** { *; }
--keep class kotlin.coroutines.** { *; }
--keep class kotlin.reflect.** { *; }
-
-# CRITICAL: Keep plugin classes for discovery
--keep class com.kingzcheung.kime.plugin.kaomoji.PluginDeclaration { *; }
--keep class com.kingzcheung.kime.plugin.kaomoji.KaomojiPluginFactory { *; }
+# Keep plugin entry class
 -keep class com.kingzcheung.kime.plugin.kaomoji.KaomojiPlugin { *; }
+
+# Keep all plugin classes
+-keep class com.kingzcheung.kime.plugin.kaomoji.** { *; }
 
 # Preserve line numbers for debugging
 -keepattributes SourceFile,LineNumberTable

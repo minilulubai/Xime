@@ -9,6 +9,33 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+tasks.register("copyPluginsToAssets", Copy::class) {
+    group = "plugin-dev"
+    description = "Manually copy plugin APKs to assets for debugging"
+    
+    val pluginProjects = listOf(
+        ":plugins:funasr-speech",
+        ":plugins:emoji-sticker",
+        ":plugins:kaomoji",
+        ":plugins:prediction-onnx"
+    )
+    
+    pluginProjects.forEach { pluginPath ->
+        dependsOn(project(pluginPath).tasks.getByName("assembleDebug"))
+        from(project(pluginPath).layout.buildDirectory.dir("outputs/apk/debug")) {
+            include("*universal*.apk")
+        }
+    }
+    
+    into(layout.projectDirectory.dir("src/main/assets/plugins"))
+    
+    doFirst {
+        layout.projectDirectory.dir("src/main/assets/plugins").asFile.mkdirs()
+    }
+}
+
+
+
 // 获取 Git 提交哈希
 fun getGitHash(): String {
     return try {
@@ -28,14 +55,14 @@ fun getBuildTime(): String {
 
 android {
     namespace = "com.kingzcheung.kime"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kingzcheung.kime"
         minSdk = 28
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.3.3"
+        versionCode = 8
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -109,7 +136,7 @@ android.applicationVariants.all {
 }
 
 dependencies {
-    implementation(project(":plugin-api"))
+    implementation(project(":plugin-core"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -146,15 +173,15 @@ dependencies {
     
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.core)
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    testImplementation("org.mockito:mockito-core:5.8.0")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.mockito.kotlin)
     
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.runner)
+    androidTestImplementation(libs.androidx.rules)
 }
