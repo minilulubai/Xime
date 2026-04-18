@@ -2,6 +2,7 @@ package com.kingzcheung.kime.plugin.core.runtime.installer
 
 import android.app.Application
 import com.kingzcheung.kime.plugin.core.model.PluginInfo
+import com.kingzcheung.kime.plugin.core.model.ProviderInfo
 import java.io.File
 
 class XmlManager(private val context: Application) {
@@ -56,6 +57,18 @@ class XmlManager(private val context: Application) {
                         writer.write("    <nativeLibPath>${escapeXml(plugin.nativeLibPath)}</nativeLibPath>\n")
                     }
                     writer.write("    <iconResId>${plugin.iconResId}</iconResId>\n")
+                    if (plugin.providers.isNotEmpty()) {
+                        writer.write("    <providers>\n")
+                        for (provider in plugin.providers) {
+                            writer.write("      <provider>\n")
+                            writer.write("        <className>${escapeXml(provider.className)}</className>\n")
+                            writer.write("        <authorities>${escapeXml(provider.authorities.joinToString(";"))}</authorities>\n")
+                            writer.write("        <exported>${provider.exported}</exported>\n")
+                            writer.write("        <enabled>${provider.enabled}</enabled>\n")
+                            writer.write("      </provider>\n")
+                        }
+                        writer.write("    </providers>\n")
+                    }
                     writer.write("  </plugin>\n")
                 }
                 writer.write("</plugins>\n")
@@ -94,6 +107,8 @@ class XmlManager(private val context: Application) {
             val installTime = extractTag(pluginContent, "installTime")?.toLongOrNull() ?: System.currentTimeMillis()
             val nativeLibPath = extractTag(pluginContent, "nativeLibPath")
             val iconResId = extractTag(pluginContent, "iconResId")?.toIntOrNull() ?: 0
+            
+            val providers = parseProviders(pluginContent)
 
             if (id != null && path != null && entryClass != null) {
                 plugins[id] = PluginInfo(
@@ -108,10 +123,38 @@ class XmlManager(private val context: Application) {
                     type = type,
                     enabled = enabled,
                     installTime = installTime,
-                    nativeLibPath = nativeLibPath
+                    nativeLibPath = nativeLibPath,
+                    providers = providers
                 )
             }
         }
+    }
+    
+    private fun parseProviders(pluginContent: String): List<ProviderInfo> {
+        val providersRegex = Regex("<providers>(.*?)</providers>", RegexOption.DOT_MATCHES_ALL)
+        val providersMatch = providersRegex.find(pluginContent)
+        
+        if (providersMatch == null) return emptyList()
+        
+        val providersContent = providersMatch.groupValues[1]
+        val providerRegex = Regex("<provider>(.*?)</provider>", RegexOption.DOT_MATCHES_ALL)
+        val providerMatches = providerRegex.findAll(providersContent)
+        
+        return providerMatches.map { providerMatch ->
+            val providerContent = providerMatch.groupValues[1]
+            val className = extractTag(providerContent, "className") ?: ""
+            val authoritiesStr = extractTag(providerContent, "authorities") ?: ""
+            val authorities = authoritiesStr.split(";").filter { it.isNotBlank() }
+            val exported = extractTag(providerContent, "exported")?.toBoolean() ?: false
+            val enabled = extractTag(providerContent, "enabled")?.toBoolean() ?: true
+            
+            ProviderInfo(
+                className = className,
+                authorities = authorities,
+                exported = exported,
+                enabled = enabled
+            )
+        }.toList()
     }
 
     private fun extractTag(content: String, tagName: String): String? {

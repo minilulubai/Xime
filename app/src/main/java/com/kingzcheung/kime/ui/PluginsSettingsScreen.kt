@@ -2,6 +2,7 @@ package com.kingzcheung.kime.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,8 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.kime.plugin.ExtensionManager
 import com.kingzcheung.kime.plugin.core.model.PluginInfo
+import com.kingzcheung.kime.plugin.core.runtime.PluginManager
 import com.kingzcheung.kime.settings.SettingsPreferences
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,8 +46,14 @@ fun PluginsSettingsContent(
         errorMsg = null
         scope.launch {
             try {
-                val initSuccess = ExtensionManager.reload(context)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val scanned = PluginManager.scanAndInstallSystemPlugins()
+                    Log.d("PluginsSettings", "Scanned $scanned new plugins")
+                    val loaded = PluginManager.loadEnabledPlugins()
+                    Log.d("PluginsSettings", "Loaded $loaded plugins")
+                }
                 extensions = ExtensionManager.getAllInstalledPlugins()
+                Log.d("PluginsSettings", "Loaded ${extensions.size} plugins: ${extensions.map { it.id }}")
             } catch (e: Exception) {
                 e.printStackTrace()
                 errorMsg = e.message

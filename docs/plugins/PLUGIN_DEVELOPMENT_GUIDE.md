@@ -53,17 +53,31 @@ Kime 采用动态加载插件架构，支持 ContentProvider 代理、sharedUser
 
 ### sharedUserId 数据共享
 
-**重要**：如果插件需要与主应用共享配置数据，必须配置 sharedUserId：
+**重要**：只有当插件需要与主应用共享配置数据时，才需要配置 sharedUserId。
 
+**需要 sharedUserId 的场景**：
+- 插件有 ContentProvider 用于配置共享（如 API Key）
+- 插件设置页面保存的数据需要被宿主读取
+
+**不需要 sharedUserId 的场景**：
+- 插件数据只在插件内部使用
+- 插件不需要 ContentProvider 配置共享
+
+配置方式：
+```xml
+<!-- 需要数据共享的插件 AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sharedUserId="com.kingzcheung.kime.shared">
+```
+
+主应用也需要配置相同的 sharedUserId：
 ```xml
 <!-- 主应用 AndroidManifest.xml -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:sharedUserId="com.kingzcheung.kime.shared">
-
-<!-- 插件 AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sharedUserId="com.kingzcheung.kime.shared">
 ```
+
+**注意**：sharedUserId 要求两个应用使用相同的签名。调试版本通常使用相同的 debug keystore，但发布版本需要确保签名一致。
 
 ## 开发插件步骤
 

@@ -80,7 +80,21 @@ object ExtensionManager {
         }
     }
     
-    fun reload(context: Context): Boolean = PluginManager.isInitialized
+    fun reload(context: Context): Boolean {
+        Log.d(TAG, "reload called")
+        return try {
+            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                val scanned = PluginManager.scanAndInstallSystemPlugins()
+                Log.d(TAG, "Scanned $scanned new plugins")
+                val loaded = PluginManager.loadEnabledPlugins()
+                Log.d(TAG, "Loaded $loaded plugins")
+            }
+            PluginManager.isInitialized
+        } catch (e: Exception) {
+            Log.e(TAG, "reload failed", e)
+            false
+        }
+    }
     
     fun getSpeechPlugins(): List<SpeechPlugin> {
         val all = PluginManager.getAllPluginInstances()
