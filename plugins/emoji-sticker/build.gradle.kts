@@ -57,20 +57,14 @@ android.applicationVariants.all {
 }
 
 dependencies {
+    // Force annotations version to resolve conflict
+    constraints {
+        implementation("org.jetbrains:annotations:23.0.0")
+    }
+    
+    // All dependencies from plugin-core (api) + host app
     compileOnly(project(":plugin-core"))
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.core)
     
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.compose.material.icons.core)
-    implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.activity.compose)
-    
+    // Plugin-specific dependency (must be implementation)
     implementation("io.coil-kt:coil-compose:2.5.0")
 }

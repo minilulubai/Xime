@@ -33,14 +33,25 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.core)
+    // Force annotations version to resolve conflict
+    constraints {
+        implementation("org.jetbrains:annotations:23.0.0")
+    }
+    
+    // Expose dependencies to plugins via api
+    api(libs.androidx.core.ktx)
+    api(libs.kotlinx.coroutines.core)
 
-    implementation(platform(libs.androidx.compose.bom))
-    implementation("androidx.compose.runtime:runtime")
-    implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.activity.compose)
+    api(platform(libs.androidx.compose.bom))
+    api("androidx.compose.runtime:runtime")
+    api(libs.androidx.compose.foundation)
+    api(libs.androidx.compose.material3)
+    api(libs.androidx.activity.compose)
+    api(libs.androidx.compose.ui)
+    api(libs.androidx.compose.ui.graphics)
+    api(libs.androidx.compose.material.icons.core)
+    api(libs.androidx.compose.material.icons.extended)
+    api(libs.androidx.lifecycle.runtime.compose)
 
     api("com.android.tools.smali:smali-dexlib2:3.0.8")
 }

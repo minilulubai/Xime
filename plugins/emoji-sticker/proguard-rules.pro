@@ -1,44 +1,25 @@
 # Plugin ProGuard rules
-
-# disable obfuscation
+# Disable obfuscation
 -dontobfuscate
-# disable optimizations - CRITICAL for plugin compatibility with host app
--dontoptimize
 
-# Keep Kotlin standard library - CRITICAL for plugin compatibility
+# CRITICAL: Only disable Lambda merging optimization
+-optimizations !class/merging/*
+
+# Keep Kotlin stdlib
 -keep class kotlin.** { *; }
--keep interface kotlin.** { *; }
--keep class kotlin.jvm.** { *; }
--keep class kotlin.jvm.functions.** { *; }
--keep class kotlin.collections.** { *; }
--keep class kotlin.collections.deserializations.** { *; }
--keep class kotlin.coroutines.** { *; }
--keep class kotlin.coroutines.intrinsics.** { *; }
--keep class kotlin.reflect.** { *; }
--keep class kotlin.text.** { *; }
--keep class kotlin.internal.** { *; }
--keep class kotlin.experimental.** { *; }
--keep class kotlin.sequences.** { *; }
--keep class kotlin.time.** { *; }
+-keepclassmembers class kotlin.** { *; }
 
-# Keep Kotlin inline functions
--keep class kotlin.coroutines.Intrinsics { *; }
--keep class kotlin.coroutines.RestrictedSuspension { *; }
--keep class kotlin.coroutines.SafeContinuation { *; }
+# Keep Compose classes
+-keep class androidx.compose.** { *; }
+-keepclassmembers class androidx.compose.** { *; }
 
 # Keep kotlinx.coroutines
 -keep class kotlinx.coroutines.** { *; }
--keep interface kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** { *; }
 
-# Keep Compose classes - CRITICAL for plugin UI compatibility
--keep class androidx.compose.** { *; }
--keep interface androidx.compose.** { *; }
-
-# Keep all plugin classes
+# Keep plugin classes
 -keep class com.kingzcheung.kime.plugin.emoji.** { *; }
+-keepclassmembers class com.kingzcheung.kime.plugin.emoji.** { *; }
 
-# remove kotlin null checks
--processkotlinnullchecks remove
-
-# Preserve line numbers for debugging
+# Preserve line numbers
 -keepattributes SourceFile,LineNumberTable

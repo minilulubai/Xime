@@ -1,19 +1,19 @@
 # Plugin ProGuard rules
-# CRITICAL: Disable ALL optimizations for compatibility with host app
--dontoptimize
+# Disable obfuscation
 -dontobfuscate
 
-# Keep ALL Kotlin classes and members
+# CRITICAL: Only disable Lambda merging optimization
+-optimizations !class/merging/*
+
+# Keep Kotlin stdlib
 -keep class kotlin.** { *; }
 -keepclassmembers class kotlin.** { *; }
--keep interface kotlin.** { *; }
 
-# Keep ALL Compose classes
+# Keep Compose classes
 -keep class androidx.compose.** { *; }
 -keepclassmembers class androidx.compose.** { *; }
--keep interface androidx.compose.** { *; }
 
-# Keep ALL kotlinx.coroutines
+# Keep kotlinx.coroutines
 -keep class kotlinx.coroutines.** { *; }
 -keepclassmembers class kotlinx.coroutines.** { *; }
 
@@ -27,5 +27,5 @@
 -keep class com.kingzcheung.kime.plugin.funasr.** { *; }
 -keepclassmembers class com.kingzcheung.kime.plugin.funasr.** { *; }
 
-# Preserve line numbers for debugging
+# Preserve line numbers
 -keepattributes SourceFile,LineNumberTable
