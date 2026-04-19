@@ -51,6 +51,7 @@ fun VoiceKeyboardLayout(
     keyBackgroundColor: Color,
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
+    keyboardBackgroundColor: Color,
     modifier: Modifier = Modifier,
     isDarkTheme: Boolean = false,
     themeId: String = "ocean_blue",
@@ -69,7 +70,7 @@ fun VoiceKeyboardLayout(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(specialKeyBackgroundColor.copy(alpha = 0.3f)),
+            .background(keyboardBackgroundColor),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(

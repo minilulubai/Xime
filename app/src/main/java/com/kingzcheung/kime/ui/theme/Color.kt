@@ -8,12 +8,12 @@ val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
 // 键盘背景色
-val KeyboardBackground = Color(0xFFE8EAED)
-val KeyboardBackgroundDark = Color(0xFF202124)
+val KeyboardBackground = Color(0xFFE3E4E8)
+val KeyboardBackgroundDark = Color(0xFF202020)
 
 // 按键颜色
 val KeyBackground = Color(0xFFFFFFFF)
-val KeyBackgroundDark = Color(0xFF35363A)
+val KeyBackgroundDark = Color(0xFF4A4A4A)
 
 // 特殊按键颜色（如 Shift, Delete, Enter）
 val SpecialKeyBackground = Color(0xFFD3E3FD)

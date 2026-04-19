@@ -326,10 +326,10 @@ fun CandidateBar(
                     Box(
                         modifier = Modifier
                             .size(24.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (isHideKeyboardPressed) (if (isDarkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f))
-                                else Color.Transparent
+                                else (if (isDarkTheme) Color(0xFF374151) else Color(0xFFF3F4F6))
                             )
                             .clickable(
                                 interactionSource = hideKeyboardInteractionSource,

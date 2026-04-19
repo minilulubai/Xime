@@ -40,6 +40,7 @@ fun ClipboardView(
     quickSendItems: List<ClipboardItem>,
     selectedTab: Int,
     isDarkTheme: Boolean,
+    backgroundColor: Color,
     onSelectItem: (String) -> Unit,
     onRemoveItem: (Long) -> Unit,
     onTogglePin: (Long) -> Unit,
@@ -47,7 +48,6 @@ fun ClipboardView(
     onRemoveFromQuickSend: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isDarkTheme) Color(0xFF35363A) else Color(0xFFF0F1F2)
     val itemBgColor = if (isDarkTheme) Color(0xFF45474A) else Color.White
     val textColor = if (isDarkTheme) Color(0xFFE8EAED) else Color(0xFF202124)
     val subTextColor = if (isDarkTheme) Color(0xFF9AA0A6) else Color(0xFF5F6368)
@@ -56,7 +56,7 @@ fun ClipboardView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(bgColor)
+            .background(backgroundColor)
     ) {
         if (selectedTab == 0) {
             ClipboardTabContent(

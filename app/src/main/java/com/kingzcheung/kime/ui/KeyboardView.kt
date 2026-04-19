@@ -13,10 +13,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.kingzcheung.kime.clipboard.ClipboardItem
 import com.kingzcheung.kime.plugin.core.api.RecognitionState
-import com.kingzcheung.kime.ui.theme.CandidateBarBackground
-import com.kingzcheung.kime.ui.theme.CandidateBarBackgroundDark
 import com.kingzcheung.kime.ui.theme.DividerColor
 import com.kingzcheung.kime.ui.theme.DividerColorDark
+import com.kingzcheung.kime.ui.theme.KeyboardBackground
+import com.kingzcheung.kime.ui.theme.KeyboardBackgroundDark
 import com.kingzcheung.kime.ui.theme.KeyBackground
 import com.kingzcheung.kime.ui.theme.KeyBackgroundDark
 import com.kingzcheung.kime.ui.theme.KeyTextColor
@@ -79,10 +79,11 @@ fun KeyboardView(
     var clipboardTab by remember { mutableStateOf(0) }
     
     val keyBgColor = if (isDarkTheme) KeyBackgroundDark else KeyBackground
+    val keyboardBgColor = if (isDarkTheme) KeyboardBackgroundDark else KeyboardBackground
     val keyTextColor = if (isDarkTheme) KeyTextColorDark else KeyTextColor
     val specialKeyBgColor = KeyboardThemes.getSpecialKeyColor(themeId, isDarkTheme)
     val accentColor = KeyboardThemes.getAccentColor(themeId, isDarkTheme)
-    val candidateBarBg = if (isDarkTheme) CandidateBarBackgroundDark else CandidateBarBackground
+    val candidateBarBg = keyboardBgColor
     val candidateTextColor = keyTextColor
     val dividerColor = if (isDarkTheme) DividerColorDark else DividerColor
 
@@ -90,7 +91,7 @@ fun KeyboardView(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
+                .background(keyboardBgColor)
         ) {
 CandidateBar(
                 candidates = candidates.toList(),
@@ -145,6 +146,7 @@ onHideKeyboard = {
                         keyBackgroundColor = keyBgColor,
                         keyTextColor = keyTextColor,
                         specialKeyBackgroundColor = specialKeyBgColor,
+                        keyboardBackgroundColor = keyboardBgColor,
                         modifier = Modifier.weight(1f),
                         isDarkTheme = isDarkTheme,
                         themeId = themeId,
@@ -161,6 +163,7 @@ onHideKeyboard = {
                     MenuBar(
                         isVisible = true,
                         isDarkTheme = isDarkTheme,
+                        backgroundColor = keyboardBgColor,
                         onDismiss = { showMenu = false },
                         onClipboard = { 
                             showClipboard = true
@@ -192,6 +195,7 @@ onHideKeyboard = {
                         quickSendItems = quickSendItems,
                         selectedTab = clipboardTab,
                         isDarkTheme = isDarkTheme,
+                        backgroundColor = keyboardBgColor,
                         onSelectItem = { text ->
                             onClipboardSelect?.invoke(text)
                             showClipboard = false

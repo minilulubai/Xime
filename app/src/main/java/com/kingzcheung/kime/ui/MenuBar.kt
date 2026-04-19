@@ -46,6 +46,7 @@ data class MenuItem(
 fun MenuBar(
     isVisible: Boolean,
     isDarkTheme: Boolean,
+    backgroundColor: Color,
     onDismiss: () -> Unit,
     onClipboard: () -> Unit,
     onQuickSend: () -> Unit,
@@ -59,7 +60,6 @@ fun MenuBar(
 ) {
     if (!isVisible) return
     
-    val bgColor = if (isDarkTheme) Color(0xFF35363A) else Color(0xFFF0F1F2)
     val textColor = if (isDarkTheme) Color(0xFFE8EAED) else Color(0xFF202124)
     val itemBgColor = if (isDarkTheme) Color(0xFF45474A) else Color.White
     
@@ -77,7 +77,7 @@ fun MenuBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(bgColor)
+            .background(backgroundColor)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
