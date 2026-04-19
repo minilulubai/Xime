@@ -228,12 +228,22 @@ override fun onCreate() {
         FileLogger.i(TAG, "KimeInputMethodService created")
         
         loadDarkModePreference()
-        initRimeEngine()
-        initClipboardManager()
-        initAssociationEngine()
-        initSpeechRecognition()
         
-        FileLogger.i(TAG, "Service initialization completed")
+        // 所有耗时初始化移到后台线程
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                initRimeEngine()
+                initClipboardManager()
+                initAssociationEngine()
+                initSpeechRecognition()
+                
+                withContext(Dispatchers.Main) {
+                    FileLogger.i(TAG, "Service initialization completed")
+                }
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Initialization failed: ${e.message}")
+            }
+        }
     }
     
     /**
@@ -299,23 +309,27 @@ override fun onCreate() {
     private fun initAssociationEngine() {
         FileLogger.i(TAG, "Initializing plugin system")
         
-        if (!ExtensionManager.isInitialized()) {
-            FileLogger.d(TAG, "ExtensionManager not initialized, initializing...")
-            ExtensionManager.initialize(this)
-        }
-        
-        if (SettingsPreferences.isSmartPredictionEnabled(this)) {
-            serviceScope.launch {
-                try {
-                    val initialized = AssociationManager.initialize(this@KimeInputMethodService)
-                    if (initialized) {
-                        FileLogger.i(TAG, "Smart prediction initialized")
-                    } else {
-                        FileLogger.w(TAG, "Smart prediction initialization failed")
-                    }
-                } catch (e: Exception) {
-                    FileLogger.e(TAG, "Failed to initialize smart prediction: ${e.message}")
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                if (!ExtensionManager.isInitialized()) {
+                    FileLogger.d(TAG, "ExtensionManager not initialized, initializing...")
+                    ExtensionManager.initialize(this@KimeInputMethodService)
                 }
+                
+                if (SettingsPreferences.isSmartPredictionEnabled(this@KimeInputMethodService)) {
+                    try {
+                        val initialized = AssociationManager.initialize(this@KimeInputMethodService)
+                        if (initialized) {
+                            FileLogger.i(TAG, "Smart prediction initialized")
+                        } else {
+                            FileLogger.w(TAG, "Smart prediction initialization failed")
+                        }
+                    } catch (e: Exception) {
+                        FileLogger.e(TAG, "Failed to initialize smart prediction: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Failed to initialize ExtensionManager: ${e.message}")
             }
         }
     }
@@ -328,23 +342,27 @@ override fun onCreate() {
             FileLogger.init(this)
         }
         
-        if (!ExtensionManager.isInitialized()) {
-            FileLogger.i(TAG, "ExtensionManager not initialized, initializing now...")
-            ExtensionManager.initialize(this)
-        }
-        
-        if (SettingsPreferences.isSmartPredictionEnabled(this)) {
-            serviceScope.launch {
-                try {
-                    val initialized = AssociationManager.initialize(this@KimeInputMethodService)
-                    if (initialized) {
-                        FileLogger.i(TAG, "Smart prediction initialized in checkAndInitialize")
-                    } else {
-                        FileLogger.w(TAG, "Smart prediction initialization failed in checkAndInitialize")
-                    }
-                } catch (e: Exception) {
-                    FileLogger.e(TAG, "Failed to initialize smart prediction: ${e.message}")
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                if (!ExtensionManager.isInitialized()) {
+                    FileLogger.i(TAG, "ExtensionManager not initialized, initializing now...")
+                    ExtensionManager.initialize(this@KimeInputMethodService)
                 }
+                
+                if (SettingsPreferences.isSmartPredictionEnabled(this@KimeInputMethodService)) {
+                    try {
+                        val initialized = AssociationManager.initialize(this@KimeInputMethodService)
+                        if (initialized) {
+                            FileLogger.i(TAG, "Smart prediction initialized in checkAndInitialize")
+                        } else {
+                            FileLogger.w(TAG, "Smart prediction initialization failed in checkAndInitialize")
+                        }
+                    } catch (e: Exception) {
+                        FileLogger.e(TAG, "Failed to initialize smart prediction: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Failed to initialize in checkAndInitialize: ${e.message}")
             }
         }
     }
