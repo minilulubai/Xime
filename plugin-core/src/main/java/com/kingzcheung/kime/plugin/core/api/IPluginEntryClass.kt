@@ -1,5 +1,6 @@
 package com.kingzcheung.kime.plugin.core.api
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import com.kingzcheung.kime.plugin.core.model.PluginContext
 
@@ -13,6 +14,8 @@ interface IPluginEntryClass {
     fun Content() {}
 
     fun hasSettings(): Boolean = false
+
+    fun openSettings(context: Context) {}
 
     fun providesService(): List<Class<out Any>> = emptyList()
 

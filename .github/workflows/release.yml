@@ -48,31 +48,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
         
-      - name: Download ONNX Model Files from HuggingFace
-        run: |
-          chmod +x scripts/download_model.sh
-          scripts/download_model.sh
-        continue-on-error: true
-        
-      - name: Verify Model Files
-        run: |
-          echo "=== 检查模型文件 ==="
-          ls -lh plugins/prediction-onnx/src/main/assets/association_model/ || echo "模型目录不存在"
-          
-          # 检查关键文件
-          for file in model.onnx model.onnx.data model_int8_dynamic.onnx vocab.json vocab.txt; do
-            if [ -f "plugins/prediction-onnx/src/main/assets/association_model/$file" ]; then
-              SIZE=$(du -h "plugins/prediction-onnx/src/main/assets/association_model/$file" | cut -f1)
-              echo "✓ $file exists ($SIZE)"
-            else
-              echo "⚠ $file missing - plugin may work with reduced functionality"
-            fi
-          done
-          
-          echo ""
-          echo "总大小:"
-          du -sh plugins/prediction-onnx/src/main/assets/association_model/ || echo "目录不存在"
-        
       - name: Build Release APKs (Unsigned)
         run: ./gradlew assembleRelease --no-daemon
         
@@ -111,30 +86,6 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
-          
-      - name: Sign Prediction Plugin APKs
-        uses: r0adkll/sign-android-release@v1
-        id: sign_prediction_plugin
-        with:
-          releaseDirectory: plugins/prediction-onnx/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
-          
-      - name: Sign FunAsr Speech Plugin APKs
-        uses: r0adkll/sign-android-release@v1
-        id: sign_funasr_plugin
-        with:
-          releaseDirectory: plugins/funasr-speech/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
         
       - name: Get version from tag
         id: get_version
@@ -146,14 +97,10 @@ jobs:
           MAIN_APKS=$(find app/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
           EMOJI_APKS=$(find plugins/emoji-sticker/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
           KAOMOJI_APKS=$(find plugins/kaomoji/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
-          PREDICTION_APKS=$(find plugins/prediction-onnx/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
-          FUNASR_APKS=$(find plugins/funasr-speech/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ',' | sed 's/,$//')
           
           echo "main_apks=$MAIN_APKS" >> $GITHUB_OUTPUT
           echo "emoji_apks=$EMOJI_APKS" >> $GITHUB_OUTPUT
           echo "kaomoji_apks=$KAOMOJI_APKS" >> $GITHUB_OUTPUT
-          echo "prediction_apks=$PREDICTION_APKS" >> $GITHUB_OUTPUT
-          echo "funasr_apks=$FUNASR_APKS" >> $GITHUB_OUTPUT
           
           echo "Main App APKs:"
           echo "$MAIN_APKS" | tr ',' '\n'
@@ -161,10 +108,6 @@ jobs:
           echo "$EMOJI_APKS" | tr ',' '\n'
           echo "Kaomoji Plugin APKs:"
           echo "$KAOMOJI_APKS" | tr ',' '\n'
-          echo "Prediction Plugin APKs:"
-          echo "$PREDICTION_APKS" | tr ',' '\n'
-          echo "FunAsr Plugin APKs:"
-          echo "$FUNASR_APKS" | tr ',' '\n'
           
           if [ -z "$MAIN_APKS" ]; then
             echo "::warning::No main app APKs found!"
@@ -198,20 +141,17 @@ jobs:
             - **x86_64**: 适用于模拟器
             - **universal**: 包含所有架构，体积较大
             
-            ### 插件下载
-            - **emoji-sticker**: 恶搞兔表情包插件
-            - **kaomoji**: 颜文字表情包插件
-            - **prediction-onnx**: 智能联想插件
-            - **funasr-speech**: 语音识别插件（基于阿里云Fun-ASR）
+            ### 插件下载（可选）
+            插件为独立 APK，安装后可在主应用中启用：
+            - **emoji-sticker**: 恶搞兔表情包插件（提供8个表情）
+            - **kaomoji**: 颜文字插件（提供精选颜文字）
             
-            ### 更新说明
+            ### 安装说明
             ${{ steps.changelog.outputs.CHANGELOG }}
           files: |
             ${{ steps.find_apks.outputs.main_apks }}
             ${{ steps.find_apks.outputs.emoji_apks }}
             ${{ steps.find_apks.outputs.kaomoji_apks }}
-            ${{ steps.find_apks.outputs.prediction_apks }}
-            ${{ steps.find_apks.outputs.funasr_apks }}
           draft: false
           prerelease: false
         env:

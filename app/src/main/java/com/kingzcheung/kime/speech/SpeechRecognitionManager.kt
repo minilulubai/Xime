@@ -7,7 +7,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import com.kingzcheung.kime.MainActivity
-import com.kingzcheung.kime.plugin.core.api.RecognitionState
+import com.kingzcheung.kime.speech.RecognitionState
 import com.kingzcheung.kime.settings.SettingsPreferences
 import com.kingzcheung.kime.speech.funasr.FunAsrWebSocketManager
 import kotlinx.coroutines.CoroutineScope

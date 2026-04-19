@@ -133,13 +133,13 @@ fun tearDown() {
 使用 Mockito 模拟外部依赖：
 ```kotlin
 @Test
-fun `plugin should predict correctly`() {
-    val mockPlugin = mock<PredictionPlugin>()
-    `when`(mockPlugin.predict("test", 5)).thenReturn(
-        listOf(PredictionResult("prediction", 0.9f))
+fun `plugin should return emojis correctly`() {
+    val mockPlugin = mock<EmojiPlugin>()
+    `when`(mockPlugin.getEmojis(null, null, 10)).thenReturn(
+        listOf(EmojiItem("1", "(^_^)", "(^_^)", null, "kaomoji"))
     )
     
-    val result = mockPlugin.predict("test", 5)
+    val result = mockPlugin.getEmojis(null, null, 10)
     assertEquals(1, result.size)
 }
 ```

@@ -15,13 +15,6 @@
             </intent-filter>
         </activity>
         
-        <activity
-            android:name=".PluginSettingsActivity"
-            android:exported="true"
-            android:label="恶搞兔表情包设置"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        </activity>
-        
         <meta-data
             android:name="plugin.entryClass"
             android:value="com.kingzcheung.kime.plugin.emoji.EmojiStickerPlugin" />

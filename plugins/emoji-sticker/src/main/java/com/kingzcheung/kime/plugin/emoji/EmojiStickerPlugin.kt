@@ -113,19 +113,4 @@ class EmojiStickerPlugin : EmojiPlugin {
     }
     
     override suspend fun getCategories(): List<String> = listOf("恶搞兔")
-    
-    override fun hasSettings(): Boolean = true
-    
-    override fun openSettings(context: Context) {
-        try {
-            val intent = android.content.Intent()
-            intent.setClassName(
-                "com.kingzcheung.kime.plugin.emoji",
-                "com.kingzcheung.kime.plugin.emoji.PluginSettingsActivity"
-            )
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "无法打开设置: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
 }

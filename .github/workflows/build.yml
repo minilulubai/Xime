@@ -48,31 +48,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
         
-      - name: Download ONNX Model Files from HuggingFace
-        run: |
-          chmod +x scripts/download_model.sh
-          scripts/download_model.sh
-        continue-on-error: true
-        
-      - name: Verify Model Files
-        run: |
-          echo "=== 检查模型文件 ==="
-          ls -lh plugins/prediction-onnx/src/main/assets/association_model/ || echo "模型目录不存在"
-          
-          # 检查关键文件
-          for file in model.onnx model.onnx.data model_int8_dynamic.onnx vocab.json vocab.txt; do
-            if [ -f "plugins/prediction-onnx/src/main/assets/association_model/$file" ]; then
-              SIZE=$(du -h "plugins/prediction-onnx/src/main/assets/association_model/$file" | cut -f1)
-              echo "✓ $file exists ($SIZE)"
-            else
-              echo "⚠ $file missing - plugin may work with reduced functionality"
-            fi
-          done
-          
-          echo ""
-          echo "总大小:"
-          du -sh plugins/prediction-onnx/src/main/assets/association_model/ || echo "目录不存在"
-        
       - name: Run Unit Tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon
         

@@ -38,7 +38,7 @@ import com.kingzcheung.kime.MainActivity
 import com.kingzcheung.kime.association.AssociationManager
 import com.kingzcheung.kime.clipboard.ClipboardManager
 import com.kingzcheung.kime.plugin.ExtensionManager
-import com.kingzcheung.kime.plugin.core.api.RecognitionState
+import com.kingzcheung.kime.speech.RecognitionState
 import com.kingzcheung.kime.rime.RimeConfigHelper
 import com.kingzcheung.kime.rime.RimeEngine
 import com.kingzcheung.kime.settings.SchemaConfigHelper

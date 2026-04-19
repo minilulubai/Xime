@@ -259,9 +259,7 @@ private fun ExtensionItem(
     
     val hasSettings = pluginInstance?.let { 
         when (it) {
-            is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> it.hasSettings()
             is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> it.hasSettings()
-            is com.kingzcheung.kime.plugin.core.api.PredictionPlugin -> it.hasSettings()
             else -> false
         }
     } ?: false

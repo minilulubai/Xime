@@ -13,7 +13,9 @@ interface EmojiPlugin : IPluginEntryClass {
     
     suspend fun getCategories(): List<String>
     
-    fun openSettings(context: Context)
+    override fun hasSettings(): Boolean = false
+    
+    override fun openSettings(context: Context) {}
 }
 
 data class EmojiItem(

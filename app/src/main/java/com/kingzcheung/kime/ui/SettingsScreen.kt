@@ -1084,9 +1084,7 @@ fun PluginSettingsContent(
     }
     
     val hasSettings = when (pluginInstance) {
-is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> pluginInstance.hasSettings()
-            is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> pluginInstance.hasSettings()
-            is com.kingzcheung.kime.plugin.core.api.PredictionPlugin -> pluginInstance.hasSettings()
+        is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> pluginInstance.hasSettings()
         else -> false
     }
     
@@ -1125,9 +1123,7 @@ is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> pluginInstance.hasSettin
     LaunchedEffect(Unit) {
         try {
             when (pluginInstance) {
-                is com.kingzcheung.kime.plugin.core.api.SpeechPlugin -> pluginInstance.openSettings(context)
                 is com.kingzcheung.kime.plugin.core.api.EmojiPlugin -> pluginInstance.openSettings(context)
-                is com.kingzcheung.kime.plugin.core.api.PredictionPlugin -> pluginInstance.openSettings(context)
             }
             onBack()
         } catch (e: Exception) {

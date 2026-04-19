@@ -37,9 +37,8 @@ class InputMethodIntegrationTest {
     fun `test full initialization workflow`() {
         assertFalse(ExtensionManager.isInitialized())
         
-        val result = ExtensionManager.initialize(context)
+        ExtensionManager.initialize(context)
         
-        assertTrue("ExtensionManager should initialize successfully", result)
         assertTrue(ExtensionManager.isInitialized())
     }
     
@@ -47,15 +46,12 @@ class InputMethodIntegrationTest {
     fun `test plugin loading workflow`() {
         ExtensionManager.initialize(context)
         
-        val allPlugins = ExtensionManager.getAllPlugins()
+        val allPlugins = ExtensionManager.getAllInstalledPlugins()
         assertNotNull("Plugin list should not be null", allPlugins)
         
-        val predictionPlugins = ExtensionManager.getPredictionPlugins()
         val emojiPlugins = ExtensionManager.getEmojiPlugins()
-        val speechPlugins = ExtensionManager.getSpeechPlugins()
         
-        val totalLoaded = predictionPlugins.size + emojiPlugins.size + speechPlugins.size
-        assertTrue("Total plugins should match all plugins", totalLoaded == allPlugins.size)
+        assertTrue("Total emoji plugins should match all plugins", emojiPlugins.size <= allPlugins.size)
     }
     
     @Test
@@ -64,7 +60,7 @@ class InputMethodIntegrationTest {
         
         ExtensionManager.initialize(context)
         
-        val initialEnabled = ExtensionManager.getEnabledPredictionPlugins(context)
+        val initialEnabled = ExtensionManager.getEnabledEmojiPlugins(context)
         val initialCount = initialEnabled.size
         
         assertFalse("New plugin should be disabled by default", 
@@ -81,17 +77,6 @@ class InputMethodIntegrationTest {
     }
     
     @Test
-    fun `test plugin prediction integration`() = runBlocking {
-        ExtensionManager.initialize(context)
-        
-        val inputText = "测试"
-        val predictions = ExtensionManager.predict(context, inputText, 5)
-        
-        assertNotNull("Predictions should not be null", predictions)
-        assertTrue("Predictions should be a list", predictions is List)
-    }
-    
-    @Test
     fun `test reload workflow`() {
         ExtensionManager.initialize(context)
         assertTrue(ExtensionManager.isInitialized())
@@ -99,15 +84,5 @@ class InputMethodIntegrationTest {
         val result = ExtensionManager.reload(context)
         assertTrue("Reload should succeed", result)
         assertTrue("Should still be initialized after reload", ExtensionManager.isInitialized())
-    }
-    
-    @Test
-    fun `test force reload workflow`() {
-        ExtensionManager.initialize(context)
-        assertTrue(ExtensionManager.isInitialized())
-        
-        val result = ExtensionManager.forceReload(context)
-        assertTrue("Force reload should succeed", result)
-        assertTrue("Should be initialized after force reload", ExtensionManager.isInitialized())
     }
 }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,15 +11,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.kingzcheung.kime.clipboard.ClipboardItem
-import com.kingzcheung.kime.plugin.core.api.RecognitionState
+import com.kingzcheung.kime.speech.RecognitionState
 import com.kingzcheung.kime.ui.theme.DividerColor
 import com.kingzcheung.kime.ui.theme.DividerColorDark
-import com.kingzcheung.kime.ui.theme.KeyboardBackground
-import com.kingzcheung.kime.ui.theme.KeyboardBackgroundDark
 import com.kingzcheung.kime.ui.theme.KeyBackground
 import com.kingzcheung.kime.ui.theme.KeyBackgroundDark
 import com.kingzcheung.kime.ui.theme.KeyTextColor
 import com.kingzcheung.kime.ui.theme.KeyTextColorDark
+import com.kingzcheung.kime.ui.theme.KeyboardBackground
+import com.kingzcheung.kime.ui.theme.KeyboardBackgroundDark
 import com.kingzcheung.kime.ui.theme.KeyboardThemes
 
 @Composable

@@ -42,7 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.kingzcheung.kime.plugin.core.api.RecognitionState
+import com.kingzcheung.kime.speech.RecognitionState
 import com.kingzcheung.kime.ui.theme.KeyboardThemes
 import kotlin.math.sqrt
 

@@ -20,12 +20,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             isShrinkResources = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
         }
     }
     
@@ -57,11 +53,8 @@ android.applicationVariants.all {
 }
 
 dependencies {
-    // Force annotations version to resolve conflict
     constraints {
         implementation("org.jetbrains:annotations:23.0.0")
     }
-    
-    // All dependencies from plugin-core (api) + host app
     compileOnly(project(":plugin-core"))
 }

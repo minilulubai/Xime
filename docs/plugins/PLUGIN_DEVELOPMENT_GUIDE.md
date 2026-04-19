@@ -2,7 +2,7 @@
 
 ## 插件系统架构
 
-Kime 采用动态加载插件架构，支持 ContentProvider 代理、sharedUserId 数据共享。
+Kime 采用动态加载插件架构，表情插件只提供数据，由主应用负责展示。
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -11,33 +11,30 @@ Kime 采用动态加载插件架构，支持 ContentProvider 代理、sharedUser
 │  ┌─────────────────────────────────────┐   │
 │  │   PluginManager                      │   │
 │  │   - PluginClassLoader 加载插件APK    │   │
-│  │   - ProxyManager 管理Provider代理    │   │
-│  │   - XmlManager 持久化插件信息        │   │
+│  │   - PluginLifecycleManager 管理生命周期 │   │
 │  └─────────────────────────────────────┘   │
 │                                              │
 │  ┌─────────────────────────────────────┐   │
-│  │   HostProvider                       │   │
-│  │   - 代理插件的ContentProvider        │   │
-│  │   - 路径重写: authority/path         │   │
+│  │   ExtensionManager                   │   │
+│  │   - 管理表情数据                     │   │
+│  │   - 提供 emojiCategoriesFlow        │   │
 │  └─────────────────────────────────────┘   │
 └─────────────────────────────────────────────┘
-           │
-           │ PluginClassLoader 加载
-           ▼
+            │
+            │ PluginClassLoader 加载
+            ▼
 ┌─────────────────────────────────────────────┐
 │       插件 APK (独立安装)                    │
 │                                              │
 │  ┌─────────────────────────────────────┐   │
-│  │   IPluginEntryClass 实现             │   │
+│  │   EmojiPlugin 实现                   │   │
 │  │   - onLoad(PluginContext)            │   │
 │  │   - onUnload()                       │   │
-│  │   - 返回具体的插件接口实例            │   │
+│  │   - getEmojis() 提供表情数据         │   │
+│  │   - getCategories() 提供分类         │   │
 │  └─────────────────────────────────────┘   │
 │                                              │
-│  ┌─────────────────────────────────────┐   │
-│  │   ContentProvider (可选)             │   │
-│  │   - 通过 sharedUserId 共享数据       │   │
-│  └─────────────────────────────────────┘   │
+│  插件不需要 UI，不依赖 Compose              │
 └─────────────────────────────────────────────┘
 ```
 
@@ -45,39 +42,23 @@ Kime 采用动态加载插件架构，支持 ContentProvider 代理、sharedUser
 
 ### 插件类型
 
+Kime 目前只支持表情插件类型：
+
 | 类型 | 接口 | 用途 |
 |------|------|------|
-| PREDICTION | PredictionPlugin | 联想词预测 |
-| SPEECH | SpeechPlugin | 语音转文字 |
-| EMOJI | EmojiPlugin | 表情输入 |
+| EMOJI | EmojiPlugin | 表情输入（颜文字、贴纸等） |
 
-### sharedUserId 数据共享
+**重要特性**：
+- 插件只提供资源数据（EmojiItem）
+- 主应用负责展示和交互
+- 插件不需要 UI 代码，不依赖 Compose
+- 插件不需要 sharedUserId（除非需要配置共享）
 
-**重要**：只有当插件需要与主应用共享配置数据时，才需要配置 sharedUserId。
+### sharedUserId
 
-**需要 sharedUserId 的场景**：
-- 插件有 ContentProvider 用于配置共享（如 API Key）
-- 插件设置页面保存的数据需要被宿主读取
+表情插件不需要 `sharedUserId`。插件只提供数据，由主应用负责展示。
 
-**不需要 sharedUserId 的场景**：
-- 插件数据只在插件内部使用
-- 插件不需要 ContentProvider 配置共享
-
-配置方式：
-```xml
-<!-- 需要数据共享的插件 AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sharedUserId="com.kingzcheung.kime.shared">
-```
-
-主应用也需要配置相同的 sharedUserId：
-```xml
-<!-- 主应用 AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sharedUserId="com.kingzcheung.kime.shared">
-```
-
-**注意**：sharedUserId 要求两个应用使用相同的签名。调试版本通常使用相同的 debug keystore，但发布版本需要确保签名一致。
+如果未来需要配置共享（如 API Key），可以考虑添加 `sharedUserId`，但需要确保签名一致。
 
 ## 开发插件步骤
 
@@ -86,15 +67,12 @@ Kime 采用动态加载插件架构，支持 ContentProvider 代理、sharedUser
 ```
 my-kime-plugin/
 ├── build.gradle.kts
-├── proguard-rules.pro
 └── src/main/
     ├── AndroidManifest.xml
-    ├── java/com/example/plugin/
-    │   ├── PluginDeclaration.kt      # 空的 Activity
-    │   ├── MyPlugin.kt               # 实现 IPluginEntryClass
-    │   ├── PluginSettingsActivity.kt # 设置界面（可选）
-    │   └── ConfigProvider.kt         # ContentProvider（可选）
-    └── res/
+    ├── assets/           # 表情资源文件（可选）
+    └── java/com/example/plugin/
+        ├── PluginDeclaration.kt      # 空的 Activity（用于插件发现）
+        └── MyPlugin.kt               # 实现 EmojiPlugin
 ```
 
 ### 2. 配置 build.gradle.kts
@@ -103,7 +81,6 @@ my-kime-plugin/
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -120,11 +97,9 @@ android {
     
     buildTypes {
         release {
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // 推荐禁用混淆，避免 Kotlin stdlib 方法丢失
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
     
@@ -133,41 +108,39 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     
-    buildFeatures {
-        compose = true
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 }
 
 dependencies {
+    // compileOnly 依赖，插件运行时由 PluginClassLoader 加载
     compileOnly(project(":plugin-core"))
     
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.activity:activity-compose:1.9.3")
+    // 如果需要加载图片，添加 coil（implementation）
+    implementation("io.coil-kt:coil-compose:2.5.0")
 }
 ```
+
+**关键点**：
+- `compileOnly(project(":plugin-core"))` - 插件核心接口
+- `isMinifyEnabled = false` - 避免 Kotlin stdlib 方法丢失
+- 不需要 Compose 依赖（插件无 UI）
 
 ### 3. 配置 AndroidManifest.xml
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sharedUserId="com.kingzcheung.kime.shared">
-    
-    <!-- ContentProvider 数据共享需要的权限 -->
-    <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" />
-    
-    <queries>
-        <package android:name="com.kingzcheung.kime" />
-    </queries>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
     <application
         android:allowBackup="false"
-        android:label="@string/app_name">
+        android:label="@string/app_name"
+        android:supportsRtl="true">
         
-        <!-- 插件声明 Activity -->
+        <!-- 插件声明 Activity（必须） -->
         <activity
             android:name=".PluginDeclaration"
             android:exported="true">
@@ -177,37 +150,28 @@ dependencies {
             </intent-filter>
         </activity>
         
-        <!-- 设置界面 -->
-        <activity
-            android:name=".PluginSettingsActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        </activity>
-        
-        <!-- ContentProvider（用于配置共享） -->
-        <provider
-            android:name=".ConfigProvider"
-            android:authorities="com.example.kime.plugin.config"
-            android:exported="true"
-            android:grantUriPermissions="true">
-        </provider>
-        
-        <!-- 插件入口类 -->
+        <!-- 插件元数据 -->
         <meta-data
             android:name="plugin.entryClass"
             android:value="com.example.plugin.MyPlugin" />
         
         <meta-data
             android:name="plugin.description"
-            android:value="插件描述" />
+            android:value="提供精选表情" />
         
         <meta-data
             android:name="plugin.type"
-            android:value="prediction" />
+            android:value="emoji" />
         
     </application>
+
 </manifest>
 ```
+
+**关键点**：
+- `PluginDeclaration` Activity 用于插件发现
+- `plugin.entryClass` 指定插件入口类
+- `plugin.type` 必须是 `emoji`
 
 ### 4. 实现插件入口类
 
@@ -215,182 +179,145 @@ dependencies {
 package com.example.plugin
 
 import android.content.Context
-import android.content.Intent
-import android.widget.Toast
-import com.kingzcheung.kime.plugin.core.api.IPluginEntryClass
-import com.kingzcheung.kime.plugin.core.api.PredictionPlugin
+import android.util.Log
+import com.kingzcheung.kime.plugin.core.api.EmojiItem
+import com.kingzcheung.kime.plugin.core.api.EmojiPlugin
 import com.kingzcheung.kime.plugin.core.model.PluginContext
+import java.io.File
+import java.util.zip.ZipFile
 
-class MyPlugin : IPluginEntryClass {
+class MyPlugin : EmojiPlugin {
     
-    private var pluginInstance: PredictionPlugin? = null
-    private var appContext: Context? = null
+    private var pluginContext: PluginContext? = null
+    private var emojiList: List<EmojiItem> = emptyList()
+    
+    companion object {
+        private const val TAG = "MyPlugin"
+    }
     
     override fun onLoad(context: PluginContext) {
-        appContext = context.application
+        this.pluginContext = context
+        Log.d(TAG, "Plugin loaded: ${context.pluginInfo.id}")
         
-        // 创建插件实例
-        pluginInstance = MyPredictionImpl(appContext!!)
+        // 加载表情数据
+        loadEmojis(context.pluginInfo.path)
+        Log.d(TAG, "Loaded ${emojiList.size} emojis")
     }
     
     override fun onUnload() {
-        pluginInstance?.release()
-        pluginInstance = null
+        emojiList = emptyList()
+        pluginContext = null
+        Log.d(TAG, "Plugin unloaded")
     }
     
-    // IPluginEntryClass 要求返回具体的插件接口
-    fun getPredictionPlugin(): PredictionPlugin? = pluginInstance
-    
-    override fun hasSettings(): Boolean = true
-    
-    override fun openSettings(context: Context) {
-        try {
-            val intent = Intent()
-            intent.setClassName(
-                "com.example.kime.plugin.myplugin",
-                "com.example.plugin.PluginSettingsActivity"
-            )
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "无法打开设置: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-}
-```
-
-### 5. 实现具体插件接口
-
-```kotlin
-package com.example.plugin
-
-import android.content.Context
-import com.kingzcheung.kime.plugin.core.api.PredictionCandidate
-import com.kingzcheung.kime.plugin.core.api.PredictionPlugin
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
-class MyPredictionImpl(private val context: Context) : PredictionPlugin {
-    
-    private var initialized = false
-    
-    override suspend fun predict(inputText: String, topK: Int): List<PredictionCandidate> {
-        if (!initialized || inputText.isEmpty()) return emptyList()
+    private fun loadEmojis(apkPath: String?) {
+        val emojis = mutableListOf<EmojiItem>()
         
-        return withContext(Dispatchers.IO) {
-            // 实现预测逻辑
-            listOf("候选1", "候选2").take(topK)
-                .map { PredictionCandidate(it, 1.0f) }
-        }
-    }
-    
-    override fun learn(text: String) {
-        // 学习用户输入
-    }
-    
-    override suspend fun saveLearnedData() {
-        // 保存学习数据
-    }
-    
-    fun release() {
-        initialized = false
-    }
-}
-```
-
-### 6. ContentProvider 数据共享（可选）
-
-如果插件需要保存配置供主应用读取：
-
-```kotlin
-package com.example.plugin
-
-import android.content.ContentProvider
-import android.content.ContentValues
-import android.content.Context
-import android.database.Cursor
-import android.database.MatrixCursor
-import android.net.Uri
-import android.util.Log
-
-class ConfigProvider : ContentProvider() {
-    
-    companion object {
-        const val AUTHORITY = "com.example.kime.plugin.config"
-        val CONTENT_URI: Uri = Uri.parse("content://$AUTHORITY/config")
-        private const val HOST_PACKAGE = "com.kingzcheung.kime"
-        private const val PREFS_NAME = "plugin_config"
-    }
-    
-    // 关键：通过 sharedUserId 访问宿主的 SharedPreferences
-    private fun getHostPrefs(): SharedPreferences? {
-        val ctx = context ?: return null
-        
-        return if (ctx.packageName == HOST_PACKAGE) {
-            // 在宿主进程
-            ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        } else {
-            // 在插件进程，通过 sharedUserId 访问宿主
+        // 从 APK assets 加载表情
+        val actualApkPath = apkPath ?: pluginContext?.application?.applicationInfo?.sourceDir
+        if (actualApkPath != null) {
             try {
-                val hostContext = ctx.createPackageContext(
-                    HOST_PACKAGE, 
-                    Context.CONTEXT_IGNORE_SECURITY
-                )
-                hostContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                ZipFile(File(actualApkPath)).use { zip ->
+                    zip.entries().asSequence()
+                        .filter { it.name.startsWith("assets/emojis/") && !it.isDirectory }
+                        .forEach { entry ->
+                            val fileName = entry.name.substringAfter("assets/emojis/")
+                            emojis.add(
+                                EmojiItem(
+                                    id = "emoji_$fileName",
+                                    displayText = fileName,
+                                    insertText = fileName,
+                                    imageUrl = null, // 或本地文件路径
+                                    category = "默认"
+                                )
+                            )
+                        }
+                }
             } catch (e: Exception) {
-                Log.e("ConfigProvider", "Failed to get host context", e)
-                null
+                Log.e(TAG, "Failed to load emojis", e)
             }
         }
+        
+        emojiList = emojis
     }
     
-    override fun query(uri: Uri, projection: Array<out String>?, ...): Cursor? {
-        val value = getHostPrefs()?.getString("key", "") ?: ""
-        val cursor = MatrixCursor(arrayOf("value"))
-        cursor.addRow(arrayOf(value))
-        return cursor
+    override suspend fun getEmojis(
+        category: String?, 
+        searchText: String?, 
+        topK: Int
+    ): List<EmojiItem> {
+        val filtered = if (searchText.isNullOrEmpty()) emojiList
+        else emojiList.filter { 
+            it.displayText.contains(searchText) || it.insertText.contains(searchText)
+        }
+        return filtered.take(topK)
     }
     
-    override fun insert(uri: Uri, values: ContentValues?): Uri? {
-        val value = values?.getAsString("value")
-        getHostPrefs()?.edit()?.putString("key", value)?.apply()
-        return uri
+    override suspend fun getCategories(): List<String> {
+        return emojiList.map { it.category }.distinct()
     }
     
-    // ... 其他方法
+    // hasSettings() 默认返回 false，不需要设置界面
+    // openSettings() 默认空实现
 }
 ```
 
-### 7. ProGuard 规则
-
-```proguard
-# 禁用混淆
--dontobfuscate
--dontoptimize
-
-# 保留插件类
--keep class com.example.plugin.** { *; }
-
-# 保留 Kotlin
--keep class kotlin.** { *; }
-```
-
-## 主应用访问插件 Provider
-
-主应用通过代理访问插件的 ContentProvider：
+### 5. 实现空的 PluginDeclaration
 
 ```kotlin
-// 主应用代码
-import com.kingzcheung.kime.plugin.core.utils.queryPlugin
-import com.kingzcheung.kime.plugin.core.utils.insertPlugin
+package com.example.plugin
 
-// 使用代理扩展函数
-val cursor = contentResolver.queryPlugin(
-    ConfigProvider.CONTENT_URI,
-    null, null, null, null
+import android.app.Activity
+import android.os.Bundle
+
+class PluginDeclaration : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // 空实现，用于插件发现
+    }
+}
+```
+
+### 6. ProGuard 规则（可选）
+
+如果启用混淆，需要添加规则：
+
+```proguard
+# Plugin ProGuard rules
+-dontobfuscate
+-optimizations !class/merging/*
+
+-keep class kotlin.** { *; }
+-keepnames class kotlin.** { *; }
+
+-keep class com.example.plugin.** { *; }
+-keepattributes SourceFile,LineNumberTable
+```
+
+**注意**：推荐禁用混淆（`isMinifyEnabled = false`），避免 Kotlin stdlib 方法丢失问题。
+
+## 插件数据结构
+
+### EmojiItem
+
+```kotlin
+data class EmojiItem(
+    val id: String,          // 唯一标识
+    val displayText: String, // 显示文本
+    val insertText: String,  // 插入文本
+    val imageUrl: String?,   // 图片 URL（本地路径或网络 URL）
+    val category: String     // 分类名称
 )
+```
 
-val values = ContentValues().put("value", "config_data")
-contentResolver.insertPlugin(ConfigProvider.CONTENT_URI, values)
+### PluginContext
+
+```kotlin
+data class PluginContext(
+    val application: Application,    // 宿主 Application
+    val pluginInfo: PluginInfo,      // 插件信息
+    val dataDir: File                // 插件数据目录
+)
 ```
 
 ## 安装和测试
@@ -411,7 +338,7 @@ contentResolver.insertPlugin(ConfigProvider.CONTENT_URI, values)
 ### 安装顺序
 
 ```bash
-# 1. 卸载旧版本（sharedUserId 变化必须完全卸载）
+# 1. 卸载旧版本
 adb uninstall com.kingzcheung.kime
 adb uninstall com.example.kime.plugin.myplugin
 
@@ -422,31 +349,52 @@ adb install my-plugin/build/outputs/apk/debug/my-plugin-xxx.apk
 
 ## 常见问题
 
-### 1. ClassNotFoundException
+### 1. ClassNotFoundException 或 NoSuchMethodError
 
-- 原因：ProGuard 混淆了插件类
-- 解决：添加 `-keep class com.example.plugin.** { *; }`
+**原因**：ProGuard 混淆导致 Kotlin 方法丢失
 
-### 2. ContentProvider 数据读取为空
+**解决**：
+1. 禁用混淆：`isMinifyEnabled = false`（推荐）
+2. 或添加 ProGuard 规则：`-keep class kotlin.** { *; }`
 
-- 原因：sharedUserId 未配置或签名不一致
-- 解决：确保两个应用配置相同的 sharedUserId，且签名相同
+### 2. 插件无法发现
 
-### 3. 插件无法发现
+**原因**：AndroidManifest intent-filter 配置错误
 
-- 原因：AndroidManifest intent-filter 配置错误
-- 解决：检查 `<action android:name="com.kingzcheung.kime.plugin.EXTENSION" />`
+**解决**：检查 `<action android:name="com.kingzcheung.kime.plugin.EXTENSION" />`
+
+### 3. 插件加载失败
+
+**原因**：插件入口类路径错误
+
+**解决**：
+- 检查 `plugin.entryClass` 元数据
+- 确保类名完整：`com.example.plugin.MyPlugin`
+
+### 4. 表情数据未显示
+
+**原因**：
+- `getEmojis()` 返回空列表
+- 主应用未启用插件
+
+**解决**：
+- 检查 `loadEmojis()` 实现
+- 在主应用设置中启用插件
 
 ## 现有插件示例
 
 | 插件 | 类型 | 特点 |
 |------|------|------|
-| funasr-speech | SPEECH | ContentProvider 配置共享、sharedUserId |
-| prediction-onnx | PREDICTION | ONNX 模型加载 |
 | kaomoji | EMOJI | 预定义颜文字数据 |
-| emoji-sticker | EMOJI | 图片表情包 |
+| emoji-sticker | EMOJI | 图片表情包（从 APK assets 加载） |
 
 ## 参考文档
 
 - [plugin-core 源码](../../plugin-core/) - 核心实现
 - [现有插件实现](../../plugins/) - 学习最佳实践
+
+## 版本兼容
+
+- 插件 compileSdk 应与主应用一致（36）
+- 插件 targetSdk 应 ≥ 主应用 minSdk（28）
+- Kotlin 版本应与主应用一致（2.3.20）

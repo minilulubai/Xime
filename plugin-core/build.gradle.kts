@@ -33,12 +33,11 @@ android {
 }
 
 dependencies {
-    // Force annotations version to resolve conflict
     constraints {
         implementation("org.jetbrains:annotations:23.0.0")
     }
     
-    // Expose dependencies to plugins via api
+    api(kotlin("stdlib"))
     api(libs.androidx.core.ktx)
     api(libs.kotlinx.coroutines.core)
 
