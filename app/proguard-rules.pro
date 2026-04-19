@@ -1,43 +1,35 @@
 # App ProGuard rules
-
-# disable obfuscation
--dontobfuscate
-# disable optimizations - CRITICAL for plugin compatibility
+# CRITICAL: Must disable ALL optimizations for plugin compatibility
+# This overrides proguard-android-optimize.txt defaults
 -dontoptimize
+-dontobfuscate
 
-# Keep Kotlin standard library - CRITICAL for plugin compatibility
+# Keep ALL Kotlin classes and members - plugins may use any API
 -keep class kotlin.** { *; }
+-keepclassmembers class kotlin.** { *; }
 -keep interface kotlin.** { *; }
--keep class kotlin.jvm.** { *; }
--keep class kotlin.jvm.functions.** { *; }
--keep class kotlin.collections.** { *; }
--keep class kotlin.collections.deserializations.** { *; }
--keep class kotlin.coroutines.** { *; }
--keep class kotlin.coroutines.intrinsics.** { *; }
--keep class kotlin.reflect.** { *; }
--keep class kotlin.text.** { *; }
--keep class kotlin.internal.** { *; }
--keep class kotlin.experimental.** { *; }
 
-# Keep Kotlin inline functions
--keep class kotlin.coroutines.Intrinsics { *; }
--keep class kotlin.coroutines.RestrictedSuspension { *; }
--keep class kotlin.coroutines.SafeContinuation { *; }
+# Keep ALL Compose classes - plugins use Compose UI
+-keep class androidx.compose.** { *; }
+-keepclassmembers class androidx.compose.** { *; }
+-keep interface androidx.compose.** { *; }
 
-# Keep kotlinx.coroutines
+# Keep ALL kotlinx.coroutines
 -keep class kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** { *; }
 -keep interface kotlinx.coroutines.** { *; }
 
 # Keep plugin API classes
--keep class com.kingzcheung.kime.plugin.api.** { *; }
--keep interface com.kingzcheung.kime.plugin.api.** { *; }
+-keep class com.kingzcheung.kime.plugin.** { *; }
+-keepclassmembers class com.kingzcheung.kime.plugin.** { *; }
+-keep interface com.kingzcheung.kime.plugin.** { *; }
 
 # Keep Rime native classes
 -keep class com.kingzcheung.kime.rime.** { *; }
 -keep class com.kingzcheung.kime.**Jni** { *; }
 
-# remove kotlin null checks
--processkotlinnullchecks remove
-
 # Preserve line numbers for debugging
 -keepattributes SourceFile,LineNumberTable
+
+# Remove Kotlin null checks (optional optimization)
+-processkotlinnullchecks remove

@@ -1,14 +1,31 @@
+# Plugin ProGuard rules
+# CRITICAL: Disable ALL optimizations for compatibility with host app
+-dontoptimize
+-dontobfuscate
+
+# Keep ALL Kotlin classes and members
+-keep class kotlin.** { *; }
+-keepclassmembers class kotlin.** { *; }
+-keep interface kotlin.** { *; }
+
+# Keep ALL Compose classes
+-keep class androidx.compose.** { *; }
+-keepclassmembers class androidx.compose.** { *; }
+-keep interface androidx.compose.** { *; }
+
+# Keep ALL kotlinx.coroutines
+-keep class kotlinx.coroutines.** { *; }
+-keepclassmembers class kotlinx.coroutines.** { *; }
+
 # Keep OkHttp
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
-# Keep plugin entry class
--keep class com.kingzcheung.kime.plugin.funasr.FunAsrPlugin { *; }
-
-# Keep all plugin classes
+# Keep plugin classes
 -keep class com.kingzcheung.kime.plugin.funasr.** { *; }
+-keepclassmembers class com.kingzcheung.kime.plugin.funasr.** { *; }
 
 # Preserve line numbers for debugging
 -keepattributes SourceFile,LineNumberTable

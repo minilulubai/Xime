@@ -1,5 +1,6 @@
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Properties
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.net.URL
 
@@ -116,6 +117,13 @@ fun getBuildTime(): String {
     return SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())
 }
 
+// 加载签名配置
+val keystorePropertiesFile = rootProject.file("app/keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.kingzcheung.kime"
     compileSdk = 36
@@ -139,14 +147,30 @@ android {
         buildConfigField("String", "BUILD_TIME", "\"${getBuildTime()}\"")
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true  // 启用代码混淆和压缩
-            isShrinkResources = true  // 启用资源压缩
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 只在本地有 keystore.properties 时才使用签名配置
+            // GitHub Actions 使用自己的签名方式
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -179,7 +203,7 @@ android {
     }
     ndkVersion = "28.2.13676358"
     
-    // 分架构打包
+    // 分架构打�?
     splits {
         abi {
             isEnable = true
@@ -203,6 +227,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    
+    // Kotlin stdlib - CRITICAL for plugin compatibility
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.20")
+    implementation(libs.kotlinx.coroutines.core)
     
     // Jetpack Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -236,15 +264,15 @@ dependencies {
     
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.core)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.mockito.core)
-    testImplementation(libs.mockito.kotlin)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.mockito:mockito-core:5.8.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation(libs.androidx.runner)
-    androidTestImplementation(libs.androidx.rules)
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }

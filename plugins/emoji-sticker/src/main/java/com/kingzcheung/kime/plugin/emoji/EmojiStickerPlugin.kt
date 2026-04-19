@@ -7,6 +7,7 @@ import com.kingzcheung.kime.plugin.core.api.EmojiItem
 import com.kingzcheung.kime.plugin.core.api.EmojiPlugin
 import com.kingzcheung.kime.plugin.core.model.PluginContext
 import java.io.File
+import java.util.Collections
 import java.util.zip.ZipFile
 
 class EmojiStickerPlugin : EmojiPlugin {
@@ -43,18 +44,25 @@ class EmojiStickerPlugin : EmojiPlugin {
             copyEmojisFromAssets(emojisDir, apkPath)
         }
         
-        emojiList = emojisDir.listFiles()
-            ?.filter { it.extension in listOf("jpg", "png", "gif") }
-            ?.sortedBy { it.nameWithoutExtension.toIntOrNull() ?: 0 }
-            ?.mapIndexed { index, file ->
-                EmojiItem(
-                    id = "emoji_$index",
-                    displayText = file.nameWithoutExtension,
-                    insertText = "[表情${file.nameWithoutExtension}]",
-                    imageUrl = file.absolutePath,
-                    category = "恶搞兔"
-                )
-            } ?: emptyList()
+        val files = emojisDir.listFiles()
+            ?.filter { it.extension == "jpg" || it.extension == "png" || it.extension == "gif" }
+            ?.toMutableList() ?: mutableListOf()
+        
+        Collections.sort(files) { f1, f2 ->
+            val n1 = f1.nameWithoutExtension.toIntOrNull() ?: 0
+            val n2 = f2.nameWithoutExtension.toIntOrNull() ?: 0
+            n1.compareTo(n2)
+        }
+        
+        emojiList = files.mapIndexed { index, file ->
+            EmojiItem(
+                id = "emoji_$index",
+                displayText = file.nameWithoutExtension,
+                insertText = "[表情${file.nameWithoutExtension}]",
+                imageUrl = file.absolutePath,
+                category = "恶搞兔"
+            )
+        }
     }
     
     private fun copyEmojisFromAssets(emojisDir: File, apkPath: String?) {

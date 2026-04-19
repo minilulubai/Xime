@@ -156,8 +156,7 @@ private fun CrashScreen(
                     )
                     Text(
                         text = crashInfo.throwable.stackTraceToString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.verticalScroll(rememberScrollState())
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
