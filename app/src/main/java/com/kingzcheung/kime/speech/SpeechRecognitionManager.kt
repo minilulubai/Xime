@@ -1,20 +1,21 @@
 package com.kingzcheung.kime.speech
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import com.kingzcheung.kime.plugin.ExtensionManager
-import com.kingzcheung.kime.plugin.core.api.AudioConfig
+import com.kingzcheung.kime.MainActivity
 import com.kingzcheung.kime.plugin.core.api.RecognitionState
-import com.kingzcheung.kime.plugin.core.api.SpeechPlugin
-import com.kingzcheung.kime.plugin.core.api.SpeechResult
+import com.kingzcheung.kime.settings.SettingsPreferences
+import com.kingzcheung.kime.speech.funasr.FunAsrWebSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -36,7 +37,7 @@ class SpeechRecognitionManager(private val context: Context) {
     ) * BUFFER_SIZE_FACTOR
     
     private var audioRecord: AudioRecord? = null
-    private var currentPlugin: SpeechPlugin? = null
+    private var webSocketManager: FunAsrWebSocketManager? = null
     private val isRecording = AtomicBoolean(false)
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var recordingJob: Job? = null
@@ -45,15 +46,7 @@ class SpeechRecognitionManager(private val context: Context) {
     private var stateCallback: ((RecognitionState) -> Unit)? = null
     private var errorCallback: ((String) -> Unit)? = null
     
-    fun getAvailablePlugins(): List<Pair<String, SpeechPlugin>> {
-        return ExtensionManager.getEnabledSpeechPlugins(context)
-    }
-    
-    fun getCurrentPlugin(): SpeechPlugin? = currentPlugin
-    
-    fun setCurrentPlugin(plugin: SpeechPlugin?) {
-        currentPlugin = plugin
-    }
+    private var partialResultBuffer = StringBuilder()
     
     fun setCallbacks(
         onResult: (String) -> Unit,
@@ -65,36 +58,19 @@ class SpeechRecognitionManager(private val context: Context) {
         errorCallback = onError
     }
     
-    fun startRecognition(pluginId: String? = null): Boolean {
-        val plugins = getAvailablePlugins()
+    fun startRecognition(): Boolean {
+        val apiKey = SettingsPreferences.getFunAsrApiKey(context)
         
-        if (plugins.isEmpty()) {
-            Log.e(TAG, "No speech plugins available")
-            errorCallback?.invoke("没有可用的语音识别插件")
-            return false
-        }
-        
-        val selectedPair = if (pluginId != null) {
-            plugins.find { it.first == pluginId }
-        } else {
-            plugins.firstOrNull()
-        }
-        
-        if (selectedPair == null) {
-            Log.e(TAG, "Plugin not found: $pluginId")
-            errorCallback?.invoke("插件未找到")
-            return false
-        }
-        
-        currentPlugin = selectedPair.second
-        val pluginInfo = ExtensionManager.getAllInstalledPlugins().firstOrNull { it.id == selectedPair.first }
-        Log.d(TAG, "Using plugin: ${pluginInfo?.name ?: pluginId}")
-        
-        val plugin = currentPlugin!!
-        
-        if (!plugin.supportsRealtime) {
-            Log.e(TAG, "Plugin does not support realtime recognition")
-            errorCallback?.invoke("该插件不支持实时识别")
+        if (apiKey.isEmpty()) {
+            Log.e(TAG, "FunAsr API Key not configured")
+            errorCallback?.invoke("请先配置阿里百炼 API Key")
+            
+            coroutineScope.launch(Dispatchers.Main) {
+                val intent = Intent(context, MainActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                intent.putExtra("open_fragment", "speech_to_text")
+                context.startActivity(intent)
+            }
             return false
         }
         
@@ -104,25 +80,31 @@ class SpeechRecognitionManager(private val context: Context) {
             return false
         }
         
-        val config = AudioConfig(
-            sampleRate = SAMPLE_RATE,
-            encoding = "pcm16",
-            channels = 1
+        partialResultBuffer.clear()
+        
+        webSocketManager = FunAsrWebSocketManager(
+            apiKey = apiKey,
+            onResult = { text, isFinal ->
+                handleRecognitionResult(text, isFinal)
+            },
+            onError = { error ->
+                handleRecognitionError(error)
+            },
+            onStateChanged = { state ->
+                handleStateChanged(state)
+            }
         )
         
-        val started = plugin.startRecognition(config) { result ->
-            handleRecognitionResult(result)
-        }
+        val connected = webSocketManager?.connect() ?: false
         
-        if (!started) {
-            Log.e(TAG, "Plugin failed to start recognition")
+        if (!connected) {
+            Log.e(TAG, "Failed to connect WebSocket")
             stopAudioRecording()
-            errorCallback?.invoke("插件启动识别失败")
+            errorCallback?.invoke("连接失败")
             return false
         }
         
         isRecording.set(true)
-        stateCallback?.invoke(RecognitionState.LISTENING)
         
         recordingJob = coroutineScope.launch {
             try {
@@ -132,7 +114,7 @@ class SpeechRecognitionManager(private val context: Context) {
                     
                     if (bytesRead > 0) {
                         val audioChunk = buffer.copyOf(bytesRead)
-                        plugin.sendAudioChunk(audioChunk)
+                        webSocketManager?.sendAudioChunk(audioChunk)
                     } else if (bytesRead < 0) {
                         Log.e(TAG, "Audio read error: $bytesRead")
                         break
@@ -146,7 +128,7 @@ class SpeechRecognitionManager(private val context: Context) {
             }
         }
         
-        Log.d(TAG, "Recognition started with plugin: ${pluginInfo?.name ?: "unknown"}")
+        Log.d(TAG, "Recognition started with FunAsr")
         return true
     }
     
@@ -158,9 +140,15 @@ class SpeechRecognitionManager(private val context: Context) {
         recordingJob?.cancel()
         recordingJob = null
         
-        stopAudioRecording()
+        webSocketManager?.sendFinishTask()
         
-        currentPlugin?.stopRecognition()
+        coroutineScope.launch {
+            kotlinx.coroutines.delay(500)
+            webSocketManager?.disconnect()
+            webSocketManager = null
+        }
+        
+        stopAudioRecording()
         
         stateCallback?.invoke(RecognitionState.IDLE)
         
@@ -175,10 +163,10 @@ class SpeechRecognitionManager(private val context: Context) {
         recordingJob?.cancel()
         recordingJob = null
         
-        stopAudioRecording()
+        webSocketManager?.cancel()
+        webSocketManager = null
         
-        currentPlugin?.cancelRecognition()
-        currentPlugin = null
+        stopAudioRecording()
         
         stateCallback?.invoke(RecognitionState.IDLE)
         
@@ -186,7 +174,14 @@ class SpeechRecognitionManager(private val context: Context) {
     }
     
     fun getState(): RecognitionState {
-        return currentPlugin?.getState() ?: RecognitionState.IDLE
+        return when (webSocketManager?.getState()) {
+            FunAsrWebSocketManager.State.LISTENING -> RecognitionState.LISTENING
+            FunAsrWebSocketManager.State.PROCESSING -> RecognitionState.PROCESSING
+            FunAsrWebSocketManager.State.CONNECTING, 
+            FunAsrWebSocketManager.State.CONNECTED -> RecognitionState.LISTENING
+            FunAsrWebSocketManager.State.ERROR -> RecognitionState.ERROR
+            else -> RecognitionState.IDLE
+        }
     }
     
     private fun startAudioRecording(): Boolean {
@@ -230,20 +225,46 @@ class SpeechRecognitionManager(private val context: Context) {
         }
     }
     
-    private fun handleRecognitionResult(result: SpeechResult) {
-        Log.d(TAG, "Recognition result: ${result.text}, isFinal: ${result.isFinal}")
+    private fun handleRecognitionResult(text: String, isFinal: Boolean) {
+        Log.d(TAG, "Recognition result: $text, isFinal: $isFinal")
         
         CoroutineScope(Dispatchers.Main).launch {
-            if (result.text.startsWith("错误:")) {
-                errorCallback?.invoke(result.text)
-            } else {
-                resultCallback?.invoke(result.text)
+            if (text.isNotEmpty()) {
+                resultCallback?.invoke(text)
             }
             
-            if (result.isFinal) {
+            if (isFinal) {
                 stateCallback?.invoke(RecognitionState.IDLE)
             } else {
                 stateCallback?.invoke(RecognitionState.PROCESSING)
+            }
+        }
+    }
+    
+    private fun handleRecognitionError(error: String) {
+        Log.e(TAG, "Recognition error: $error")
+        
+        CoroutineScope(Dispatchers.Main).launch {
+            errorCallback?.invoke(error)
+        }
+    }
+    
+    private fun handleStateChanged(state: FunAsrWebSocketManager.State) {
+        Log.d(TAG, "State changed: $state")
+        
+        CoroutineScope(Dispatchers.Main).launch {
+            when (state) {
+                FunAsrWebSocketManager.State.LISTENING -> 
+                    stateCallback?.invoke(RecognitionState.LISTENING)
+                FunAsrWebSocketManager.State.PROCESSING -> 
+                    stateCallback?.invoke(RecognitionState.PROCESSING)
+                FunAsrWebSocketManager.State.CONNECTING, 
+                FunAsrWebSocketManager.State.CONNECTED -> 
+                    stateCallback?.invoke(RecognitionState.LISTENING)
+                FunAsrWebSocketManager.State.ERROR -> 
+                    stateCallback?.invoke(RecognitionState.ERROR)
+                else -> 
+                    stateCallback?.invoke(RecognitionState.IDLE)
             }
         }
     }

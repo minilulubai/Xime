@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AddBox
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.KeyboardAlt
@@ -85,6 +86,8 @@ object SettingsRoutes {
     const val Plugins = "plugins"
     const val PluginSettings = "plugin_settings"
     const val SmartPrediction = "smart_prediction"
+    const val SpeechToText = "speech_to_text"
+    const val FunAsrSettings = "funasr_settings"
     const val About = "about"
     const val Privacy = "privacy"
     const val Licenses = "licenses"
@@ -112,6 +115,7 @@ fun SettingsScreen(
                 onNavigateToDictionary = { navController.navigate(SettingsRoutes.Dictionary) },
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
+                onNavigateToSpeechToText = { navController.navigate(SettingsRoutes.SpeechToText) },
                 onNavigateToAbout = { navController.navigate(SettingsRoutes.About) }
             )
         }
@@ -151,6 +155,17 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.SmartPrediction) {
             SmartPredictionSettingsContent(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(SettingsRoutes.SpeechToText) {
+            SpeechToTextSettingsContent(
+                onBack = { navController.popBackStack() },
+                onNavigateToFunAsrSettings = { navController.navigate(SettingsRoutes.FunAsrSettings) }
+            )
+        }
+        composable(SettingsRoutes.FunAsrSettings) {
+            FunAsrSettingsContent(
                 onBack = { navController.popBackStack() }
             )
         }
@@ -194,6 +209,7 @@ fun SettingsMainContent(
     onNavigateToDictionary: () -> Unit,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSmartPrediction: () -> Unit,
+    onNavigateToSpeechToText: () -> Unit,
     onNavigateToAbout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -371,6 +387,18 @@ fun SettingsMainContent(
                         title = "智能联想",
                         subtitle = "基于 AI 模型的智能联想词预测",
                         onClick = onNavigateToSmartPrediction,
+                        showArrow = true
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.Outlined.Mic,
+                        title = "语音转文本",
+                        subtitle = "在线 ASR 服务和本地模型管理",
+                        onClick = onNavigateToSpeechToText,
                         showArrow = true
                     )
                     HorizontalDivider(

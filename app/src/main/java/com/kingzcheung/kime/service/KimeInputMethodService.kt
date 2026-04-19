@@ -266,16 +266,13 @@ override fun onCreate() {
             }
         )
         
-        val plugins = speechRecognitionManager.getAvailablePlugins()
-        if (plugins.isNotEmpty()) {
-            val (pluginId, plugin) = plugins.first()
-            val pluginInfo = ExtensionManager.getAllInstalledPlugins()
-                .firstOrNull { it.id == pluginId }
-            uiState.value = uiState.value.copy(voicePluginName = pluginInfo?.name ?: "语音插件")
-            speechRecognitionManager.setCurrentPlugin(plugin)
-            FileLogger.i(TAG, "Speech plugin available: ${pluginInfo?.name ?: "unknown"}")
+        val apiKey = SettingsPreferences.getFunAsrApiKey(this)
+        if (apiKey.isNotEmpty()) {
+            uiState.value = uiState.value.copy(voicePluginName = "阿里百炼")
+            FileLogger.i(TAG, "FunAsr API Key configured")
         } else {
-            FileLogger.w(TAG, "No speech plugins available")
+            uiState.value = uiState.value.copy(voicePluginName = "未配置")
+            FileLogger.w(TAG, "FunAsr API Key not configured")
         }
     }
     

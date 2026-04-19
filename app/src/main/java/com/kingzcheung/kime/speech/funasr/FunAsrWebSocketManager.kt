@@ -1,4 +1,4 @@
-package com.kingzcheung.kime.plugin.funasr
+package com.kingzcheung.kime.speech.funasr
 
 import android.util.Log
 import kotlinx.coroutines.*
@@ -8,7 +8,7 @@ import org.json.JSONObject
 import java.util.UUID
 import java.time.Duration
 
-class WebSocketManager(
+class FunAsrWebSocketManager(
     private val apiKey: String,
     private val onResult: (String, Boolean) -> Unit,
     private val onError: (String) -> Unit,
@@ -30,11 +30,10 @@ class WebSocketManager(
     private var state: State = State.IDLE
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
-    // 用于累积结果处理
     private var lastResultText: String = ""
     
     companion object {
-        private const val TAG = "WebSocketManager"
+        private const val TAG = "FunAsrWebSocket"
         private const val WS_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference/"
         private const val MODEL = "fun-asr-realtime"
         private const val SAMPLE_RATE = 16000
@@ -44,7 +43,6 @@ class WebSocketManager(
     fun getState(): State = state
     
     fun connect(): Boolean {
-        // 重置累积结果
         lastResultText = ""
         
         if (state != State.IDLE) {
@@ -68,7 +66,7 @@ class WebSocketManager(
             val request = Request.Builder()
                 .url(WS_URL)
                 .header("Authorization", "bearer $apiKey")
-                .header("user-agent", "Kime-FunAsr-Plugin/1.0")
+                .header("user-agent", "Kime-FunAsr/1.0")
                 .build()
             
             Log.d(TAG, "Request headers: Authorization=bearer ${apiKey.take(10)}...")
@@ -188,7 +186,6 @@ class WebSocketManager(
                     }
                     
                     "result-generated" -> {
-                        // 打印完整消息以便调试
                         Log.d(TAG, "Full result message: $text")
                         
                         val payload = message.getJSONObject("payload")
@@ -196,7 +193,6 @@ class WebSocketManager(
                         if (output != null) {
                             val sentence = output.optJSONObject("sentence")
                             if (sentence != null) {
-                                // 检查是否是心跳消息
                                 val heartbeat = sentence.optBoolean("heartbeat", false)
                                 if (heartbeat) {
                                     Log.d(TAG, "Skipping heartbeat message")
@@ -215,26 +211,20 @@ class WebSocketManager(
                                 onStateChanged(state)
                                 
                                 if (resultText.isNotEmpty()) {
-                                    // FunASR 返回的是累积结果，需要提取增量部分
                                     val incrementalText = if (lastResultText.isNotEmpty() && resultText.startsWith(lastResultText)) {
-                                        // 新结果是旧结果的扩展，提取新增部分
                                         val delta = resultText.substring(lastResultText.length)
                                         Log.d(TAG, "Incremental text: '$delta'")
                                         delta
                                     } else {
-                                        // 结果发生变化（可能是修正），返回完整新结果
                                         Log.d(TAG, "Result changed, returning full text")
                                         resultText
                                     }
                                     
-                                    // 只有在有增量内容时才回调
                                     if (incrementalText.isNotEmpty()) {
                                         onResult(incrementalText, isFinal)
                                     }
                                     
-                                    // 更新累积状态
                                     if (isFinal) {
-                                        // 句子结束，重置累积状态
                                         Log.d(TAG, "Sentence finalized, resetting lastResultText")
                                         lastResultText = ""
                                     } else {

@@ -70,7 +70,6 @@ tasks.register("copyPluginsToAssets", Copy::class) {
     description = "Manually copy plugin APKs to assets for debugging"
     
     val pluginProjects = listOf(
-        ":plugins:funasr-speech",
         ":plugins:emoji-sticker",
         ":plugins:kaomoji"
     )
@@ -313,6 +312,9 @@ dependencies {
     // Coil (Image Loading with SVG support)
     implementation(libs.coil)
     implementation(libs.coil.svg)
+    
+    // OkHttp for WebSocket
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     
     debugImplementation(libs.androidx.compose.ui.tooling)
     

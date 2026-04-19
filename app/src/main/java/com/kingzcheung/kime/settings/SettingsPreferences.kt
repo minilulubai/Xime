@@ -19,6 +19,10 @@ object SettingsPreferences {
     private const val KEY_SMART_PREDICTION_ENABLED = "smart_prediction_enabled"
     private const val KEY_PREDICTION_MODEL_REPO = "prediction_model_repo"
     
+    private const val KEY_STT_ENABLED = "stt_enabled"
+    private const val KEY_STT_PROVIDER = "stt_provider"
+    private const val KEY_FUNASR_API_KEY = "funasr_api_key"
+    
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -118,5 +122,29 @@ object SettingsPreferences {
     
     fun setPredictionModelRepo(context: Context, repo: String) {
         getPrefs(context).edit().putString(KEY_PREDICTION_MODEL_REPO, repo).apply()
+    }
+    
+    fun isSttEnabled(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_STT_ENABLED, false)
+    }
+    
+    fun setSttEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_STT_ENABLED, enabled).apply()
+    }
+    
+    fun getSttProvider(context: Context): String {
+        return getPrefs(context).getString(KEY_STT_PROVIDER, "funasr") ?: "funasr"
+    }
+    
+    fun setSttProvider(context: Context, provider: String) {
+        getPrefs(context).edit().putString(KEY_STT_PROVIDER, provider).apply()
+    }
+    
+    fun getFunAsrApiKey(context: Context): String {
+        return getPrefs(context).getString(KEY_FUNASR_API_KEY, "") ?: ""
+    }
+    
+    fun setFunAsrApiKey(context: Context, apiKey: String) {
+        getPrefs(context).edit().putString(KEY_FUNASR_API_KEY, apiKey).apply()
     }
 }
