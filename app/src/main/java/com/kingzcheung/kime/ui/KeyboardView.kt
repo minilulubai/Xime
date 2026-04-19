@@ -67,6 +67,7 @@ fun KeyboardView(
     voicePluginName: String = "",
     voiceRecognitionState: RecognitionState = RecognitionState.IDLE,
     voiceRecognizedText: String = "",
+    voiceAmplitude: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     var isShifted by remember { mutableStateOf(false) }
@@ -145,12 +146,15 @@ onHideKeyboard = {
                         keyTextColor = keyTextColor,
                         specialKeyBackgroundColor = specialKeyBgColor,
                         modifier = Modifier.weight(1f),
+                        isDarkTheme = isDarkTheme,
+                        themeId = themeId,
                         bottomActive = voiceBottomActive,
                         leftActive = voiceLeftActive,
                         rightActive = voiceRightActive,
                         pluginName = voicePluginName,
                         recognitionState = voiceRecognitionState,
-                        recognizedText = voiceRecognizedText
+                        recognizedText = voiceRecognizedText,
+                        amplitude = voiceAmplitude
                     )
                 }
                 showMenu -> {

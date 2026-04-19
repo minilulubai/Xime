@@ -27,7 +27,7 @@ class SpeechRecognitionManager(private val context: Context) {
         private const val SAMPLE_RATE = 16000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val BUFFER_SIZE_FACTOR = 2
+        private const val BUFFER_SIZE_FACTOR = 1
     }
     
     private val bufferSize = AudioRecord.getMinBufferSize(
@@ -45,17 +45,20 @@ class SpeechRecognitionManager(private val context: Context) {
     private var resultCallback: ((String) -> Unit)? = null
     private var stateCallback: ((RecognitionState) -> Unit)? = null
     private var errorCallback: ((String) -> Unit)? = null
+    private var amplitudeCallback: ((Float) -> Unit)? = null
     
     private var partialResultBuffer = StringBuilder()
     
     fun setCallbacks(
         onResult: (String) -> Unit,
         onStateChange: (RecognitionState) -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        onAmplitude: ((Float) -> Unit)? = null
     ) {
         resultCallback = onResult
         stateCallback = onStateChange
         errorCallback = onError
+        amplitudeCallback = onAmplitude
     }
     
     fun startRecognition(): Boolean {
@@ -115,6 +118,9 @@ class SpeechRecognitionManager(private val context: Context) {
                     if (bytesRead > 0) {
                         val audioChunk = buffer.copyOf(bytesRead)
                         webSocketManager?.sendAudioChunk(audioChunk)
+                        
+                        val amplitude = calculateAmplitude(buffer, bytesRead)
+                        amplitudeCallback?.invoke(amplitude)
                     } else if (bytesRead < 0) {
                         Log.e(TAG, "Audio read error: $bytesRead")
                         break
@@ -273,5 +279,22 @@ class SpeechRecognitionManager(private val context: Context) {
         cancelRecognition()
         coroutineScope.cancel()
         Log.d(TAG, "SpeechRecognitionManager released")
+    }
+    
+    private fun calculateAmplitude(buffer: ByteArray, length: Int): Float {
+        var maxAmplitude = 0
+        val samples = length / 2
+        
+        for (i in 0 until samples) {
+            val sample = ((buffer[i * 2 + 1].toInt() shl 8) or (buffer[i * 2].toInt() and 0xFF)).toShort()
+            val absSample = kotlin.math.abs(sample.toInt())
+            if (absSample > maxAmplitude) {
+                maxAmplitude = absSample
+            }
+        }
+        
+        val normalizedAmplitude = (maxAmplitude / 15000.0).coerceIn(0.0, 1.0)
+        
+        return normalizedAmplitude.toFloat()
     }
 }

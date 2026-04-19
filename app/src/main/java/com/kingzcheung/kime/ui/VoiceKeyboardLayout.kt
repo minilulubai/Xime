@@ -13,14 +13,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -39,7 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.kingzcheung.kime.plugin.core.api.RecognitionState
+import com.kingzcheung.kime.ui.theme.KeyboardThemes
 import kotlin.math.sqrt
 
 @Composable
@@ -48,14 +52,19 @@ fun VoiceKeyboardLayout(
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
     modifier: Modifier = Modifier,
+    isDarkTheme: Boolean = false,
+    themeId: String = "ocean_blue",
     bottomActive: Boolean = false,
     leftActive: Boolean = false,
     rightActive: Boolean = false,
     pluginName: String = "",
     recognitionState: RecognitionState = RecognitionState.IDLE,
-    recognizedText: String = ""
+    recognizedText: String = "",
+    amplitude: Float = 0f
 ) {
-    val inactiveColor = Color.Gray.copy(alpha = 0.5f)
+    val accentColor = KeyboardThemes.getAccentColor(themeId, isDarkTheme)
+    val inactiveColor = if (isDarkTheme) Color.Gray.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.9f)
+    val activeColor = accentColor
     
     Column(
         modifier = modifier
@@ -63,196 +72,128 @@ fun VoiceKeyboardLayout(
             .background(specialKeyBackgroundColor.copy(alpha = 0.3f)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(top = 24.dp),
-            contentAlignment = Alignment.Center
+                .padding(top = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (pluginName.isNotEmpty()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "语音",
-                            tint = keyTextColor.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = pluginName,
-                            color = keyTextColor.copy(alpha = 0.6f),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-                }
-                
-                AudioSpectrumAnimation(
-                    modifier = Modifier.size(120.dp, 80.dp),
-                    isActive = recognitionState == RecognitionState.LISTENING || 
-                               recognitionState == RecognitionState.PROCESSING
+            if (pluginName.isNotEmpty()) {
+                Text(
+                    text = pluginName,
+                    color = keyTextColor.copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal
                 )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                val statusText = when (recognitionState) {
-                    RecognitionState.IDLE -> "点击开始说话"
-                    RecognitionState.LISTENING -> "正在聆听..."
-                    RecognitionState.PROCESSING -> "正在识别..."
-                    RecognitionState.ERROR -> "识别出错"
-                }
+            }
+            
+            val statusText = when (recognitionState) {
+                RecognitionState.IDLE -> "长按空格开始说话"
+                RecognitionState.LISTENING -> "正在聆听..."
+                RecognitionState.PROCESSING -> "正在识别..."
+                RecognitionState.ERROR -> "识别出错"
+            }
+            
+            Text(
+                text = statusText,
+                color = keyTextColor.copy(alpha = 0.8f),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+            
+            if (recognizedText.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(
-                    text = statusText,
-                    color = keyTextColor.copy(alpha = 0.8f),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center
+                    text = recognizedText,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    modifier = Modifier.padding(horizontal = 24.dp)
                 )
-                
-                if (recognizedText.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = recognizedText,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
             }
         }
         
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp)
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
+                modifier = Modifier.size(64.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Canvas(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.size(if (leftActive) 64.dp else 56.dp)
                 ) {
-                    val canvasWidth = size.width
-                    val canvasHeight = size.height
-                    
-                    val sideLength = canvasHeight * 1.3f
-                    
-                    val Ax = 0f
-                    val Ay = -sideLength * 0.15f
-                    val Bx = 0f
-                    val By = canvasHeight + sideLength * 0.15f
-                    val Cx = sideLength * sqrt(3f) / 2f
-                    val Cy = canvasHeight / 2f
-                    
-                    val cornerRadius = sideLength * 0.3f
-                    
-                    val AC_dist = sqrt((Cx - Ax) * (Cx - Ax) + (Cy - Ay) * (Cy - Ay))
-                    val ACx = Ax + (Cx - Ax) * cornerRadius / AC_dist
-                    val ACy = Ay + (Cy - Ay) * cornerRadius / AC_dist
-                    
-                    val BC_dist = sqrt((Cx - Bx) * (Cx - Bx) + (Cy - By) * (Cy - By))
-                    val BCx = Bx + (Cx - Bx) * cornerRadius / BC_dist
-                    val BCy = By + (Cy - By) * cornerRadius / BC_dist
-                    
-                    val path = Path().apply {
-                        moveTo(Ax, Ay)
-                        lineTo(ACx, ACy)
-                        quadraticBezierTo(Cx, Cy, BCx, BCy)
-                        lineTo(Bx, By)
-                        close()
-                    }
-                    
-                    drawPath(
-                        path = path,
-                        color = if (leftActive) Color.White else inactiveColor
+                    drawCircle(
+                        color = if (leftActive) activeColor else inactiveColor,
+                        radius = size.minDimension / 2f
                     )
                 }
-                
-                Box(
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Undo,
+                    contentDescription = "撤销",
+                    tint = if (leftActive) Color.White else if (isDarkTheme) Color.DarkGray else Color.Gray,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 16.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Text(
-                        text = "撤回",
-                        color = if (leftActive) Color.Black else Color.DarkGray,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                        .size(28.dp)
+                        .scale(if (leftActive) 1.15f else 1f)
+                )
             }
             
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(28.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Canvas(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    val canvasWidth = size.width
-                    val canvasHeight = size.height
-                    
-                    val sideLength = canvasHeight * 1.3f
-                    
-                    val Ax = canvasWidth
-                    val Ay = -sideLength * 0.15f
-                    val Bx = canvasWidth
-                    val By = canvasHeight + sideLength * 0.15f
-                    val Cx = canvasWidth - sideLength * sqrt(3f) / 2f
-                    val Cy = canvasHeight / 2f
-                    
-                    val cornerRadius = sideLength * 0.3f
-                    
-                    val AC_dist = sqrt((Cx - Ax) * (Cx - Ax) + (Cy - Ay) * (Cy - Ay))
-                    val ACx = Ax + (Cx - Ax) * cornerRadius / AC_dist
-                    val ACy = Ay + (Cy - Ay) * cornerRadius / AC_dist
-                    
-                    val BC_dist = sqrt((Cx - Bx) * (Cx - Bx) + (Cy - By) * (Cy - By))
-                    val BCx = Bx + (Cx - Bx) * cornerRadius / BC_dist
-                    val BCy = By + (Cy - By) * cornerRadius / BC_dist
-                    
-                    val path = Path().apply {
-                        moveTo(Ax, Ay)
-                        lineTo(ACx, ACy)
-                        quadraticBezierTo(Cx, Cy, BCx, BCy)
-                        lineTo(Bx, By)
-                        close()
-                    }
-                    drawPath(
-                        path = path,
-                        color = if (rightActive) Color.White else inactiveColor
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRoundRect(
+                        color = inactiveColor.copy(alpha = 0.3f),
+                        topLeft = Offset.Zero,
+                        size = size,
+                        cornerRadius = CornerRadius(28.dp.toPx(), 28.dp.toPx())
                     )
                 }
                 
-                Box(
+                AudioSpectrumAnimation(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(end = 16.dp),
-                    contentAlignment = Alignment.CenterEnd
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    isActive = recognitionState == RecognitionState.LISTENING || 
+                               recognitionState == RecognitionState.PROCESSING,
+                    amplitude = amplitude
+                )
+            }
+            
+            Box(
+                modifier = Modifier.size(64.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(
+                    modifier = Modifier.size(if (rightActive) 64.dp else 56.dp)
                 ) {
-                    Text(
-                        text = "搜索",
-                        color = if (rightActive) Color.Black else Color.DarkGray,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
+                    drawCircle(
+                        color = if (rightActive) activeColor else inactiveColor,
+                        radius = size.minDimension / 2f
                     )
                 }
+                Icon(
+                    imageVector = Icons.Default.ArrowUpward,
+                    contentDescription = "发送",
+                    tint = if (rightActive) Color.White else if (isDarkTheme) Color.DarkGray else Color.Gray,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .scale(if (rightActive) 1.15f else 1f)
+                )
             }
         }
         
@@ -316,50 +257,148 @@ fun VoiceKeyboardLayout(
 @Composable
 fun AudioSpectrumAnimation(
     modifier: Modifier = Modifier,
-    isActive: Boolean = true
+    isActive: Boolean = true,
+    amplitude: Float = 0f
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "spectrum")
     
-    val barCount = 7
-    val animations = List(barCount) { index ->
-        infiniteTransition.animateFloat(
-            initialValue = 0.3f + index * 0.05f,
-            targetValue = 0.8f - index * 0.03f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = if (isActive) 300 + index * 50 else 1000,
-                    easing = FastOutSlowInEasing
-                ),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "bar_$index"
-        )
-    }
+    val barCount = 9
+    
+    val anim1 by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(150, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim1"
+    )
+    
+    val anim2 by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(180, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim2"
+    )
+    
+    val anim3 by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(120, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim3"
+    )
+    
+    val anim4 by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim4"
+    )
+    
+    val anim5 by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(130, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim5"
+    )
+    
+    val anim6 by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(160, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim6"
+    )
+    
+    val anim7 by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim7"
+    )
+    
+    val anim8 by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(220, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim8"
+    )
+    
+    val anim9 by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(250, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "anim9"
+    )
+    
+    val anims = listOf(anim1, anim2, anim3, anim4, anim5, anim6, anim7, anim8, anim9)
     
     val colors = listOf(
         Color(0xFFFF6B6B),
+        Color(0xFFFF8E72),
         Color(0xFFFF9F43),
+        Color(0xFFFFB86C),
         Color(0xFFFFEAA7),
         Color(0xFF55EFC4),
+        Color(0xFF74D7AE),
         Color(0xFF54A0FF),
         Color(0xFF5F27CD),
-        Color(0xFFFF6B6B),
     )
     
+    val amplitudeValue = amplitude.coerceIn(0f, 1f)
+    
     Canvas(modifier = modifier) {
-        val barWidth = size.width / (barCount * 2f)
-        val spacing = barWidth
+        val barWidth = size.width / (barCount * 2.2f)
+        val spacing = barWidth * 0.6f
         val maxHeight = size.height
         
-        animations.forEachIndexed { index, animatable ->
-            val animatedHeight by animatable
-            val barHeight = maxHeight * (if (isActive) animatedHeight else 0.2f)
+        anims.forEachIndexed { index, animValue ->
+            val baseHeight = animValue
             
-            val x = spacing + index * (barWidth + spacing)
+            val barHeight = maxHeight * (
+                if (isActive) {
+                    (baseHeight * 0.4f + amplitudeValue * 0.6f).coerceIn(0.1f, 0.95f)
+                } else {
+                    0.1f
+                }
+            )
+            
+            val totalWidth = barCount * barWidth + (barCount - 1) * spacing
+            val startX = (size.width - totalWidth) / 2f
+            val x = startX + index * (barWidth + spacing)
             val y = (maxHeight - barHeight) / 2f
             
+            val barAlpha = if (isActive) {
+                0.5f + amplitudeValue * 0.5f
+            } else {
+                0.3f
+            }
+            
             drawRoundRect(
-                color = colors[index].copy(alpha = if (isActive) 0.7f + animatedHeight * 0.3f else 0.3f),
+                color = colors[index % colors.size].copy(alpha = barAlpha),
                 topLeft = Offset(x, y),
                 size = Size(barWidth, barHeight),
                 cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
