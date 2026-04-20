@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.kingzcheung.kime.clipboard.ClipboardItem
+import com.kingzcheung.kime.settings.SchemaInfo
 import com.kingzcheung.kime.speech.RecognitionState
 import com.kingzcheung.kime.ui.theme.DividerColor
 import com.kingzcheung.kime.ui.theme.DividerColorDark
@@ -30,6 +31,8 @@ fun KeyboardView(
     isComposing: Boolean = false,
     isAsciiMode: Boolean = false,
     schemaName: String = "",
+    currentSchemaId: String = "",
+    schemas: List<SchemaInfo> = emptyList(),
     enterKeyText: String = "发送",
     isDarkTheme: Boolean = false,
     themeId: String = "ocean_blue",
@@ -46,15 +49,13 @@ fun KeyboardView(
     onClipboardSelect: ((String) -> Unit)? = null,
     onClipboardRemove: ((Long) -> Unit)? = null,
     onClipboardTogglePin: ((Long) -> Unit)? = null,
-    onClipboardClearAll: (() -> Unit)? = null,
     onAddToQuickSend: ((Long) -> Unit)? = null,
     onRemoveFromQuickSend: ((Long) -> Unit)? = null,
     onQuickSend: (() -> Unit)? = null,
     onManageDict: (() -> Unit)? = null,
-    onEmoji: (() -> Unit)? = null,
     onReloadConfig: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
-    onMixedInput: (() -> Unit)? = null,
+    onSwitchSchema: ((String) -> Unit)? = null,
     onHideKeyboard: (() -> Unit)? = null,
     onSwitchKeyboard: (() -> Unit)? = null,
     onCommitImage: ((String) -> Unit)? = null,
@@ -75,6 +76,7 @@ fun KeyboardView(
     var showCandidatePage by remember { mutableStateOf(false) }
     var showClipboard by remember { mutableStateOf(false) }
     var showEmoji by remember { mutableStateOf(false) }
+    var showSchemaList by remember { mutableStateOf(false) }
     var clipboardTab by remember { mutableStateOf(0) }
     
     val keyBgColor = if (isDarkTheme) KeyBackgroundDark else KeyBackground
@@ -107,8 +109,12 @@ CandidateBar(
                 onToggleDarkMode = onToggleDarkMode,
                 onLogoClick = { showMenu = true },
                 showMenu = showMenu,
+                showSchemaList = showSchemaList,
                 onDismissMenu = {
-                    if (showClipboard) {
+                    if (showSchemaList) {
+                        showSchemaList = false
+                        showMenu = true
+                    } else if (showClipboard) {
                         showClipboard = false
                     } else if (showCandidatePage) {
                         showCandidatePage = false
@@ -122,6 +128,7 @@ onHideKeyboard = {
                         showMenu = false
                         showCandidatePage = false
                         showClipboard = false
+                        showSchemaList = false
                         showEmoji = false
                         isShifted = false
                     },
@@ -183,7 +190,10 @@ onHideKeyboard = {
                         },
                         onReloadConfig = { onReloadConfig?.invoke(); showMenu = false },
                         onSettings = { onSettings?.invoke(); showMenu = false },
-                        onMixedInput = { onMixedInput?.invoke(); showMenu = false },
+                        onSchemaList = { 
+                            showSchemaList = true
+                            showMenu = false 
+                        },
                         onToggleDarkMode = { onToggleDarkMode?.invoke() },
                         modifier = Modifier.weight(1f)
                     )
@@ -203,6 +213,19 @@ onHideKeyboard = {
                         onTogglePin = { id -> onClipboardTogglePin?.invoke(id) },
                         onAddToQuickSend = { id -> onAddToQuickSend?.invoke(id) },
                         onRemoveFromQuickSend = { id -> onRemoveFromQuickSend?.invoke(id) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                showSchemaList -> {
+                    SchemaListView(
+                        schemas = schemas,
+                        currentSchemaId = currentSchemaId,
+                        isDarkTheme = isDarkTheme,
+                        backgroundColor = keyboardBgColor,
+                        onSelectSchema = { schemaId ->
+                            onSwitchSchema?.invoke(schemaId)
+                            showSchemaList = false
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -261,7 +284,9 @@ onHideKeyboard = {
                                 keyBackgroundColor = keyBgColor,
                                 keyTextColor = keyTextColor,
                                 specialKeyBackgroundColor = specialKeyBgColor,
+                                keyboardBackgroundColor = keyboardBgColor,
                                 showBottomButtons = showBottomButtons,
+                                modifier = Modifier.weight(1f),
                                 onHideKeyboard = {
                                     onHideKeyboard?.invoke()
                                     keyboardMode = KeyboardMode.FULL

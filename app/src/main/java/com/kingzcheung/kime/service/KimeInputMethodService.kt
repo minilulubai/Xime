@@ -17,6 +17,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +65,8 @@ data class InputUIState(
     val isComposing: Boolean = false,
     val isAsciiMode: Boolean = false,
     val schemaName: String = "",
+    val currentSchemaId: String = "",
+    val schemas: List<com.kingzcheung.kime.settings.SchemaInfo> = emptyList(),
     val enterKeyText: String = "发送",
     val darkMode: Int = 0,
     val themeId: String = "ocean_blue",
@@ -136,6 +139,9 @@ class KimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     // 语音识别管理器
     private lateinit var speechRecognitionManager: SpeechRecognitionManager
     
+    // SharedPreferences 监听器
+    private var sharedPrefsListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
+    
     // 音频和振动
     private val audioManager: AudioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
     private val vibrator: Vibrator by lazy {
@@ -204,6 +210,19 @@ class KimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         )
     }
     
+    private fun registerSharedPrefsListener() {
+        val prefs = SettingsPreferences.getPrefsPublic(this)
+        sharedPrefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            when (key) {
+                "dark_mode", "keyboard_theme", "show_bottom_buttons" -> {
+                    loadDarkModePreference()
+                    Log.d(TAG, "Settings changed: $key, updated UI state")
+                }
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(sharedPrefsListener)
+    }
+    
     private fun saveDarkModePreference(mode: Int) {
         SettingsPreferences.setDarkMode(this, mode)
         uiState.value = uiState.value.copy(darkMode = mode)
@@ -231,6 +250,9 @@ override fun onCreate() {
         FileLogger.i(TAG, "KimeInputMethodService created")
         
         loadDarkModePreference()
+        
+        // 注册 SharedPreferences 监听器，实时监听设置变化
+        registerSharedPrefsListener()
         
         // 所有耗时初始化移到后台线程
         serviceScope.launch(Dispatchers.IO) {
@@ -510,6 +532,8 @@ private fun getPredictionFromPlugin(contextText: String) {
                             isComposing = state.isComposing,
                             isAsciiMode = state.isAsciiMode,
                             schemaName = state.schemaName,
+                            currentSchemaId = state.currentSchemaId,
+                            schemas = state.schemas,
                             enterKeyText = state.enterKeyText,
                             isDarkTheme = isDarkTheme,
                             themeId = state.themeId,
@@ -549,9 +573,6 @@ private fun getPredictionFromPlugin(contextText: String) {
                             onClipboardTogglePin = { id ->
                                 toggleClipboardPin(id)
                             },
-                            onClipboardClearAll = {
-                                clearClipboard()
-                            },
                             onAddToQuickSend = { id ->
                                 addToQuickSend(id)
                             },
@@ -564,17 +585,14 @@ private fun getPredictionFromPlugin(contextText: String) {
                             onManageDict = {
                                 openManageDict()
                             },
-                            onEmoji = {
-                                commitText("😊")
-                            },
                             onReloadConfig = {
                                 reloadConfig()
                             },
                             onSettings = {
                                 openSettings()
                             },
-                            onMixedInput = {
-                                toggleMixedInput()
+                            onSwitchSchema = { schemaId ->
+                                switchSchema(schemaId)
                             },
                             onHideKeyboard = {
                                 hideKeyboard()
@@ -880,6 +898,9 @@ private fun getPredictionFromPlugin(contextText: String) {
 
     override fun onDestroy() {
         super.onDestroy()
+        sharedPrefsListener?.let {
+            SettingsPreferences.getPrefsPublic(this).unregisterOnSharedPreferenceChangeListener(it)
+        }
         rimeEngine.destroy()
         if (::speechRecognitionManager.isInitialized) {
             speechRecognitionManager.release()
@@ -943,7 +964,11 @@ private fun getPredictionFromPlugin(contextText: String) {
         val currentSchemaId = rimeEngine.getCurrentSchema()
         val schemas = SchemaConfigHelper.loadSchemas(this)
         val schemaInfo = schemas.find { it.schemaId == currentSchemaId }
-        uiState.value = uiState.value.copy(schemaName = schemaInfo?.name ?: currentSchemaId)
+        uiState.value = uiState.value.copy(
+            schemaName = schemaInfo?.name ?: currentSchemaId,
+            currentSchemaId = currentSchemaId,
+            schemas = schemas
+        )
     }
 
     private fun handleKeyPress(key: String, isShifted: Boolean) {
@@ -1262,26 +1287,17 @@ private fun getPredictionFromPlugin(contextText: String) {
         }
     }
     
-    /**
-     * 切换五笔拼音混输
-     */
-    private fun toggleMixedInput() {
-        Log.d(TAG, "Toggling mixed input...")
+    private fun switchSchema(schemaId: String) {
+        Log.d(TAG, "Switching schema to: $schemaId")
         try {
-            val currentSchema = rimeEngine.getCurrentSchema()
-            val newSchema = if (currentSchema.contains("pinyin")) {
-                "wubi86"
-            } else {
-                "wubi86_pinyin"
-            }
-            SettingsPreferences.setCurrentSchema(this, newSchema)
-            rimeEngine.switchSchema(newSchema)
-            rimeEngine.deploy()
+            SettingsPreferences.setCurrentSchema(this, schemaId)
+            rimeEngine.switchSchema(schemaId)
             updateSchemaName()
             updateUI()
-            Log.d(TAG, "Switched to schema: $newSchema")
+            Toast.makeText(this, "已切换输入方案", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "Switched to schema: $schemaId")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to toggle mixed input", e)
+            Log.e(TAG, "Failed to switch schema", e)
         }
     }
 

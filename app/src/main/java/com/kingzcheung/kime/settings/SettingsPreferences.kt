@@ -27,6 +27,10 @@ object SettingsPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
     
+    fun getPrefsPublic(context: Context): SharedPreferences {
+        return getPrefs(context)
+    }
+    
     fun getCurrentSchema(context: Context): String {
         return getPrefs(context).getString(KEY_CURRENT_SCHEMA, "wubi86") ?: "wubi86"
     }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ fun CandidateBar(
     onToggleDarkMode: (() -> Unit)? = null,
     onLogoClick: (() -> Unit)? = null,
     showMenu: Boolean = false,
+    showSchemaList: Boolean = false,
     onDismissMenu: (() -> Unit)? = null,
     onHideKeyboard: (() -> Unit)? = null,
     onShowMoreCandidates: (() -> Unit)? = null,
@@ -149,7 +151,23 @@ fun CandidateBar(
             Spacer(modifier = Modifier.weight(1f))
         } else {
             if (!isComposing && inputText.isEmpty()) {
-                if (showMenu && onDismissMenu != null) {
+                if (showSchemaList && onDismissMenu != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isDarkTheme) Color(0xFF374151) else Color(0xFFF3F4F6))
+                            .clickable { onDismissMenu() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowLeft,
+                            contentDescription = "返回菜单",
+                            tint = accentColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                } else if (showMenu && onDismissMenu != null) {
                     Box(
                         modifier = Modifier
                             .size(28.dp)

@@ -59,6 +59,7 @@ fun KeyboardLayout(
     keyBackgroundColor: Color,
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
+    keyboardBackgroundColor: Color = Color.Transparent,
     showBottomButtons: Boolean = false,
     onHideKeyboard: (() -> Unit)? = null,
     onSwitchKeyboard: (() -> Unit)? = null,
@@ -94,19 +95,22 @@ fun KeyboardLayout(
     }
     
     Box(
-        modifier = modifier.onGloballyPositioned { coordinates ->
-            keyboardBounds = coordinates.boundsInRoot()
-        }
+        modifier = modifier
+            .background(keyboardBackgroundColor)
+            .onGloballyPositioned { coordinates ->
+                keyboardBounds = coordinates.boundsInRoot()
+            }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(keyboardBackgroundColor)
                 .padding(vertical = 8.dp, horizontal = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // 第一行
             if (isVoiceMode) {
-                DummyKeyboardRow(keysCount = 10, keyBackgroundColor = keyBackgroundColor.copy(alpha = 0.5f))
+                DummyKeyboardRow(keysCount = 10, keyBackgroundColor = keyBackgroundColor.copy(alpha = 0.5f), keyboardBackgroundColor = keyboardBackgroundColor)
             } else {
                 KeyboardRowWithConfig(
                     keys = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
@@ -115,6 +119,7 @@ fun KeyboardLayout(
                     keyTextColor = keyTextColor,
                     isShifted = isShifted,
                     isAsciiMode = isAsciiMode,
+                    keyboardBackgroundColor = keyboardBackgroundColor,
                     onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
                     onKeyPressDown = onKeyPressDown
                 )
@@ -125,6 +130,7 @@ fun KeyboardLayout(
                 DummyKeyboardRow(
                     keysCount = 9, 
                     keyBackgroundColor = keyBackgroundColor.copy(alpha = 0.5f),
+                    keyboardBackgroundColor = keyboardBackgroundColor,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             } else {
@@ -135,6 +141,7 @@ fun KeyboardLayout(
                     keyTextColor = keyTextColor,
                     isShifted = isShifted,
                     isAsciiMode = isAsciiMode,
+                    keyboardBackgroundColor = keyboardBackgroundColor,
                     modifier = Modifier.padding(horizontal = 16.dp),
                     onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
                     onKeyPressDown = onKeyPressDown
@@ -145,11 +152,14 @@ fun KeyboardLayout(
             if (isVoiceMode) {
                 DummyBottomRow(
                     keyBackgroundColor = keyBackgroundColor.copy(alpha = 0.5f),
-                    specialKeyBackgroundColor = specialKeyBackgroundColor.copy(alpha = 0.5f)
+                    specialKeyBackgroundColor = specialKeyBackgroundColor.copy(alpha = 0.5f),
+                    keyboardBackgroundColor = keyboardBackgroundColor
                 )
             } else {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(keyboardBackgroundColor),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (isAsciiMode) {
@@ -174,7 +184,9 @@ fun KeyboardLayout(
                     }
                     
                     Row(
-                        modifier = Modifier.weight(7f),
+                        modifier = Modifier
+                            .weight(7f)
+                            .background(keyboardBackgroundColor),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         val bottomKeys = listOf("z", "x", "c", "v", "b", "n", "m")
@@ -217,7 +229,9 @@ fun KeyboardLayout(
             
             // 第四行（控制行）- 包含空格键
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(keyboardBackgroundColor),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // 123 / 英中 键
@@ -368,7 +382,9 @@ fun KeyboardLayout(
             // 底部按钮
             if (showBottomButtons && !isVoiceMode) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(keyboardBackgroundColor),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     IconButton(
@@ -425,10 +441,13 @@ fun KeyboardLayout(
 private fun DummyKeyboardRow(
     keysCount: Int,
     keyBackgroundColor: Color,
+    keyboardBackgroundColor: Color = Color.Transparent,
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(keyboardBackgroundColor),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         repeat(keysCount) {
@@ -443,10 +462,13 @@ private fun DummyKeyboardRow(
 @Composable
 private fun DummyBottomRow(
     keyBackgroundColor: Color,
-    specialKeyBackgroundColor: Color
+    specialKeyBackgroundColor: Color,
+    keyboardBackgroundColor: Color = Color.Transparent
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(keyboardBackgroundColor),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         DummyKeyButton(
@@ -492,12 +514,15 @@ fun KeyboardRowWithConfig(
     keyTextColor: Color,
     isShifted: Boolean,
     isAsciiMode: Boolean,
+    keyboardBackgroundColor: Color = Color.Transparent,
     modifier: Modifier = Modifier,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
     onKeyPressDown: ((String) -> Unit)? = null
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(keyboardBackgroundColor),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         keys.forEach { key ->

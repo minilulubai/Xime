@@ -54,7 +54,7 @@ fun MenuBar(
     onEmoji: () -> Unit,
     onReloadConfig: () -> Unit,
     onSettings: () -> Unit,
-    onMixedInput: () -> Unit,
+    onSchemaList: () -> Unit,
     onToggleDarkMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -70,8 +70,8 @@ fun MenuBar(
         MenuItem(rememberVectorPainter(Icons.Default.EmojiEmotions), "表情", onEmoji),
         MenuItem(rememberVectorPainter(if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode), if (isDarkTheme) "浅色模式" else "深色模式", onToggleDarkMode),
         MenuItem(rememberVectorPainter(Icons.Default.Refresh), "部署方案", onReloadConfig),
-        MenuItem(rememberVectorPainter(Icons.Default.Settings), "设置", onSettings),
-        MenuItem(rememberVectorPainter(Icons.Default.Keyboard), "混输", onMixedInput)
+        MenuItem(rememberVectorPainter(Icons.Default.Keyboard), "输入方案", onSchemaList),
+        MenuItem(rememberVectorPainter(Icons.Default.Settings), "设置", onSettings)
     )
     
     Column(
