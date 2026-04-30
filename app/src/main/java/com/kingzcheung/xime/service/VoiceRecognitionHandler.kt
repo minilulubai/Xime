@@ -25,9 +25,9 @@ class VoiceRecognitionHandler(
     
     fun initialize() {
         FileLogger.i(TAG, "Initializing speech recognition system")
-        
+
         speechRecognitionManager = SpeechRecognitionManager(context)
-        
+
         speechRecognitionManager.setCallbacks(
             onResult = { text ->
                 handleSpeechResult(text)
@@ -42,22 +42,17 @@ class VoiceRecognitionHandler(
                 handleAmplitudeUpdate(amplitude)
             }
         )
-        
-        val apiKey = SettingsPreferences.getFunAsrApiKey(context)
-        val sttProvider = SettingsPreferences.getSttProvider(context)
-        
-        val providerName = when (sttProvider) {
-            "funasr" -> if (apiKey.isNotEmpty()) "阿里百炼" else "未配置"
-            else -> "未配置"
-        }
-        
-        onStateChanged(getState().copy(voicePluginName = providerName))
-        
-        if (apiKey.isNotEmpty()) {
-            FileLogger.i(TAG, "STT provider: $sttProvider, configured")
+
+        val useLocal = SettingsPreferences.isSttUseLocal(context)
+        val providerName = if (useLocal) {
+            "本地模型"
         } else {
-            FileLogger.w(TAG, "STT provider: $sttProvider, not configured")
+            val apiKey = SettingsPreferences.getFunAsrApiKey(context)
+            if (apiKey.isNotEmpty()) "阿里百炼" else "未配置"
         }
+
+        onStateChanged(getState().copy(voicePluginName = providerName))
+        FileLogger.i(TAG, "STT provider: ${if (useLocal) "local" else "funasr"}")
     }
     
     fun startRecognition(): Boolean {

@@ -435,8 +435,12 @@ dependencies {
     implementation(libs.coil)
     implementation(libs.coil.svg)
     
-    // OkHttp for WebSocket
+    // OkHttp for WebSocket and model download
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
+    
+    // Apache Commons Compress for tar.bz2 extraction
+    implementation("org.apache.commons:commons-compress:1.26.0")
     
     debugImplementation(libs.androidx.compose.ui.tooling)
     

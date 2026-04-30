@@ -14,41 +14,22 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 class SherpaAsrEngine(private val context: Context) {
-    
+
     companion object {
         private const val TAG = "SherpaAsrEngine"
         private const val SAMPLE_RATE = 16000
-        
+
         val AVAILABLE_MODELS = listOf(
             AsrModelInfo(
-                id = "zipformer-zh-14m",
-                name = "中文小模型 (14MB)",
+                id = "ctc-multi-zh-hans-int8",
+                name = "中文多方言 CTC int8",
+                description = "CTC 架构，支持多种中文方言，int8 量化",
                 language = "zh",
-                size = "14MB",
-                downloadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2",
-                files = listOf("encoder-epoch-99-avg-1.int8.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.int8.onnx", "tokens.txt"),
-                int8Encoder = "encoder-epoch-99-avg-1.int8.onnx",
-                int8Joiner = "joiner-epoch-99-avg-1.int8.onnx"
-            ),
-            AsrModelInfo(
-                id = "zipformer-small-zh-en",
-                name = "中英双语小模型 (30MB)",
-                language = "zh-en",
-                size = "30MB",
-                downloadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16.tar.bz2",
-                files = listOf("encoder-epoch-99-avg-1.onnx", "decoder-epoch-99-avg-1.onnx", "joiner-epoch-99-avg-1.onnx", "tokens.txt", "bpe.model"),
-                int8Encoder = null,
-                int8Joiner = null
-            ),
-            AsrModelInfo(
-                id = "zipformer-zh-int8",
-                name = "中文大模型 int8 (160MB)",
-                language = "zh",
-                size = "160MB",
-                downloadUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
-                files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", "bpe.model"),
-                int8Encoder = "encoder.int8.onnx",
-                int8Joiner = "joiner.int8.onnx"
+                size = "13 MB",
+                downloadUrl = "https://www.modelscope.cn/models/bikeand/asr/resolve/master/sherpa-onnx-streaming-zipformer-ctc-multi-zh-hans-int8-2023-12-13.tar.bz2",
+                modelType = "ctc",
+                files = listOf("ctc-epoch-20-avg-1-chunk-16-left-128.int8.onnx", "tokens.txt"),
+                ctcModelFile = "ctc-epoch-20-avg-1-chunk-16-left-128.int8.onnx"
             )
         )
     }
@@ -67,12 +48,16 @@ class SherpaAsrEngine(private val context: Context) {
     data class AsrModelInfo(
         val id: String,
         val name: String,
+        val description: String = "",
         val language: String,
         val size: String,
         val downloadUrl: String,
+        val modelType: String = "transducer",
         val files: List<String>,
-        val int8Encoder: String?,
-        val int8Joiner: String?
+        val encoderFile: String = "",
+        val decoderFile: String = "",
+        val joinerFile: String = "",
+        val ctcModelFile: String = ""
     )
     
     fun isAvailable(): Boolean {
@@ -95,13 +80,13 @@ class SherpaAsrEngine(private val context: Context) {
     
     fun getSelectedModelDir(): File {
         val sharedPrefs = context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
-        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-14m") ?: "zipformer-zh-14m"
+        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
         return File(context.filesDir, "asr_models/$modelId")
     }
-    
+
     fun getSelectedModelInfo(): AsrModelInfo? {
         val sharedPrefs = context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
-        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-14m") ?: "zipformer-zh-14m"
+        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
         return AVAILABLE_MODELS.find { it.id == modelId }
     }
     
@@ -110,22 +95,57 @@ class SherpaAsrEngine(private val context: Context) {
         sharedPrefs.edit().putString("selected_model", modelId).apply()
     }
     
+    private fun findFile(dir: File, fileName: String): File? {
+        val direct = File(dir, fileName)
+        if (direct.exists()) return direct
+        // Search subdirectories (for tarballs extracted without stripping top-level dir)
+        dir.listFiles()?.forEach { child ->
+            if (child.isDirectory) {
+                val found = findFile(child, fileName)
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
     fun initialize(): Boolean {
         if (!isAvailable()) {
             Log.e(TAG, "sherpa-onnx JNI not available")
             return false
         }
-        
+
         val modelDir = getSelectedModelDir()
         if (!modelDir.exists()) {
             Log.e(TAG, "Model directory not found: ${modelDir.absolutePath}")
             return false
         }
-        
+
         val modelInfo = getSelectedModelInfo()
         if (modelInfo == null) {
             Log.e(TAG, "Model info not found")
             return false
+        }
+
+        val tokensFile = findFile(modelDir, "tokens.txt")
+        if (tokensFile == null) {
+            Log.e(TAG, "tokens.txt not found in ${modelDir.absolutePath}")
+            errorCallback?.invoke("模型文件不完整，缺少 tokens.txt")
+            return false
+        }
+
+        if (modelInfo.modelType == "ctc") {
+            if (findFile(modelDir, modelInfo.ctcModelFile) == null &&
+                modelInfo.files.none { f -> f.endsWith(".onnx") && findFile(modelDir, f) != null }) {
+                Log.e(TAG, "CTC model file not found in ${modelDir.absolutePath}")
+                errorCallback?.invoke("模型文件不完整，请重新下载")
+                return false
+            }
+        } else {
+            if (findFile(modelDir, modelInfo.encoderFile) == null) {
+                Log.e(TAG, "Encoder file not found in ${modelDir.absolutePath}")
+                errorCallback?.invoke("模型文件不完整，请重新下载")
+                return false
+            }
         }
         
         try {
@@ -141,40 +161,42 @@ class SherpaAsrEngine(private val context: Context) {
     }
     
     private fun createConfig(modelDir: File, modelInfo: AsrModelInfo): OnlineRecognizerConfig {
-        val encoder = if (modelInfo.int8Encoder != null && File(modelDir, modelInfo.int8Encoder).exists()) {
-            File(modelDir, modelInfo.int8Encoder).absolutePath
+        val tokens = findFile(modelDir, "tokens.txt")?.absolutePath
+            ?: File(modelDir, "tokens.txt").absolutePath
+
+        val modelConfig = if (modelInfo.modelType == "ctc") {
+            val modelFile = findFile(modelDir, modelInfo.ctcModelFile)?.absolutePath
+                ?: modelInfo.files.firstOrNull { f -> f.endsWith(".onnx") }
+                    ?.let { findFile(modelDir, it)?.absolutePath }
+                ?: File(modelDir, modelInfo.ctcModelFile).absolutePath
+            OnlineModelConfig(
+                zipformer2Ctc = OnlineZipformer2CtcModelConfig(model = modelFile),
+                tokens = tokens,
+                numThreads = 2,
+                provider = "cpu",
+                modelType = "zipformer2"
+            )
         } else {
-            val defaultEncoder = modelInfo.files.first { it.startsWith("encoder") }
-            File(modelDir, defaultEncoder).absolutePath
-        }
-        
-        val decoder = File(modelDir, modelInfo.files.first { it.startsWith("decoder") }).absolutePath
-        
-        val joiner = if (modelInfo.int8Joiner != null && File(modelDir, modelInfo.int8Joiner).exists()) {
-            File(modelDir, modelInfo.int8Joiner).absolutePath
-        } else {
-            val defaultJoiner = modelInfo.files.first { it.startsWith("joiner") }
-            File(modelDir, defaultJoiner).absolutePath
-        }
-        
-        val tokens = File(modelDir, "tokens.txt").absolutePath
-        
-        return OnlineRecognizerConfig(
-            featConfig = FeatureConfig(
-                sampleRate = SAMPLE_RATE,
-                featureDim = 80
-            ),
-            modelConfig = OnlineModelConfig(
+            val encoder = (findFile(modelDir, modelInfo.encoderFile) ?: modelInfo.files.firstOrNull { f -> f.startsWith("encoder") }
+                ?.let { findFile(modelDir, it) } ?: File(modelDir, modelInfo.encoderFile)).absolutePath
+            val decoder = (findFile(modelDir, modelInfo.decoderFile) ?: modelInfo.files.firstOrNull { f -> f.startsWith("decoder") }
+                ?.let { findFile(modelDir, it) } ?: File(modelDir, modelInfo.decoderFile)).absolutePath
+            val joiner = (findFile(modelDir, modelInfo.joinerFile) ?: modelInfo.files.firstOrNull { f -> f.startsWith("joiner") }
+                ?.let { findFile(modelDir, it) } ?: File(modelDir, modelInfo.joinerFile)).absolutePath
+            OnlineModelConfig(
                 transducer = OnlineTransducerModelConfig(
-                    encoder = encoder,
-                    decoder = decoder,
-                    joiner = joiner
+                    encoder = encoder, decoder = decoder, joiner = joiner
                 ),
                 tokens = tokens,
                 numThreads = 2,
                 provider = "cpu",
                 modelType = "zipformer2"
-            ),
+            )
+        }
+
+        return OnlineRecognizerConfig(
+            featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
+            modelConfig = modelConfig,
             endpointConfig = EndpointConfig(
                 rule1 = EndpointRule(false, 2.4f, 0f),
                 rule2 = EndpointRule(true, 1.2f, 0f),

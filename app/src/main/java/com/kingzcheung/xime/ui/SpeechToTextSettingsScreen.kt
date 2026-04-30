@@ -1,5 +1,7 @@
 package com.kingzcheung.xime.ui
 
+import android.content.Context
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,18 +23,26 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -47,6 +57,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,9 +66,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.R
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.speech.sherpa.ModelDownloadManager
+import com.kingzcheung.xime.speech.sherpa.SherpaAsrEngine
+import kotlinx.coroutines.launch
+import java.text.DecimalFormat
 
 data class AsrProvider(
     val id: String,
@@ -79,7 +95,7 @@ fun SpeechToTextSettingsContent(
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("在线 ASR", "本地模型")
-    
+
     val onlineProviders = remember {
         mutableStateListOf(
             AsrProvider(
@@ -93,21 +109,7 @@ fun SpeechToTextSettingsContent(
             )
         )
     }
-    
-    val localProviders = remember {
-        mutableStateListOf(
-            AsrProvider(
-                id = "whisper_local",
-                name = "Whisper 本地模型",
-                description = "OpenAI Whisper 离线识别",
-                icon = Icons.Default.PhoneAndroid,
-                isOnline = false,
-                isConfigured = false,
-                features = listOf("离线运行", "隐私保护", "多语言")
-            )
-        )
-    }
-    
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -134,6 +136,10 @@ fun SpeechToTextSettingsContent(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            EngineSelectorComposable()
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             TabRow(
                 selectedTabIndex = selectedTab,
                 indicator = { tabPositions ->
@@ -160,9 +166,9 @@ fun SpeechToTextSettingsContent(
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             when (selectedTab) {
                 0 -> OnlineAsrTab(
                     providers = onlineProviders,
@@ -172,11 +178,60 @@ fun SpeechToTextSettingsContent(
                         }
                     }
                 )
-                1 -> LocalAsrTab(
-                    providers = localProviders,
-                    onProviderClick = { }
+                1 -> LocalAsrTab()
+            }
+        }
+    }
+}
+
+@Composable
+fun EngineSelectorComposable() {
+    val context = LocalContext.current
+    var useLocal by remember { mutableStateOf(SettingsPreferences.isSttUseLocal(context)) }
+    val downloadedModels = remember { mutableStateOf(
+        com.kingzcheung.xime.speech.sherpa.ModelDownloadManager(context).getDownloadedModelIds().toSet()
+    ) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "使用本地模型",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = if (useLocal) "离线运行，无需网络" else "使用阿里百炼在线 API",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
                 )
             }
+            Switch(
+                checked = useLocal,
+                onCheckedChange = {
+                    useLocal = it
+                    SettingsPreferences.setSttUseLocal(context, it)
+                },
+                enabled = if (useLocal) true else downloadedModels.value.any { m -> m.isNotEmpty() } || true,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            )
         }
     }
 }
@@ -199,17 +254,17 @@ fun OnlineAsrTab(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
-        
+
         items(providers) { provider ->
             AsrProviderCardModern(
                 provider = provider,
                 onClick = { onProviderClick(provider) }
             )
         }
-        
+
         item {
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
                 text = "在线 ASR 需要网络连接，适合需要高准确率的场景",
                 style = MaterialTheme.typography.bodySmall,
@@ -221,35 +276,132 @@ fun OnlineAsrTab(
 }
 
 @Composable
-fun LocalAsrTab(
-    providers: List<AsrProvider>,
-    onProviderClick: (AsrProvider) -> Unit
-) {
+fun LocalAsrTab() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val downloadManager = remember { ModelDownloadManager(context) }
+
+    val models = remember { SherpaAsrEngine.AVAILABLE_MODELS }
+
+    val downloadedModels = remember { mutableStateOf(downloadManager.getDownloadedModelIds().toSet()) }
+
+    val savedModelId = remember {
+        context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
+            .getString("selected_model", "") ?: ""
+    }
+    var selectedModelId by remember {
+        mutableStateOf(
+            if (savedModelId.isNotEmpty() && savedModelId in downloadedModels.value) savedModelId else ""
+        )
+    }
+
+    val downloadStates = remember {
+        mutableStateListOf<Pair<String, ModelDownloadManager.DownloadState>>().also {
+            models.forEach { model -> it.add(model.id to ModelDownloadManager.DownloadState.Idle) }
+        }
+    }
+
+    fun refreshDownloaded() {
+        downloadedModels.value = downloadManager.getDownloadedModelIds().toSet()
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
+            val sherpaAvailable = try {
+                System.loadLibrary("sherpa-onnx-jni"); true
+            } catch (e: UnsatisfiedLinkError) { false }
+
             Text(
-                text = "本地模型无需联网，保护隐私",
+                text = "下载本地模型",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+
+            if (!sherpaAvailable) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ErrorOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "本地 ASR 引擎未编译，请先运行 build-sherpa-onnx.ps1 构建",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        items(models) { modelInfo ->
+            val stateIndex = downloadStates.indexOfFirst { it.first == modelInfo.id }
+            val downloadState = if (stateIndex >= 0) downloadStates[stateIndex].second
+            else ModelDownloadManager.DownloadState.Idle
+
+            val isDownloaded = modelInfo.id in downloadedModels.value
+            val isSelected = modelInfo.id == selectedModelId
+
+            ModelCard(
+                modelInfo = modelInfo,
+                isDownloaded = isDownloaded,
+                isSelected = isSelected,
+                downloadState = downloadState,
+                onDownload = {
+                    scope.launch {
+                        val idx = downloadStates.indexOfFirst { p -> p.first == modelInfo.id }
+                        if (idx >= 0) downloadStates[idx] = modelInfo.id to ModelDownloadManager.DownloadState.Downloading(0f, 0L, -1L)
+
+                        downloadManager.downloadModel(
+                            downloadUrl = modelInfo.downloadUrl,
+                            modelId = modelInfo.id,
+                            onProgress = { state ->
+                                val i = downloadStates.indexOfFirst { p -> p.first == modelInfo.id }
+                                if (i >= 0) downloadStates[i] = modelInfo.id to state
+                                if (state is ModelDownloadManager.DownloadState.Complete) {
+                                    refreshDownloaded()
+                                }
+                            }
+                        )
+                    }
+                },
+                onDelete = {
+                    downloadManager.deleteModel(modelInfo.id)
+                    refreshDownloaded()
+                    if (isSelected) {
+                        selectedModelId = ""
+                        context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
+                            .edit().putString("selected_model", "").apply()
+                    }
+                },
+                onSelect = {
+                    selectedModelId = modelInfo.id
+                    context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
+                        .edit().putString("selected_model", modelInfo.id).apply()
+                }
             )
         }
-        
-        items(providers) { provider ->
-            AsrProviderCardModern(
-                provider = provider,
-                onClick = { onProviderClick(provider) },
-                enabled = provider.isConfigured
-            )
-        }
-        
+
         item {
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -259,7 +411,7 @@ fun LocalAsrTab(
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Icon(
@@ -268,11 +420,283 @@ fun LocalAsrTab(
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(20.dp)
                     )
-                    Text(
-                        text = "本地 ASR 功能正在开发中，敬请期待",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
+                    Column {
+                        Text(
+                            text = "说明",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "• 模型下载后存储在应用内部存储空间\n" +
+                                    "• 选择模型后会自动应用于语音识别\n" +
+                                    "• 切换到已下载的模型无需重新下载\n" +
+                                    "• 建议优先使用 int8 量化模型以节省空间",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModelCard(
+    modelInfo: SherpaAsrEngine.AsrModelInfo,
+    isDownloaded: Boolean,
+    isSelected: Boolean,
+    downloadState: ModelDownloadManager.DownloadState,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+    onSelect: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 2.dp else 0.dp
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isDownloaded)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storage,
+                        contentDescription = null,
+                        tint = if (isDownloaded)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(24.dp)
                     )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = modelInfo.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Text(
+                        text = modelInfo.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        ) {
+                            Text(
+                                text = modelInfo.size,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        if (isDownloaded) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            ) {
+                                Text(
+                                    text = "已下载",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            when (downloadState) {
+                is ModelDownloadManager.DownloadState.Downloading -> {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = downloadState.progress.coerceIn(0f, 1f),
+                        label = "progress"
+                    )
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "下载中...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "${(downloadState.progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (downloadState.totalBytes > 0) {
+                            val df = DecimalFormat("#.##")
+                            val downloaded = downloadState.bytesDownloaded.toFloat() / (1024 * 1024)
+                            val total = downloadState.totalBytes.toFloat() / (1024 * 1024)
+                            Text(
+                                text = "${df.format(downloaded)} MB / ${df.format(total)} MB",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+                is ModelDownloadManager.DownloadState.Error -> {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    ) {
+                        Text(
+                            text = downloadState.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                ModelDownloadManager.DownloadState.Complete -> {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "下载完成",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+                ModelDownloadManager.DownloadState.Idle -> {}
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isDownloaded) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("删除")
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Button(
+                        onClick = onSelect,
+                        enabled = !isSelected,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSelected)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            else
+                                MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            if (isSelected) Icons.Default.Check else Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (isSelected) "使用中" else "使用")
+                    }
+                } else {
+                    val isDownloading = downloadState is ModelDownloadManager.DownloadState.Downloading
+                    Button(
+                        onClick = onDownload,
+                        enabled = !isDownloading
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (isDownloading) "下载中..." else "下载")
+                    }
                 }
             }
         }
@@ -336,9 +760,9 @@ fun AsrProviderCardModern(
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.width(16.dp))
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = provider.name,
@@ -349,9 +773,9 @@ fun AsrProviderCardModern(
                         else
                             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
-                    
+
                     Spacer(modifier = Modifier.height(4.dp))
-                    
+
                     Text(
                         text = provider.description,
                         style = MaterialTheme.typography.bodyMedium,
@@ -361,7 +785,7 @@ fun AsrProviderCardModern(
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
-                
+
                 if (enabled) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -403,9 +827,9 @@ fun AsrProviderCardModern(
                             }
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    
+
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = "进入设置",
@@ -414,10 +838,10 @@ fun AsrProviderCardModern(
                     )
                 }
             }
-            
+
             if (provider.features.isNotEmpty() && enabled) {
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
