@@ -4,3 +4,6 @@
 [submodule "app/src/main/jni/snappy"]
 	path = app/src/main/jni/snappy
 	url = https://github.com/google/snappy.git
+[submodule "app/src/main/jni/sherpa-onnx-src"]
+	path = app/src/main/jni/sherpa-onnx-src
+	url = https://github.com/k2-fsa/sherpa-onnx

@@ -97,6 +97,21 @@ git submodule update --init --recursive
 ./gradlew assembleRelease
 ```
 
+### 本地语音识别构建
+
+项目支持本地离线语音识别（基于 sherpa-onnx）。首次构建时会自动下载并编译 JNI 库。
+
+如果自动构建失败，可手动执行：
+
+```bash
+# 手动构建 sherpa-onnx JNI 库
+./build-sherpa-onnx.sh
+```
+
+构建完成后，会在 `app/src/main/jniLibs/` 生成 `libsherpa-onnx-jni.so`。
+
+本地 ASR 模型需用户自行下载，放置到 `filesDir/asr_models/` 目录。
+
 
 ## 技术栈
 

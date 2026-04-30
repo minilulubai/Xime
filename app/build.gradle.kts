@@ -63,6 +63,44 @@ val downloadOnnx by tasks.registering {
     }
 }
 
+val buildSherpaOnnx by tasks.registering {
+    val jniLibsDir = file("src/main/jniLibs")
+    val sherpaOnnxSoArm64 = file("src/main/jniLibs/arm64-v8a/libsherpa-onnx-jni.so")
+    val sherpaOnnxSoArmV7 = file("src/main/jniLibs/armeabi-v7a/libsherpa-onnx-jni.so")
+    
+    outputs.file(sherpaOnnxSoArm64)
+    outputs.file(sherpaOnnxSoArmV7)
+    
+    dependsOn(downloadOnnx)
+    
+    doLast {
+        if (sherpaOnnxSoArm64.exists() && sherpaOnnxSoArmV7.exists()) {
+            println("sherpa-onnx JNI libraries already exist, skipping build")
+            return@doLast
+        }
+        
+        println("Building sherpa-onnx JNI libraries...")
+        
+        val buildScript = File(rootDir, "build-sherpa-onnx.sh")
+        if (!buildScript.exists()) {
+            println("ERROR: build script not found: ${buildScript.absolutePath}")
+            return@doLast
+        }
+        
+        val process = ProcessBuilder("bash", buildScript.absolutePath)
+            .directory(rootDir)
+            .redirectErrorStream(true)
+            .start()
+        
+        val output = process.inputStream.bufferedReader().readText()
+        println(output)
+        
+        if (process.waitFor() != 0) {
+            println("WARNING: sherpa-onnx build failed. ASR will use online mode only.")
+        }
+    }
+}
+
 val buildTrie by tasks.registering {
     val inputFile = file("src/main/assets/english.txt")
     val outputFile = file("src/main/assets/english_trie.bin")
@@ -145,6 +183,7 @@ val buildTrie by tasks.registering {
 
 tasks.named("preBuild").configure {
     dependsOn(downloadOnnx)
+    dependsOn(buildSherpaOnnx)
     dependsOn(buildTrie)
 }
 

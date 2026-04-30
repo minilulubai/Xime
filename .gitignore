@@ -30,6 +30,9 @@ app/src/main/jni/boost*
 app/src/main/jni/onnxruntime/
 app/src/main/jniLibs/
 app/release
+# sherpa-onnx build artifacts
+build/sherpa-onnx-*
+build/sherpa-onnx-*.tar.gz
 # Large archives
 *.tar.xz
 *.tar.gz

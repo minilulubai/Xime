@@ -160,3 +160,27 @@ target_link_libraries(onnx_jni
 )
 
 target_link_options(onnx_jni PRIVATE "-Wl,-z,max-page-size=16384")
+
+# sherpa-onnx ASR JNI 库
+set(SHERPA_ONNX_SRC_DIR "${CMAKE_SOURCE_DIR}/sherpa-onnx-src")
+set(SHERPA_ONNXRUNTIME_LIB_DIR "${ONNXRUNTIME_DIR}/lib/${ANDROID_ABI}")
+set(SHERPA_ONNXRUNTIME_INCLUDE_DIR "${ONNXRUNTIME_DIR}/include")
+
+option(SHERPA_ONNX_ENABLE_TTS "" OFF)
+option(SHERPA_ONNX_ENABLE_OFFLINE_TTS "" OFF)
+option(SHERPA_ONNX_ENABLE_PYTHON "" OFF)
+option(SHERPA_ONNX_ENABLE_TESTS "" OFF)
+option(SHERPA_ONNX_ENABLE_C_API "" OFF)
+option(SHERPA_ONNX_ENABLE_WEBSOCKET "" OFF)
+target_link_options(onnx_jni PRIVATE "-Wl,-z,max-page-size=16384")
+
+# sherpa-onnx JNI 库（预编译，使用项目的 onnxruntime）
+# libsherpa-onnx-jni.so 需要通过 build-sherpa-onnx-for-xime.sh 构建
+set(SHERPA_ONNX_JNI_DIR "${CMAKE_SOURCE_DIR}/sherpa_onnx_jni")
+
+if(EXISTS "${SHERPA_ONNX_JNI_DIR}/lib/${ANDROID_ABI}/libsherpa-onnx-jni.so")
+  add_library(sherpa-onnx-jni SHARED IMPORTED)
+  set_target_properties(sherpa-onnx-jni PROPERTIES
+      IMPORTED_LOCATION "${SHERPA_ONNX_JNI_DIR}/lib/${ANDROID_ABI}/libsherpa-onnx-jni.so"
+  )
+endif()
