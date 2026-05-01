@@ -274,9 +274,22 @@ class FunAsrWebSocketManager(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             Log.e(TAG, "WebSocket failure: ${t.message}", t)
             Log.e(TAG, "Response: ${response?.code ?: "null"}, ${response?.message ?: "null"}")
-            state = State.ERROR
+            
+            val errorCode = response?.code ?: 0
+            val errorMsg = when (errorCode) {
+                401 -> "API Key 无效或未配置，请检查设置"
+                403 -> "访问被拒绝，请检查 API Key 权限"
+                429 -> "请求过于频繁，请稍后再试"
+                500 -> "服务器错误，请稍后再试"
+                502 -> "服务器网关错误，请稍后再试"
+                503 -> "服务暂时不可用，请稍后再试"
+                else -> "连接失败: ${t.message ?: "未知错误"}"
+            }
+            
+            webSocket?.close(1000, "Error cleanup")
+            state = State.IDLE
             onStateChanged(state)
-            onError("WebSocket错误: ${t.message}")
+            onError(errorMsg)
         }
         
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {

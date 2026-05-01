@@ -5,6 +5,7 @@ import android.util.Log
 import android.view.inputmethod.InputConnection
 import com.kingzcheung.xime.speech.RecognitionState
 import com.kingzcheung.xime.speech.SpeechRecognitionManager
+import com.kingzcheung.xime.speech.sherpa.SherpaAsrEngine
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.util.FileLogger
 
@@ -48,7 +49,8 @@ class VoiceRecognitionHandler(
 
         val useLocal = SettingsPreferences.isSttUseLocal(context)
         val providerName = if (useLocal) {
-            "本地模型"
+            val sherpaEngine = SherpaAsrEngine(context)
+            sherpaEngine.getSelectedModelInfo()?.name ?: "本地模型"
         } else {
             val apiKey = SettingsPreferences.getFunAsrApiKey(context)
             if (apiKey.isNotEmpty()) "阿里百炼" else "未配置"
@@ -80,6 +82,16 @@ class VoiceRecognitionHandler(
         textLengthBeforeVoiceInput = textBeforeVoiceInput.length
         Log.d("VoiceButtons", "Saved text before voice: length=$textLengthBeforeVoiceInput")
 
+        val useLocal = SettingsPreferences.isSttUseLocal(context)
+        val providerName = if (useLocal) {
+            val sherpaEngine = SherpaAsrEngine(context)
+            sherpaEngine.getSelectedModelInfo()?.name ?: "本地模型"
+        } else {
+            val apiKey = SettingsPreferences.getFunAsrApiKey(context)
+            if (apiKey.isNotEmpty()) "阿里百炼" else "未配置"
+        }
+        onStateChanged(getState().copy(voicePluginName = providerName))
+
         speechRecognitionManager.startRecognition()
         Log.d("VoiceButtons", "Speech recognition starting")
     }
@@ -108,10 +120,21 @@ class VoiceRecognitionHandler(
         if (text.isNotEmpty() && !text.startsWith("错误:")) {
             val ic = getInputConnection()
             if (ic != null) {
-                ic.commitText("$text${heuristicPunctuation(text)}", 1)
+                val needsAutoPunctuation = getNeedsAutoPunctuation()
+                val finalText = if (needsAutoPunctuation) "$text${heuristicPunctuation(text)}" else text
+                ic.commitText(finalText, 1)
             }
             onStateChanged(getState().copy(voiceRecognizedText = ""))
         }
+    }
+    
+    private fun getNeedsAutoPunctuation(): Boolean {
+        val useLocal = SettingsPreferences.isSttUseLocal(context)
+        if (useLocal) {
+            val sherpaEngine = SherpaAsrEngine(context)
+            return sherpaEngine.getSelectedModelInfo()?.needsAutoPunctuation ?: true
+        }
+        return false
     }
 
     private fun heuristicPunctuation(text: String): String {

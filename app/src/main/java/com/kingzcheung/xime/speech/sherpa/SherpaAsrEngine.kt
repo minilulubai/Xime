@@ -70,7 +70,8 @@ class SherpaAsrEngine(private val context: Context) {
         val encoderFile: String = "",
         val decoderFile: String = "",
         val joinerFile: String = "",
-        val ctcModelFile: String = ""
+        val ctcModelFile: String = "",
+        val needsAutoPunctuation: Boolean = true
     )
     
     private var recognizer: OnlineRecognizer? = null

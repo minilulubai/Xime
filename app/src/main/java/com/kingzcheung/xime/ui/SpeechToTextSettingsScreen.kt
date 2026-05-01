@@ -83,7 +83,8 @@ data class AsrProvider(
     val icon: ImageVector? = null,
     val isOnline: Boolean,
     val isConfigured: Boolean,
-    val features: List<String> = emptyList()
+    val features: List<String> = emptyList(),
+    val needsAutoPunctuation: Boolean = false
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
