@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "曦码"
+  name: "Xime 长距离依赖(曦码)"
   text: "安卓五笔输入法"
   tagline: 基于 Rime 引擎构建，专注于简洁高效的中文输入体验
   actions:
@@ -22,7 +22,7 @@ features:
     details: 使用 Rime 输入法引擎，高度可定制化
   - icon: 🎤
     title: 语音转文本
-    details: 内置语音识别功能，支持阿里百炼 FunAsr
+    details: 支持阿里百炼在线 API 和 Sherpa 本地模型，离线可用
   - icon: 😀
     title: 表情插件
     details: 支持扩展表情插件，颜文字、表情包等

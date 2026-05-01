@@ -1,6 +1,7 @@
 package com.kingzcheung.xime.speech.funasr
 
 import android.util.Log
+import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.*
 import okhttp3.*
 import okio.ByteString.Companion.toByteString
@@ -47,9 +48,11 @@ class FunAsrWebSocketManager(
         
         if (state != State.IDLE) {
             Log.w(TAG, "Already connected or connecting, state: $state")
+            FileLogger.w(TAG, "Connect called but state is $state, not IDLE")
             return false
         }
         
+        FileLogger.i(TAG, "Starting WebSocket connection, API key length: ${apiKey.length}")
         Log.d(TAG, "Starting connection, API key: '${apiKey.take(10)}...' (length: ${apiKey.length})")
         
         try {
@@ -159,6 +162,7 @@ class FunAsrWebSocketManager(
     
     private inner class WebSocketListenerImpl : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            FileLogger.i(TAG, "WebSocket opened successfully")
             Log.d(TAG, "WebSocket opened, response code: ${response.code}")
             Log.d(TAG, "Response headers: ${response.headers}")
             state = State.CONNECTED
@@ -180,6 +184,7 @@ class FunAsrWebSocketManager(
                 
                 when (event) {
                     "task-started" -> {
+                        FileLogger.i(TAG, "ASR task started, ready for audio input")
                         Log.d(TAG, "Task started! Ready to send audio")
                         state = State.LISTENING
                         onStateChanged(state)
@@ -254,6 +259,7 @@ class FunAsrWebSocketManager(
                     "task-failed" -> {
                         val errorCode = header.optString("error_code", "UNKNOWN")
                         val errorMsg = header.optString("error_message", "Unknown error")
+                        FileLogger.e(TAG, "ASR task failed: code=$errorCode, message=$errorMsg")
                         Log.e(TAG, "Task failed: code=$errorCode, message=$errorMsg")
                         state = State.ERROR
                         onStateChanged(state)
@@ -266,16 +272,18 @@ class FunAsrWebSocketManager(
                     }
                 }
             } catch (e: Exception) {
+                FileLogger.e(TAG, "Failed to parse WebSocket message: ${e.message}")
                 Log.e(TAG, "Failed to parse message: $text", e)
                 onError("解析消息失败: ${e.message}")
             }
         }
         
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            val errorCode = response?.code ?: 0
+            FileLogger.e(TAG, "WebSocket failure: code=$errorCode, error=${t.message}")
             Log.e(TAG, "WebSocket failure: ${t.message}", t)
             Log.e(TAG, "Response: ${response?.code ?: "null"}, ${response?.message ?: "null"}")
             
-            val errorCode = response?.code ?: 0
             val errorMsg = when (errorCode) {
                 401 -> "API Key 无效或未配置，请检查设置"
                 403 -> "访问被拒绝，请检查 API Key 权限"

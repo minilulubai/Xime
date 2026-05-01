@@ -6,6 +6,7 @@ import android.content.Context
 import android.util.Log
 import com.k2fsa.sherpa.onnx.*
 import com.kingzcheung.xime.speech.RecognitionState
+import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -134,24 +135,30 @@ class SherpaAsrEngine(private val context: Context) {
 
     fun initialize(): Boolean {
         if (!isAvailable()) {
+            FileLogger.e(TAG, "sherpa-onnx JNI library not available")
             Log.e(TAG, "sherpa-onnx JNI not available")
             return false
         }
 
         val modelDir = getSelectedModelDir()
         if (!modelDir.exists()) {
+            FileLogger.e(TAG, "Model directory not found: ${modelDir.absolutePath}")
             Log.e(TAG, "Model directory not found: ${modelDir.absolutePath}")
             return false
         }
 
         val modelInfo = getSelectedModelInfo()
         if (modelInfo == null) {
+            FileLogger.e(TAG, "Model info not found for selected model")
             Log.e(TAG, "Model info not found")
             return false
         }
 
+        FileLogger.i(TAG, "Initializing local ASR model: ${modelInfo.name} (${modelInfo.id})")
+
         val tokensFile = findFile(modelDir, "tokens.txt")
         if (tokensFile == null) {
+            FileLogger.e(TAG, "tokens.txt not found in ${modelDir.absolutePath}")
             Log.e(TAG, "tokens.txt not found in ${modelDir.absolutePath}")
             errorCallback?.invoke("模型文件不完整，缺少 tokens.txt")
             return false
@@ -160,12 +167,14 @@ class SherpaAsrEngine(private val context: Context) {
         if (modelInfo.modelType == "ctc") {
             if (findFile(modelDir, modelInfo.ctcModelFile) == null &&
                 modelInfo.files.none { f -> f.endsWith(".onnx") && findFile(modelDir, f) != null }) {
+                FileLogger.e(TAG, "CTC model file not found: ${modelInfo.ctcModelFile}")
                 Log.e(TAG, "CTC model file not found in ${modelDir.absolutePath}")
                 errorCallback?.invoke("模型文件不完整，请重新下载")
                 return false
             }
         } else {
             if (findFile(modelDir, modelInfo.encoderFile) == null) {
+                FileLogger.e(TAG, "Encoder file not found: ${modelInfo.encoderFile}")
                 Log.e(TAG, "Encoder file not found in ${modelDir.absolutePath}")
                 errorCallback?.invoke("模型文件不完整，请重新下载")
                 return false
@@ -175,9 +184,11 @@ class SherpaAsrEngine(private val context: Context) {
         try {
             val config = createConfig(modelDir, modelInfo)
             recognizer = OnlineRecognizer(config = config)
+            FileLogger.i(TAG, "Local ASR model initialized successfully: ${modelInfo.name}")
             Log.d(TAG, "Recognizer initialized from ${modelDir.absolutePath}")
             return true
         } catch (e: Exception) {
+            FileLogger.e(TAG, "Failed to initialize recognizer: ${e.message}", e)
             Log.e(TAG, "Failed to initialize recognizer", e)
             errorCallback?.invoke("模型初始化失败: ${e.message}")
             return false

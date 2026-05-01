@@ -5,10 +5,15 @@ import android.util.Log
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.speech.AsrBackend
 import com.kingzcheung.xime.speech.RecognitionState
+import com.kingzcheung.xime.util.FileLogger
 
 class FunAsrAsrBackend(private val context: Context) : AsrBackend {
 
     override val name: String = "阿里百炼 FunAsr"
+    
+    companion object {
+        private const val TAG = "FunAsrBackend"
+    }
 
     private var wsManager: FunAsrWebSocketManager? = null
     private var resultCallback: ((String) -> Unit)? = null
@@ -29,9 +34,11 @@ class FunAsrAsrBackend(private val context: Context) : AsrBackend {
     override fun initialize(): Boolean {
         val apiKey = SettingsPreferences.getFunAsrApiKey(context)
         if (apiKey.isEmpty()) {
-            Log.e("FunAsrBackend", "API Key not configured")
+            FileLogger.e(TAG, "FunAsr API Key not configured")
+            Log.e(TAG, "API Key not configured")
             return false
         }
+        FileLogger.i(TAG, "Initializing FunAsr backend with API key (length: ${apiKey.length})")
         wsManager = FunAsrWebSocketManager(
             apiKey = apiKey,
             onResult = { text, _ ->
@@ -40,7 +47,8 @@ class FunAsrAsrBackend(private val context: Context) : AsrBackend {
                 }
             },
             onError = { error ->
-                Log.e("FunAsrBackend", "Error: $error")
+                FileLogger.e(TAG, "FunAsr error: $error")
+                Log.e(TAG, "Error: $error")
                 errorCallback?.invoke(error)
             },
             onStateChanged = { wsState ->
@@ -51,6 +59,7 @@ class FunAsrAsrBackend(private val context: Context) : AsrBackend {
     }
 
     override fun start(): Boolean {
+        FileLogger.i(TAG, "Starting FunAsr connection")
         return wsManager?.connect() ?: false
     }
 
@@ -59,14 +68,17 @@ class FunAsrAsrBackend(private val context: Context) : AsrBackend {
     }
 
     override fun stop() {
+        FileLogger.i(TAG, "Stopping FunAsr recognition")
         wsManager?.sendFinishTask()
     }
 
     override fun cancel() {
+        FileLogger.i(TAG, "Canceling FunAsr recognition")
         wsManager?.cancel()
     }
 
     override fun release() {
+        FileLogger.i(TAG, "Releasing FunAsr backend")
         wsManager?.disconnect()
         wsManager = null
     }

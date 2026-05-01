@@ -12,6 +12,7 @@ import androidx.annotation.RequiresPermission
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.speech.funasr.FunAsrAsrBackend
 import com.kingzcheung.xime.speech.sherpa.SherpaAsrBackend
+import com.kingzcheung.xime.util.FileLogger
 
 class SpeechRecognitionManager(private val context: Context) {
 
@@ -49,13 +50,21 @@ class SpeechRecognitionManager(private val context: Context) {
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun startRecognition() {
-        if (recordingThread != null) return
+        if (recordingThread != null) {
+            FileLogger.w(TAG, "Recognition already running, ignoring start request")
+            return
+        }
 
+        FileLogger.i(TAG, "Starting speech recognition")
         stateCallback?.invoke(RecognitionState.PROCESSING)
 
         if (backend == null) {
+            val useLocal = SettingsPreferences.isSttUseLocal(context)
+            FileLogger.i(TAG, "Creating ASR backend: ${if (useLocal) "Sherpa (local)" else "FunAsr (online)"}")
+            
             val newBackend = createBackend()
             if (newBackend == null) {
+                FileLogger.e(TAG, "Failed to create ASR backend")
                 errorCallback?.invoke("无法创建 ASR 引擎")
                 stateCallback?.invoke(RecognitionState.ERROR)
                 return
@@ -72,13 +81,16 @@ class SpeechRecognitionManager(private val context: Context) {
             if (!newBackend.initialize()) {
                 val msg = when {
                     newBackend is SherpaAsrBackend -> "本地模型未下载或引擎未编译"
-                    newBackend is FunAsrAsrBackend -> "初始化在线引擎失败"
+                    newBackend is FunAsrAsrBackend -> "初始化在线引擎失败，请检查 API Key"
                     else -> "引擎初始化失败"
                 }
+                FileLogger.e(TAG, "Backend initialization failed: $msg")
                 errorCallback?.invoke(msg)
                 stateCallback?.invoke(RecognitionState.ERROR)
                 return
             }
+            
+            FileLogger.i(TAG, "ASR backend initialized successfully")
         }
 
         val currentBackend = backend!!

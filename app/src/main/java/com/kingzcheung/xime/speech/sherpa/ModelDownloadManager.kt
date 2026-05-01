@@ -2,6 +2,7 @@ package com.kingzcheung.xime.speech.sherpa
 
 import android.content.Context
 import android.util.Log
+import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -78,6 +79,8 @@ class ModelDownloadManager(private val context: Context) {
         modelId: String,
         onProgress: (DownloadState) -> Unit
     ) = withContext(Dispatchers.IO) {
+        FileLogger.i(TAG, "Starting model download: $modelId from $downloadUrl")
+        
         val modelDir = getModelDir(modelId)
         modelDir.mkdirs()
 
@@ -89,11 +92,13 @@ class ModelDownloadManager(private val context: Context) {
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {
+                FileLogger.e(TAG, "Model download failed: HTTP ${response.code}")
                 onProgress(DownloadState.Error("下载失败: HTTP ${response.code}"))
                 return@withContext
             }
 
             val totalBytes = response.body?.contentLength() ?: -1L
+            FileLogger.i(TAG, "Download started: total size = ${if (totalBytes > 0) "$totalBytes bytes" else "unknown"}")
             var downloadedBytes = 0L
 
             response.body?.byteStream()?.use { input ->
@@ -111,16 +116,19 @@ class ModelDownloadManager(private val context: Context) {
                 }
             }
 
+            FileLogger.i(TAG, "Download complete: $downloadedBytes bytes, extracting...")
             onProgress(DownloadState.Downloading(1f, downloadedBytes, totalBytes))
 
             extractTarBz2(tmpFile, modelDir, onProgress)
 
             tmpFile.delete()
 
+            FileLogger.i(TAG, "Model $modelId downloaded and extracted successfully")
             onProgress(DownloadState.Complete)
             Log.d(TAG, "Model $modelId downloaded and extracted successfully")
         } catch (e: Exception) {
             tmpFile.delete()
+            FileLogger.e(TAG, "Failed to download model $modelId: ${e.message}", e)
             Log.e(TAG, "Failed to download model $modelId", e)
             onProgress(DownloadState.Error("下载失败: ${e.message}"))
         }
