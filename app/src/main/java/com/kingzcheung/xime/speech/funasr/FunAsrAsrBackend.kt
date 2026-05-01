@@ -17,6 +17,7 @@ class FunAsrAsrBackend(private val context: Context) : AsrBackend {
 
     override fun setCallbacks(
         onResult: (String) -> Unit,
+        onPartialResult: ((String) -> Unit)?,
         onStateChange: (RecognitionState) -> Unit,
         onError: (String) -> Unit
     ) {

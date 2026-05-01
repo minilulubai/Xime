@@ -11,15 +11,18 @@ class SherpaAsrBackend(private val context: Context) : AsrBackend {
 
     private var engine: SherpaAsrEngine? = null
     private var resultCallback: ((String) -> Unit)? = null
+    private var partialResultCallback: ((String) -> Unit)? = null
     private var stateCallback: ((RecognitionState) -> Unit)? = null
     private var errorCallback: ((String) -> Unit)? = null
 
     override fun setCallbacks(
         onResult: (String) -> Unit,
+        onPartialResult: ((String) -> Unit)?,
         onStateChange: (RecognitionState) -> Unit,
         onError: (String) -> Unit
     ) {
         resultCallback = onResult
+        partialResultCallback = onPartialResult
         stateCallback = onStateChange
         errorCallback = onError
     }
@@ -28,6 +31,7 @@ class SherpaAsrBackend(private val context: Context) : AsrBackend {
         engine = SherpaAsrEngine(context)
         engine?.setCallbacks(
             onResult = { text -> resultCallback?.invoke(text) },
+            onPartialResult = { text -> partialResultCallback?.invoke(text) },
             onStateChange = { state -> stateCallback?.invoke(state) },
             onError = { error -> errorCallback?.invoke(error) }
         )
@@ -44,7 +48,7 @@ class SherpaAsrBackend(private val context: Context) : AsrBackend {
 
     override fun start(): Boolean {
         val eng = engine ?: return false
-        return eng.initialize() && eng.startRecognition()
+        return eng.startRecognition()
     }
 
     override fun processAudioChunk(buffer: ByteArray) {

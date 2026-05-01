@@ -454,17 +454,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                 if (enabled) {
                                     feedbackManager.performVibration()
                                     isTrackingVoiceButtons = true
-                                    val started = voiceRecognitionHandler.startRecognition()
-                                    voiceRecordingStarted = started
-                                    Log.d("VoiceButtons", "Speech recognition started: $started")
-                                    if (!started) {
-                                        Log.e(TAG, "Failed to start speech recognition")
-                                        uiState.value = uiState.value.copy(
-                                            isVoiceMode = false,
-                                            voiceRecognitionState = RecognitionState.ERROR
-                                        )
-                                        isTrackingVoiceButtons = false
-                                    }
+                                    voiceRecordingStarted = true
+                                    voiceRecognitionHandler.startRecognition()
+                                    Log.d("VoiceButtons", "Speech recognition starting...")
                                 } else {
                                     isTrackingVoiceButtons = false
                                 }

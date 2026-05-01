@@ -30,20 +30,33 @@ class SherpaAsrEngine(private val context: Context) {
                 modelType = "ctc",
                 files = listOf("ctc-epoch-20-avg-1-chunk-16-left-128.int8.onnx", "tokens.txt"),
                 ctcModelFile = "ctc-epoch-20-avg-1-chunk-16-left-128.int8.onnx"
+            ),
+            AsrModelInfo(
+                id = "zipformer-multilingual-int8",
+                name = "多语言 Zipformer int8",
+                description = "支持阿拉伯语、英语、印尼语、日语、俄语、泰语、越南语、中文",
+                language = "multi",
+                size = "259 MB",
+                downloadUrl = "https://www.modelscope.cn/models/bikeand/asr/resolve/master/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
+                modelType = "transducer",
+                files = listOf("encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "decoder-epoch-75-avg-11-chunk-16-left-128.onnx", "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "tokens.txt"),
+                encoderFile = "encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
+                decoderFile = "decoder-epoch-75-avg-11-chunk-16-left-128.onnx",
+                joinerFile = "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx"
+            ),
+            AsrModelInfo(
+                id = "ctc-zh-xlarge-int8",
+                name = "中文大模型 CTC int8",
+                description = "中文大模型，int8 量化，更高精度",
+                language = "zh",
+                size = "590 MB",
+                downloadUrl = "https://www.modelscope.cn/models/bikeand/asr/resolve/master/sherpa-onnx-streaming-zipformer-ctc-zh-xlarge-int8-2025-06-30.tar.bz2",
+                modelType = "ctc",
+                files = listOf("model.int8.onnx", "tokens.txt"),
+                ctcModelFile = "model.int8.onnx"
             )
         )
     }
-    
-    private var recognizer: OnlineRecognizer? = null
-    private var stream: OnlineStream? = null
-    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
-    private var resultCallback: ((String) -> Unit)? = null
-    private var stateCallback: ((RecognitionState) -> Unit)? = null
-    private var errorCallback: ((String) -> Unit)? = null
-    
-    private var accumulatedText = StringBuilder()
-    private var isProcessingEndpoint = false
     
     data class AsrModelInfo(
         val id: String,
@@ -59,6 +72,17 @@ class SherpaAsrEngine(private val context: Context) {
         val joinerFile: String = "",
         val ctcModelFile: String = ""
     )
+    
+    private var recognizer: OnlineRecognizer? = null
+    private var stream: OnlineStream? = null
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    private var resultCallback: ((String) -> Unit)? = null
+    private var partialResultCallback: ((String) -> Unit)? = null
+    private var stateCallback: ((RecognitionState) -> Unit)? = null
+    private var errorCallback: ((String) -> Unit)? = null
+    
+    private val accumulatedText = StringBuilder()
     
     fun isAvailable(): Boolean {
         return try {
@@ -80,13 +104,13 @@ class SherpaAsrEngine(private val context: Context) {
     
     fun getSelectedModelDir(): File {
         val sharedPrefs = context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
-        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
+        val modelId = sharedPrefs.getString("selected_model", "ctc-multi-zh-hans-int8") ?: "ctc-multi-zh-hans-int8"
         return File(context.filesDir, "asr_models/$modelId")
     }
 
     fun getSelectedModelInfo(): AsrModelInfo? {
         val sharedPrefs = context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
-        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
+        val modelId = sharedPrefs.getString("selected_model", "ctc-multi-zh-hans-int8") ?: "ctc-multi-zh-hans-int8"
         return AVAILABLE_MODELS.find { it.id == modelId }
     }
     
@@ -98,7 +122,6 @@ class SherpaAsrEngine(private val context: Context) {
     private fun findFile(dir: File, fileName: String): File? {
         val direct = File(dir, fileName)
         if (direct.exists()) return direct
-        // Search subdirectories (for tarballs extracted without stripping top-level dir)
         dir.listFiles()?.forEach { child ->
             if (child.isDirectory) {
                 val found = findFile(child, fileName)
@@ -209,10 +232,12 @@ class SherpaAsrEngine(private val context: Context) {
     
     fun setCallbacks(
         onResult: (String) -> Unit,
+        onPartialResult: ((String) -> Unit)? = null,
         onStateChange: (RecognitionState) -> Unit,
         onError: (String) -> Unit
     ) {
         resultCallback = onResult
+        partialResultCallback = onPartialResult
         stateCallback = onStateChange
         errorCallback = onError
     }
@@ -226,7 +251,6 @@ class SherpaAsrEngine(private val context: Context) {
         
         stream = recognizer?.createStream()
         accumulatedText.clear()
-        isProcessingEndpoint = false
         
         stateCallback?.invoke(RecognitionState.LISTENING)
         Log.d(TAG, "Recognition started")
@@ -246,30 +270,30 @@ class SherpaAsrEngine(private val context: Context) {
             currentRecognizer.decode(currentStream)
         }
         
-        val result = currentRecognizer.getResult(currentStream)
-        if (result.text.isNotEmpty()) {
-            coroutineScope.launch(Dispatchers.Main) {
-                resultCallback?.invoke(accumulatedText.toString() + result.text)
-                stateCallback?.invoke(RecognitionState.PROCESSING)
-            }
-        }
+        val isEndpoint = currentRecognizer.isEndpoint(currentStream)
+        val text = currentRecognizer.getResult(currentStream).text
         
-        if (currentRecognizer.isEndpoint(currentStream) && !isProcessingEndpoint) {
-            isProcessingEndpoint = true
+        if (isEndpoint) {
+            val tailPaddings = FloatArray((0.8f * SAMPLE_RATE).toInt())
+            currentStream.acceptWaveform(tailPaddings, SAMPLE_RATE)
+            while (currentRecognizer.isReady(currentStream)) {
+                currentRecognizer.decode(currentStream)
+            }
+            val finalText = currentRecognizer.getResult(currentStream).text
             
-            val finalResult = currentRecognizer.getResult(currentStream)
-            if (finalResult.text.isNotEmpty()) {
-                accumulatedText.append(finalResult.text)
+            if (finalText.isNotEmpty()) {
                 coroutineScope.launch(Dispatchers.Main) {
-                    resultCallback?.invoke(accumulatedText.toString())
+                    resultCallback?.invoke(finalText)
                 }
             }
             
             currentRecognizer.reset(currentStream)
-            isProcessingEndpoint = false
-            
             coroutineScope.launch(Dispatchers.Main) {
                 stateCallback?.invoke(RecognitionState.LISTENING)
+            }
+        } else if (text.isNotEmpty()) {
+            coroutineScope.launch(Dispatchers.Main) {
+                partialResultCallback?.invoke(text)
             }
         }
     }
@@ -289,27 +313,32 @@ class SherpaAsrEngine(private val context: Context) {
         val currentStream = stream
         val currentRecognizer = recognizer
         
+        var resultText = ""
         if (currentStream != null && currentRecognizer != null) {
+            val tailPaddings = FloatArray((0.6f * SAMPLE_RATE).toInt())
+            currentStream.acceptWaveform(tailPaddings, SAMPLE_RATE)
             currentStream.inputFinished()
             
             while (currentRecognizer.isReady(currentStream)) {
                 currentRecognizer.decode(currentStream)
             }
             
-            val result = currentRecognizer.getResult(currentStream)
-            if (result.text.isNotEmpty()) {
-                accumulatedText.append(result.text)
-                coroutineScope.launch(Dispatchers.Main) {
-                    resultCallback?.invoke(accumulatedText.toString())
-                }
-            }
+            resultText = currentRecognizer.getResult(currentStream).text
             
             currentStream.release()
             stream = null
         }
         
+        if (resultText.isNotEmpty()) {
+            val finalText = resultText
+            coroutineScope.launch(Dispatchers.Main) {
+                resultCallback?.invoke(finalText)
+            }
+        }
+        
+        accumulatedText.clear()
         stateCallback?.invoke(RecognitionState.IDLE)
-        Log.d(TAG, "Recognition stopped, final text: ${accumulatedText}")
+        Log.d(TAG, "Recognition stopped")
     }
     
     fun cancelRecognition() {

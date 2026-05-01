@@ -23,6 +23,7 @@ object SettingsPreferences {
     private const val KEY_STT_PROVIDER = "stt_provider"
     private const val KEY_FUNASR_API_KEY = "funasr_api_key"
     private const val KEY_STT_USE_LOCAL = "stt_use_local"
+    private const val KEY_STT_KEEP_MODEL_IN_RAM = "stt_keep_model_in_ram"
     
     private const val KEY_KEYBOARD_HEIGHT_DP = "keyboard_height_dp"
     private const val DEFAULT_KEYBOARD_HEIGHT_DP = 290
@@ -165,6 +166,14 @@ object SettingsPreferences {
     
     fun setSttUseLocal(context: Context, useLocal: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_STT_USE_LOCAL, useLocal).apply()
+    }
+    
+    fun isSttKeepModelInRam(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_STT_KEEP_MODEL_IN_RAM, true)
+    }
+    
+    fun setSttKeepModelInRam(context: Context, keep: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_STT_KEEP_MODEL_IN_RAM, keep).apply()
     }
     
     fun getKeyboardHeightDp(context: Context): Int {

@@ -69,21 +69,21 @@ class VoiceKeyboardContainer(
     }
     
     private fun handleActionUp() {
-        val state = uiStateProvider().voiceButtonState
+        val state = uiStateProvider()
         
-        if (state.leftActive) {
-            onPerformUndo()
-        } else if (state.rightActive) {
-            onPerformSearch()
-        }
-        
-        if (isRecording() && isRecording()) {
-            onStopRecognition()
-            setRecording(false)
-        }
-        
-        if (uiStateProvider().isVoiceMode) {
-            onUiStateChanged(uiStateProvider().copy(
+        if (state.isVoiceMode || isRecording()) {
+            if (state.voiceButtonState.leftActive) {
+                onPerformUndo()
+            } else if (state.voiceButtonState.rightActive) {
+                onPerformSearch()
+            }
+            
+            if (isRecording()) {
+                onStopRecognition()
+                setRecording(false)
+            }
+            
+            onUiStateChanged(state.copy(
                 isVoiceMode = false,
                 voiceButtonState = VoiceButtonState(),
                 voiceRecognitionState = RecognitionState.IDLE

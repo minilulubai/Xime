@@ -123,16 +123,20 @@ fun SettingsToggleItem(
     title: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    onClick: (() -> Unit)? = null,
+    showArrow: Boolean = false
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
+            .then(
+                if (onClick != null) Modifier.clickable(onClick = onClick)
+                else Modifier.clickable { onCheckedChange(!checked) }
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 图标圆角背景
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -158,6 +162,13 @@ fun SettingsToggleItem(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (showArrow) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Switch(

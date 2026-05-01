@@ -136,6 +136,8 @@ fun SpeechToTextSettingsContent(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            Spacer(modifier = Modifier.height(8.dp))
+            
             EngineSelectorComposable()
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -438,6 +440,59 @@ fun LocalAsrTab() {
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            KeepModelInRamToggle()
+        }
+    }
+}
+
+@Composable
+fun KeepModelInRamToggle() {
+    val context = LocalContext.current
+    var keepInRam by remember { mutableStateOf(SettingsPreferences.isSttKeepModelInRam(context)) }
+    val sherpaAvailable = try {
+        System.loadLibrary("sherpa-onnx-jni"); true
+    } catch (e: UnsatisfiedLinkError) { false }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "保持模型常驻内存",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = if (keepInRam) "首次语音后模型保持加载，后续秒级启动" else "每次语音后释放模型，下次需重新加载",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                )
+            }
+            Switch(
+                checked = keepInRam,
+                onCheckedChange = {
+                    keepInRam = it
+                    SettingsPreferences.setSttKeepModelInRam(context, it)
+                },
+                enabled = sherpaAvailable,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            )
         }
     }
 }

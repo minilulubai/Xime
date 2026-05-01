@@ -90,7 +90,12 @@ import com.kingzcheung.xime.settings.DictEntry
 import com.kingzcheung.xime.settings.DictionaryHelper
 import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.speech.sherpa.SherpaAsrEngine
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object SettingsRoutes {
     const val Main = "main"
@@ -411,12 +416,31 @@ fun SettingsMainContent(
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
-                    SettingsItem(
+                    var sttEnabled by remember { mutableStateOf(SettingsPreferences.isSttEnabled(context)) }
+                    SettingsToggleItem(
                         icon = Icons.TwoTone.GraphicEq,
                         title = "语音转文本",
                         subtitle = "在线 ASR 服务和本地模型管理",
-                        onClick = onNavigateToSpeechToText,
-                        showArrow = true
+                        checked = sttEnabled,
+                        showArrow = true,
+                        onClick = {
+                            if (sttEnabled) onNavigateToSpeechToText()
+                        },
+                        onCheckedChange = { enabled ->
+                            sttEnabled = enabled
+                            SettingsPreferences.setSttEnabled(context, enabled)
+                            if (enabled && SettingsPreferences.isSttUseLocal(context)) {
+                                kotlinx.coroutines.MainScope().launch {
+                                    try {
+                                        val engine = com.kingzcheung.xime.speech.sherpa.SherpaAsrEngine(context)
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            engine.initialize()
+                                        }
+                                        engine.release()
+                                    } catch (_: Exception) { }
+                                }
+                            }
+                        }
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 56.dp),
