@@ -17,12 +17,12 @@ class VoiceRecognitionHandler(
     companion object {
         private const val TAG = "VoiceRecognition"
     }
-    
+
     private lateinit var speechRecognitionManager: SpeechRecognitionManager
-    
+
     var textBeforeVoiceInput = ""
     var textLengthBeforeVoiceInput = 0
-    
+
     fun initialize() {
         FileLogger.i(TAG, "Initializing speech recognition system")
 
@@ -65,7 +65,7 @@ class VoiceRecognitionHandler(
             }.start()
         }
     }
-    
+
     fun startRecognition() {
         if (!::speechRecognitionManager.isInitialized) {
             Log.e(TAG, "speechRecognitionManager not initialized")
@@ -75,32 +75,32 @@ class VoiceRecognitionHandler(
             ))
             return
         }
-        
+
         textBeforeVoiceInput = getInputConnection()?.getTextBeforeCursor(1000, 0)?.toString() ?: ""
         textLengthBeforeVoiceInput = textBeforeVoiceInput.length
         Log.d("VoiceButtons", "Saved text before voice: length=$textLengthBeforeVoiceInput")
-        
+
         speechRecognitionManager.startRecognition()
         Log.d("VoiceButtons", "Speech recognition starting")
     }
-    
+
     fun stopRecognition() {
         if (::speechRecognitionManager.isInitialized) {
             speechRecognitionManager.stopRecognition()
         }
     }
-    
+
     fun release() {
         if (::speechRecognitionManager.isInitialized) {
             speechRecognitionManager.release()
         }
     }
-    
+
     fun isInitialized(): Boolean = ::speechRecognitionManager.isInitialized
-    
+
     private var lastPartialText = ""
     private var lastAmplitudeUpdate = 0L
-    
+
     private fun handleSpeechResult(text: String) {
         Log.d(TAG, "Speech result (final): $text")
         lastPartialText = ""
@@ -108,12 +108,20 @@ class VoiceRecognitionHandler(
         if (text.isNotEmpty() && !text.startsWith("错误:")) {
             val ic = getInputConnection()
             if (ic != null) {
-                ic.commitText("$text。", 1)
+                ic.commitText("$text${heuristicPunctuation(text)}", 1)
             }
             onStateChanged(getState().copy(voiceRecognizedText = ""))
         }
     }
-    
+
+    private fun heuristicPunctuation(text: String): String {
+        return when {
+            text.any { it in "吗呢么吧" } || text.contains("什么") || text.contains("怎么") || text.contains("为什么") || text.contains("如何") || text.contains("哪") -> "？"
+            text.length < 4 -> "，"
+            else -> "。"
+        }
+    }
+
     private fun handlePartialResult(text: String) {
         if (text == lastPartialText) return
         lastPartialText = text
@@ -124,7 +132,7 @@ class VoiceRecognitionHandler(
         }
         onStateChanged(getState().copy(voiceRecognizedText = text))
     }
-    
+
     private fun handleSpeechStateChange(state: RecognitionState) {
         Log.d(TAG, "Speech state changed: $state")
         if (state == RecognitionState.LISTENING) {
@@ -132,7 +140,7 @@ class VoiceRecognitionHandler(
         }
         onStateChanged(getState().copy(voiceRecognitionState = state))
     }
-    
+
     private fun handleSpeechError(error: String) {
         Log.e(TAG, "Speech error: $error")
         FileLogger.e(TAG, "Speech error: $error")
@@ -145,7 +153,7 @@ class VoiceRecognitionHandler(
             voiceAmplitude = 0f
         ))
     }
-    
+
     private fun handleAmplitudeUpdate(amplitude: Float) {
         val now = System.currentTimeMillis()
         if (now - lastAmplitudeUpdate < 80) return
