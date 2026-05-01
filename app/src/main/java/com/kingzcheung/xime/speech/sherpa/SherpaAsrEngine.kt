@@ -264,6 +264,16 @@ class SherpaAsrEngine(private val context: Context) {
         stream = recognizer?.createStream()
         accumulatedText.clear()
         
+        val currentStream = stream
+        val currentRecognizer = recognizer
+        if (currentStream != null && currentRecognizer != null) {
+            val warmupSamples = FloatArray((0.1f * SAMPLE_RATE).toInt())
+            currentStream.acceptWaveform(warmupSamples, SAMPLE_RATE)
+            while (currentRecognizer.isReady(currentStream)) {
+                currentRecognizer.decode(currentStream)
+            }
+        }
+        
         stateCallback?.invoke(RecognitionState.LISTENING)
         Log.d(TAG, "Recognition started")
         return true

@@ -14,7 +14,8 @@ export default defineConfig({
     nav: [
       { text: '首页', link: '/' },
       { text: '使用文档', link: '/usage' },
-      { text: '插件', link: '/plugins/' }
+      { text: '插件', link: '/plugins/' },
+      { text: '下载', link: 'https://github.com/ximeiorg/Xime/releases' }
     ],
 
     sidebar: {
