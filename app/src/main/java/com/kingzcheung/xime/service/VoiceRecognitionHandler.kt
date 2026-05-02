@@ -5,6 +5,8 @@ import android.util.Log
 import android.view.inputmethod.InputConnection
 import com.kingzcheung.xime.speech.RecognitionState
 import com.kingzcheung.xime.speech.SpeechRecognitionManager
+import com.kingzcheung.xime.speech.punctuation.PunctuationInference
+import com.kingzcheung.xime.speech.punctuation.PunctuationModelManager
 import com.kingzcheung.xime.speech.sherpa.SherpaAsrEngine
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.util.FileLogger
@@ -20,6 +22,7 @@ class VoiceRecognitionHandler(
     }
 
     private lateinit var speechRecognitionManager: SpeechRecognitionManager
+    private var punctuationInitialized = false
 
     var textBeforeVoiceInput = ""
     var textLengthBeforeVoiceInput = 0
@@ -63,8 +66,34 @@ class VoiceRecognitionHandler(
             Thread {
                 try {
                     speechRecognitionManager.preload()
+                    initPunctuationModel()
                 } catch (_: Exception) { }
             }.start()
+        }
+    }
+    
+    private fun initPunctuationModel() {
+        if (punctuationInitialized) return
+        
+        val punctuationEnabled = SettingsPreferences.isPunctuationModelEnabled(context)
+        if (!punctuationEnabled) {
+            FileLogger.i(TAG, "Punctuation model not enabled in settings")
+            return
+        }
+        
+        val punctuationManager = PunctuationModelManager(context)
+        if (!punctuationManager.isModelDownloaded()) {
+            FileLogger.i(TAG, "Punctuation model not downloaded")
+            return
+        }
+        
+        val modelFile = punctuationManager.getModelFile()
+        val vocabFile = punctuationManager.getVocabFile()
+        if (PunctuationInference.initialize(context, modelFile.absolutePath, vocabFile.absolutePath)) {
+            punctuationInitialized = true
+            FileLogger.i(TAG, "Punctuation model initialized successfully")
+        } else {
+            FileLogger.e(TAG, "Failed to initialize punctuation model")
         }
     }
 
@@ -100,11 +129,17 @@ class VoiceRecognitionHandler(
         if (::speechRecognitionManager.isInitialized) {
             speechRecognitionManager.stopRecognition()
         }
+        // handleFinalResult is now called from within handleSpeechResult
+        // when the final stopRecognition result arrives
     }
 
     fun release() {
         if (::speechRecognitionManager.isInitialized) {
             speechRecognitionManager.release()
+        }
+        if (punctuationInitialized) {
+            PunctuationInference.release()
+            punctuationInitialized = false
         }
     }
 
@@ -117,24 +152,40 @@ class VoiceRecognitionHandler(
         Log.d(TAG, "Speech result (final): $text")
         lastPartialText = ""
 
-        if (text.isNotEmpty() && !text.startsWith("错误:")) {
+        val cleanText = text.replace(" ", "")
+        if (cleanText.isNotEmpty() && !cleanText.startsWith("错误:")) {
             val ic = getInputConnection()
             if (ic != null) {
-                val needsAutoPunctuation = getNeedsAutoPunctuation()
-                val finalText = if (needsAutoPunctuation) "$text${heuristicPunctuation(text)}" else text
-                ic.commitText(finalText, 1)
+                val punctuatedText = addPunctuation(cleanText)
+                ic.commitText(punctuatedText, 1)
             }
             onStateChanged(getState().copy(voiceRecognizedText = ""))
         }
     }
     
-    private fun getNeedsAutoPunctuation(): Boolean {
+    private fun addPunctuation(text: String): String {
         val useLocal = SettingsPreferences.isSttUseLocal(context)
-        if (useLocal) {
-            val sherpaEngine = SherpaAsrEngine(context)
-            return sherpaEngine.getSelectedModelInfo()?.needsAutoPunctuation ?: true
+        if (!useLocal) return text
+        
+        val sherpaEngine = SherpaAsrEngine(context)
+        val needsAutoPunctuation = sherpaEngine.getSelectedModelInfo()?.needsAutoPunctuation ?: true
+        if (!needsAutoPunctuation) return text
+        
+        val cleanText = text.trim().replace(" ", "")
+        if (cleanText.isEmpty()) return text
+        
+        val punctuationEnabled = SettingsPreferences.isPunctuationModelEnabled(context)
+        if (punctuationEnabled && punctuationInitialized) {
+            try {
+                val result = PunctuationInference.predict(cleanText)
+                FileLogger.d(TAG, "Punctuation model result: '$cleanText' -> '$result'")
+                return result
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Punctuation model failed: ${e.message}")
+            }
         }
-        return false
+        
+        return "$cleanText${heuristicPunctuation(cleanText)}"
     }
 
     private fun heuristicPunctuation(text: String): String {
@@ -149,11 +200,16 @@ class VoiceRecognitionHandler(
         if (text == lastPartialText) return
         lastPartialText = text
         Log.d(TAG, "Speech result (partial): $text")
+        
+        // 过滤掉空格，避免显示空白
+        val cleanText = text.replace(" ", "")
+        if (cleanText.isEmpty()) return
+        
         val ic = getInputConnection()
         if (ic != null) {
-            ic.setComposingText(text, 1)
+            ic.setComposingText(cleanText, 1)
         }
-        onStateChanged(getState().copy(voiceRecognizedText = text))
+        onStateChanged(getState().copy(voiceRecognizedText = cleanText))
     }
 
     private fun handleSpeechStateChange(state: RecognitionState) {

@@ -161,6 +161,22 @@ target_link_libraries(onnx_jni
 
 target_link_options(onnx_jni PRIVATE "-Wl,-z,max-page-size=16384")
 
+# Punctuation ONNX JNI 库
+add_library(punctuation_jni SHARED
+    punctuation_jni.cc
+)
+
+target_include_directories(punctuation_jni PRIVATE
+    ${ONNXRUNTIME_DIR}/include
+)
+
+target_link_libraries(punctuation_jni
+    onnxruntime
+    log
+)
+
+target_link_options(punctuation_jni PRIVATE "-Wl,-z,max-page-size=16384")
+
 # sherpa-onnx ASR JNI 库
 set(SHERPA_ONNX_SRC_DIR "${CMAKE_SOURCE_DIR}/sherpa-onnx-src")
 set(SHERPA_ONNXRUNTIME_LIB_DIR "${ONNXRUNTIME_DIR}/lib/${ANDROID_ABI}")

@@ -21,7 +21,7 @@ class SpeechRecognitionManager(private val context: Context) {
         private const val SAMPLE_RATE = 16000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val BUFFER_SIZE_SECONDS = 0.2f
+        private const val BUFFER_SIZE_SECONDS = 0.1f
     }
 
     private var backend: AsrBackend? = null
@@ -48,8 +48,22 @@ class SpeechRecognitionManager(private val context: Context) {
         amplitudeCallback = onAmplitude
     }
 
+    private var isPreloading = false
+    private val preloadLock = Object()
+
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun startRecognition() {
+        synchronized(preloadLock) {
+            while (isPreloading) {
+                try {
+                    preloadLock.wait()
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return
+                }
+            }
+        }
+        
         if (recordingThread != null) {
             FileLogger.w(TAG, "Recognition already running, ignoring start request")
             return
@@ -150,10 +164,19 @@ class SpeechRecognitionManager(private val context: Context) {
     }
 
     fun preload() {
-        if (backend != null) return
+        synchronized(preloadLock) {
+            if (backend != null) return
+            isPreloading = true
+        }
+        
         val newBackend = createBackend()
-        if (newBackend == null) return
-        backend = newBackend
+        if (newBackend == null) {
+            synchronized(preloadLock) {
+                isPreloading = false
+                preloadLock.notifyAll()
+            }
+            return
+        }
 
         newBackend.setCallbacks(
             onResult = { text -> handleResult(text) },
@@ -163,8 +186,17 @@ class SpeechRecognitionManager(private val context: Context) {
         )
 
         if (!newBackend.initialize()) {
-            backend = null
+            synchronized(preloadLock) {
+                isPreloading = false
+                preloadLock.notifyAll()
+            }
             return
+        }
+
+        synchronized(preloadLock) {
+            backend = newBackend
+            isPreloading = false
+            preloadLock.notifyAll()
         }
 
         newBackend.start()
@@ -231,6 +263,19 @@ class SpeechRecognitionManager(private val context: Context) {
             val buffer = ShortArray((SAMPLE_RATE * BUFFER_SIZE_SECONDS).toInt())
             val byteBuffer = ByteArray(buffer.size * 2)
             try {
+                // Feed the first 3 chunks quickly without waiting for results
+                // to give the decoder a running start
+                for (i in 0 until 3) {
+                    val nread = audioRecord.read(buffer, 0, buffer.size)
+                    if (nread <= 0) break
+                    for (j in 0 until nread) {
+                        val s = buffer[j].toInt()
+                        byteBuffer[j * 2] = (s and 0xFF).toByte()
+                        byteBuffer[j * 2 + 1] = ((s shr 8) and 0xFF).toByte()
+                    }
+                    currentBackend.processAudioChunk(byteBuffer.copyOf(nread * 2))
+                }
+
                 while (!interrupted()) {
                     val nread = audioRecord.read(buffer, 0, buffer.size)
                     if (nread > 0) {

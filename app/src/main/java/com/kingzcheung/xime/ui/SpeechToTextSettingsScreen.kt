@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.R
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.speech.punctuation.PunctuationModelManager
 import com.kingzcheung.xime.speech.sherpa.ModelDownloadManager
 import com.kingzcheung.xime.speech.sherpa.SherpaAsrEngine
 import kotlinx.coroutines.launch
@@ -314,43 +315,13 @@ fun LocalAsrTab() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            val sherpaAvailable = try {
-                System.loadLibrary("sherpa-onnx-jni"); true
-            } catch (e: UnsatisfiedLinkError) { false }
-
-            Text(
-                text = "下载本地模型",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-
-            if (!sherpaAvailable) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ErrorOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "本地 ASR 引擎未编译，请先运行 build-sherpa-onnx.ps1 构建",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "下载本地模型",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
             }
         }
 
@@ -445,6 +416,10 @@ fun LocalAsrTab() {
             Spacer(modifier = Modifier.height(8.dp))
 
             KeepModelInRamToggle()
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            PunctuationModelSection()
         }
     }
 }
@@ -499,6 +474,316 @@ fun KeepModelInRamToggle() {
 }
 
 @Composable
+fun PunctuationModelSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val punctuationManager = remember { PunctuationModelManager(context) }
+    
+    var isDownloaded by remember { mutableStateOf(punctuationManager.isModelDownloaded()) }
+    var downloadState by remember { mutableStateOf<PunctuationModelManager.DownloadState>(
+        PunctuationModelManager.DownloadState.Idle
+    ) }
+    var isEnabled by remember { mutableStateOf(SettingsPreferences.isPunctuationModelEnabled(context)) }
+    
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "标点预测模型",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDownloaded && isEnabled)
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                else
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isDownloaded)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Storage,
+                            contentDescription = null,
+                            tint = if (isDownloaded)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(16.dp))
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = PunctuationModelManager.PUNCTUATION_MODEL.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        
+                        Spacer(modifier = Modifier.height(2.dp))
+                        
+                        Text(
+                            text = PunctuationModelManager.PUNCTUATION_MODEL.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                            ) {
+                                Text(
+                                    text = PunctuationModelManager.PUNCTUATION_MODEL.size,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            if (isDownloaded) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                ) {
+                                    Text(
+                                        text = "已下载",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                when (downloadState) {
+                    is PunctuationModelManager.DownloadState.Downloading -> {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        val state = downloadState as PunctuationModelManager.DownloadState.Downloading
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = state.progress.coerceIn(0f, 1f),
+                            label = "punc_progress"
+                        )
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "下载中...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "${(state.progress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        }
+                    }
+                    is PunctuationModelManager.DownloadState.Error -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val state = downloadState as PunctuationModelManager.DownloadState.Error
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        ) {
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                    PunctuationModelManager.DownloadState.Complete -> {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "下载完成",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        isDownloaded = true
+                        downloadState = PunctuationModelManager.DownloadState.Idle
+                    }
+                    PunctuationModelManager.DownloadState.Idle -> {}
+                }
+                
+                if (isDownloaded) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "启用智能标点",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (isEnabled) "使用 AI 模型预测标点" else "使用简单规则添加标点",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = isEnabled,
+                            onCheckedChange = {
+                                isEnabled = it
+                                SettingsPreferences.setPunctuationModelEnabled(context, it)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                punctuationManager.deleteModel()
+                                isDownloaded = false
+                                isEnabled = false
+                                SettingsPreferences.setPunctuationModelEnabled(context, false)
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("删除")
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    val isDownloading = downloadState is PunctuationModelManager.DownloadState.Downloading
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                downloadState = PunctuationModelManager.DownloadState.Downloading(0f, 0L, -1L)
+                                punctuationManager.downloadModel { state ->
+                                    downloadState = state
+                                }
+                            }
+                        },
+                        enabled = !isDownloading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (isDownloading) "下载中..." else "下载标点模型")
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "标点预测模型基于 Transformer 架构，可自动为语音识别结果添加逗号、句号、问号、感叹号等标点符号",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun ModelCard(
     modelInfo: SherpaAsrEngine.AsrModelInfo,
     isDownloaded: Boolean,
@@ -513,12 +798,9 @@ fun ModelCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
             else
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 2.dp else 0.dp
         )
     ) {
         Column(

@@ -33,28 +33,17 @@ class SherpaAsrEngine(private val context: Context) {
                 ctcModelFile = "ctc-epoch-20-avg-1-chunk-16-left-128.int8.onnx"
             ),
             AsrModelInfo(
-                id = "zipformer-multilingual-int8",
-                name = "多语言 Zipformer int8",
-                description = "支持阿拉伯语、英语、印尼语、日语、俄语、泰语、越南语、中文",
-                language = "multi",
-                size = "259 MB",
-                downloadUrl = "https://www.modelscope.cn/models/bikeand/asr/resolve/master/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10.tar.bz2",
-                modelType = "transducer",
-                files = listOf("encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "decoder-epoch-75-avg-11-chunk-16-left-128.onnx", "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx", "tokens.txt"),
-                encoderFile = "encoder-epoch-75-avg-11-chunk-16-left-128.int8.onnx",
-                decoderFile = "decoder-epoch-75-avg-11-chunk-16-left-128.onnx",
-                joinerFile = "joiner-epoch-75-avg-11-chunk-16-left-128.int8.onnx"
-            ),
-            AsrModelInfo(
-                id = "ctc-zh-xlarge-int8",
-                name = "中文大模型 CTC int8",
-                description = "中文大模型，int8 量化，更高精度",
+                id = "zipformer-zh-int8",
+                name = "中文 Zipformer int8",
+                description = "Zipformer 架构，适合实时语音识别，int8 量化",
                 language = "zh",
-                size = "590 MB",
-                downloadUrl = "https://www.modelscope.cn/models/bikeand/asr/resolve/master/sherpa-onnx-streaming-zipformer-ctc-zh-xlarge-int8-2025-06-30.tar.bz2",
-                modelType = "ctc",
-                files = listOf("model.int8.onnx", "tokens.txt"),
-                ctcModelFile = "model.int8.onnx"
+                size = "36 MB",
+                downloadUrl = "https://www.modelscope.cn/models/bikeand/asr/resolve/master/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30.tar.bz2",
+                modelType = "transducer",
+                files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt"),
+                encoderFile = "encoder.int8.onnx",
+                decoderFile = "decoder.onnx",
+                joinerFile = "joiner.int8.onnx"
             )
         )
     }
@@ -233,11 +222,11 @@ class SherpaAsrEngine(private val context: Context) {
             featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
             modelConfig = modelConfig,
             endpointConfig = EndpointConfig(
-                rule1 = EndpointRule(false, 2.4f, 0f),
-                rule2 = EndpointRule(true, 1.2f, 0f),
-                rule3 = EndpointRule(false, 0f, 20f)
+                rule1 = EndpointRule(false, 0f, 0f),
+                rule2 = EndpointRule(false, 0f, 0f),
+                rule3 = EndpointRule(false, 0f, 60f)
             ),
-            enableEndpoint = true,
+            enableEndpoint = false,
             decodingMethod = "greedy_search"
         )
     }
@@ -262,17 +251,6 @@ class SherpaAsrEngine(private val context: Context) {
         }
         
         stream = recognizer?.createStream()
-        accumulatedText.clear()
-        
-        val currentStream = stream
-        val currentRecognizer = recognizer
-        if (currentStream != null && currentRecognizer != null) {
-            val warmupSamples = FloatArray((0.1f * SAMPLE_RATE).toInt())
-            currentStream.acceptWaveform(warmupSamples, SAMPLE_RATE)
-            while (currentRecognizer.isReady(currentStream)) {
-                currentRecognizer.decode(currentStream)
-            }
-        }
         
         stateCallback?.invoke(RecognitionState.LISTENING)
         Log.d(TAG, "Recognition started")
