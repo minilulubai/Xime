@@ -15,6 +15,7 @@ export default defineConfig({
       { text: '首页', link: '/' },
       { text: '使用文档', link: '/usage' },
       { text: '插件', link: '/plugins/' },
+      { text: '更新日志', link: '/changelog' },
       { text: '下载', link: 'https://github.com/ximeiorg/Xime/releases' }
     ],
 
@@ -24,7 +25,8 @@ export default defineConfig({
           text: '开始',
           items: [
             { text: '简介', link: '/' },
-            { text: '使用文档', link: '/usage' }
+            { text: '使用文档', link: '/usage' },
+            { text: '更新日志', link: '/changelog' }
           ]
         },
         {
