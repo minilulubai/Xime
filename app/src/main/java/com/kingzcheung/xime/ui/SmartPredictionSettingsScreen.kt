@@ -130,16 +130,27 @@ fun SmartPredictionSettingsContent(
                 downloadStatus = "下载完成"
                 checkModelState()
                 
+                withContext(Dispatchers.IO) {
+                    if (isInitialized) {
+                        AssociationManager.release()
+                        isInitialized = false
+                    }
+                }
+                
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "模型下载成功", Toast.LENGTH_SHORT).show()
                     
-                    if (isEnabled && !isInitialized) {
+                    if (isEnabled) {
                         isLoading = true
                         val success = withContext(Dispatchers.IO) {
                             AssociationManager.initialize(context)
                         }
                         isInitialized = success
                         isLoading = false
+                        
+                        if (!success) {
+                            Toast.makeText(context, "模型加载失败，请检查模型文件", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
             } catch (e: Exception) {

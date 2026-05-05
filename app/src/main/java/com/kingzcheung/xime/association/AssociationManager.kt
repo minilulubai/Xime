@@ -2,6 +2,7 @@ package com.kingzcheung.xime.association
 
 import android.content.Context
 import android.util.Log
+import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -21,33 +22,39 @@ object AssociationManager {
     suspend fun initialize(ctx: Context): Boolean = withContext(Dispatchers.IO) {
         context = ctx
         if (isInitialized) {
+            FileLogger.d(TAG, "Already initialized")
             return@withContext true
         }
         
         mutex.withLock {
             if (isInitialized) {
+                FileLogger.d(TAG, "Already initialized (in lock)")
                 return@withContext true
             }
             
             try {
                 fusionEngine = NgramFusionEngine(ctx)
                 
+                FileLogger.i(TAG, "Starting OnnxAssociationEngine initialization...")
                 val modelInit = OnnxAssociationEngine.initialize(ctx)
+                FileLogger.i(TAG, "OnnxAssociationEngine init result: $modelInit")
+                
                 val cacheInit = fusionEngine.initialize()
+                FileLogger.i(TAG, "NgramFusionEngine init result: $cacheInit")
                 
                 isInitialized = modelInit
                 
-                Log.d(TAG, "AssociationManager initialized: model=$modelInit, cache=$cacheInit")
+                FileLogger.i(TAG, "AssociationManager initialized: model=$modelInit, cache=$cacheInit")
                 isInitialized
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize AssociationManager", e)
+                FileLogger.e(TAG, "Failed to initialize AssociationManager: ${e.message}", e)
                 false
             }
         }
     }
     
-    suspend fun predict(contextText: String, topK: Int = 5): List<AssociationCandidate> = withContext(Dispatchers.Default) {
+    suspend fun predict(contextText: String, topK: Int = 20): List<AssociationCandidate> = withContext(Dispatchers.Default) {
         if (!isInitialized) {
             Log.d(TAG, "Not initialized, attempting to initialize...")
             val ctx = context

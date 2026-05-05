@@ -20,9 +20,26 @@ class PredictionManager(
 ) {
     companion object {
         private const val TAG = "PredictionManager"
+        private const val MAX_CONTEXT_LENGTH = 25
     }
     
-    var lastCommittedText = ""
+    private var _lastCommittedText = ""
+    val lastCommittedText: String get() = _lastCommittedText
+    
+    fun appendCommittedText(text: String) {
+        _lastCommittedText = (_lastCommittedText + text).takeLast(MAX_CONTEXT_LENGTH)
+        FileLogger.d(TAG, "Context updated: '$text' -> '$lastCommittedText' (len=${lastCommittedText.length})")
+    }
+    
+    fun clearCommittedText() {
+        _lastCommittedText = ""
+    }
+    
+    fun deleteLastChar() {
+        if (_lastCommittedText.isNotEmpty()) {
+            _lastCommittedText = _lastCommittedText.dropLast(1)
+        }
+    }
     
     fun initialize() {
         FileLogger.i(TAG, "Initializing association system")
@@ -114,7 +131,7 @@ class PredictionManager(
                     }
                 }
                 
-                val candidates = AssociationManager.predict(contextText, 5)
+                val candidates = AssociationManager.predict(contextText, 20)
                 
                 Log.d(TAG, "Prediction candidates: ${candidates.map { it.text }}")
                 

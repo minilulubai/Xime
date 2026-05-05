@@ -6,11 +6,37 @@
 #include <cstring>
 #include <algorithm>
 #include <mutex>
+#include <fstream>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 #define LOG_TAG "OnnxJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+
+static std::string g_log_path;
+static std::mutex g_log_mutex;
+
+static void write_to_file(const std::string& message) {
+    std::lock_guard<std::mutex> lock(g_log_mutex);
+    if (g_log_path.empty()) return;
+    
+    try {
+        std::ofstream file(g_log_path, std::ios::app);
+        if (file.is_open()) {
+            auto now = std::chrono::system_clock::now();
+            auto time = std::chrono::system_clock::to_time_t(now);
+            std::stringstream ss;
+            ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
+            file << ss.str() << " [D] OnnxJNI: " << message << "\n";
+            file.close();
+        }
+    } catch (...) {}
+}
+
+#define FILE_LOG(msg) write_to_file(msg)
 
 static OrtEnv* g_env = nullptr;
 static OrtSession* g_session = nullptr;
@@ -48,6 +74,17 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeInitialize(
 
     const char* modelPathStr = env->GetStringUTFChars(model_path, nullptr);
     LOGI("Initializing ONNX Runtime with model: %s", modelPathStr);
+    
+    std::string model_path_std(modelPathStr);
+    size_t last_slash = model_path_std.find_last_of('/');
+    if (last_slash != std::string::npos) {
+        std::string files_dir = model_path_std.substr(0, last_slash);
+        size_t logs_slash = files_dir.find_last_of('/');
+        if (logs_slash != std::string::npos) {
+            g_log_path = files_dir + "/logs/onnx_jni.log";
+            FILE_LOG("Log file path: " + g_log_path);
+        }
+    }
 
     OrtStatus* status = nullptr;
 
@@ -195,6 +232,7 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativePredict(
     }
 
     LOGD("Output shape: [%ld, %ld, %ld]", (long)output_dims[0], (long)output_dims[1], (long)output_dims[2]);
+    FILE_LOG("Output shape: [" + std::to_string(output_dims[0]) + ", " + std::to_string(output_dims[1]) + ", " + std::to_string(output_dims[2]) + "]");
 
     float* output_data = nullptr;
     status = api->GetTensorMutableData(output_tensor, (void**)&output_data);
@@ -207,8 +245,17 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativePredict(
 
     int64_t vocab_size = output_dims[2];
     int64_t last_pos = output_dims[1] - 1;
+    
+    FILE_LOG("vocab_size=" + std::to_string(vocab_size) + ", last_pos=" + std::to_string(last_pos) + ", input_len=" + std::to_string(input_len));
 
     float* logits = output_data + last_pos * vocab_size;
+    
+    std::stringstream logits_ss;
+    logits_ss << "First 10 logits at position " << last_pos << ": ";
+    for (int i = 0; i < 10; i++) {
+        logits_ss << logits[i] << " ";
+    }
+    FILE_LOG(logits_ss.str());
 
     std::vector<std::pair<int, float>> scores;
     for (int64_t i = 4; i < vocab_size; i++) {
@@ -219,6 +266,13 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativePredict(
               [](const auto& a, const auto& b) { return a.second > b.second; });
 
     scores.resize(std::min(static_cast<size_t>(top_k), scores.size()));
+    
+    std::stringstream top_ss;
+    top_ss << "Top 5 predictions: ";
+    for (int i = 0; i < 5 && i < scores.size(); i++) {
+        top_ss << "id=" << scores[i].first << " score=" << scores[i].second << " | ";
+    }
+    FILE_LOG(top_ss.str());
 
     jclass string_class = env->FindClass("java/lang/String");
     jobjectArray result = env->NewObjectArray(scores.size() * 2, string_class, nullptr);

@@ -1,7 +1,7 @@
 package com.kingzcheung.xime.association
 
 import android.content.Context
-import android.util.Log
+import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -15,7 +15,10 @@ object OnnxAssociationEngine {
     private var isInitialized = false
 
     fun initialize(context: Context): Boolean {
-        if (isInitialized) return true
+        if (isInitialized) {
+            FileLogger.d(TAG, "Already initialized")
+            return true
+        }
 
         try {
             val modelDir = context.filesDir
@@ -26,54 +29,76 @@ object OnnxAssociationEngine {
             for (fileName in filesToCheck) {
                 val file = File(modelDir, fileName)
                 if (!file.exists()) {
-                    Log.d(TAG, "$fileName not found at ${file.absolutePath}")
+                    FileLogger.e(TAG, "$fileName not found at ${file.absolutePath}")
                     return false
                 }
+                FileLogger.d(TAG, "$fileName exists: ${file.length()} bytes")
             }
 
             val vocabFile = File(modelDir, "vocab.json")
+            val vocabText = vocabFile.readText()
+            FileLogger.d(TAG, "vocab.json content preview: ${vocabText.take(200)}")
 
-            val vocabJson = JSONObject(vocabFile.readText())
-            val vocabMap = vocabJson.getJSONObject("model").getJSONObject("vocab")
+            val vocabJson = JSONObject(vocabText)
+            val vocabMap = when {
+                vocabJson.has("model") -> {
+                    vocabJson.getJSONObject("model").getJSONObject("vocab")
+                }
+                vocabJson.has("vocab") -> {
+                    vocabJson.getJSONObject("vocab")
+                }
+                else -> {
+                    vocabJson
+                }
+            }
             vocab = vocabMap.keys().asSequence().associateWith { vocabMap.getInt(it) }
             id2word = vocab.entries.associate { it.value to it.key }
-            Log.d(TAG, "Vocabulary loaded: ${vocab.size} words")
+            FileLogger.i(TAG, "Vocabulary loaded: ${vocab.size} words")
+            
+            FileLogger.d(TAG, "id2word mapping check: id=308='${id2word[308]}', id=81='${id2word[81]}', id=9='${id2word[9]}', id=5='${id2word[5]}', id=11='${id2word[11]}'")
+
 
             val modelFile = File(modelDir, "model_int8_dynamic.onnx")
-            Log.d(TAG, "Using model: ${modelFile.name} (${modelFile.length()} bytes)")
+            FileLogger.d(TAG, "Using model: ${modelFile.name} (${modelFile.length()} bytes)")
 
             val success = NativeOnnxEngine.initialize(context, modelFile.absolutePath)
             if (success) {
                 isInitialized = true
-                Log.i(TAG, "ONNX Runtime initialized successfully")
+                FileLogger.i(TAG, "ONNX Runtime initialized successfully")
                 return true
             } else {
-                Log.e(TAG, "Failed to initialize ONNX Runtime")
+                FileLogger.e(TAG, "Failed to initialize ONNX Runtime - NativeOnnxEngine.initialize returned false")
                 return false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize ONNX Runtime", e)
+            FileLogger.e(TAG, "Failed to initialize ONNX Runtime: ${e.message}", e)
             return false
         }
     }
 
-    suspend fun predict(inputText: String, topK: Int = 5): List<AssociationCandidate> = withContext(Dispatchers.Default) {
+    suspend fun predict(inputText: String, topK: Int = 20): List<AssociationCandidate> = withContext(Dispatchers.Default) {
+        FileLogger.d(TAG, "predict called with inputText='$inputText', topK=$topK")
+        
         if (!isInitialized) {
-            Log.e(TAG, "Engine not initialized")
+            FileLogger.e(TAG, "Engine not initialized")
             return@withContext emptyList()
         }
 
         try {
             val inputIds = encodeText(inputText)
+            FileLogger.d(TAG, "encodeText result: inputIds=$inputIds")
             if (inputIds.isEmpty()) {
-                Log.d(TAG, "Empty input encoding for: '$inputText'")
+                FileLogger.d(TAG, "Empty input encoding for: '$inputText'")
                 return@withContext emptyList()
             }
 
-            Log.d(TAG, "Predicting for: '$inputText', tokens: $inputIds")
+            FileLogger.d(TAG, "Predicting for: '$inputText', tokens: $inputIds")
 
             val inputIdsLong = inputIds.map { it.toLong() }.toLongArray()
             val scores = NativeOnnxEngine.predict(inputIdsLong, topK)
+            
+            FileLogger.d(TAG, "NativeOnnxEngine.predict returned ${scores.size} scores")
+            FileLogger.d(TAG, "Top 5 scores with id2word lookup: ${scores.take(5).map { (id, score) -> "id=$id -> '${id2word[id]}' (score=$score)" }}")
 
             val candidates = scores.mapNotNull { (id, score) ->
                 id2word[id]?.let { word ->
@@ -81,17 +106,18 @@ object OnnxAssociationEngine {
                 }
             }
 
-            Log.d(TAG, "Predicted ${candidates.size} candidates: ${candidates.map { it.text }}")
+            FileLogger.d(TAG, "Predicted ${candidates.size} candidates: ${candidates.map { it.text }}")
             candidates
 
         } catch (e: Exception) {
-            Log.e(TAG, "Prediction failed", e)
+            FileLogger.e(TAG, "Prediction failed: ${e.message}", e)
             emptyList()
         }
     }
 
     private fun encodeText(text: String): List<Int> {
         val ids = mutableListOf<Int>()
+        ids.add(vocab["[BOS]"] ?: 1)
         var i = 0
         while (i < text.length) {
             val char = text[i].toString()
@@ -105,7 +131,7 @@ object OnnxAssociationEngine {
     fun release() {
         NativeOnnxEngine.release()
         isInitialized = false
-        Log.d(TAG, "ONNX Runtime released")
+        FileLogger.d(TAG, "ONNX Runtime released")
     }
 
     fun isInitialized(): Boolean = isInitialized

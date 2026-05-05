@@ -3,6 +3,7 @@ package com.kingzcheung.xime.association
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import com.kingzcheung.xime.util.FileLogger
 import java.io.File
 import java.util.zip.ZipFile
 
@@ -15,13 +16,13 @@ object NativeOnnxEngine {
         
         for (libName in libsToLoad) {
             if (!loadSingleLibrary(context, libName)) {
-                Log.e(TAG, "Failed to load $libName")
+                FileLogger.e(TAG, "Failed to load $libName")
                 return false
             }
         }
         
         nativeLoaded = true
-        Log.d(TAG, "All native libraries loaded successfully")
+        FileLogger.i(TAG, "All native libraries loaded successfully")
         return true
     }
     
@@ -30,14 +31,14 @@ object NativeOnnxEngine {
         
         try {
             System.loadLibrary(simpleName)
-            Log.d(TAG, "Loaded $libName via System.loadLibrary")
+            FileLogger.d(TAG, "Loaded $libName via System.loadLibrary")
             return true
         } catch (e: UnsatisfiedLinkError) {
             if (e.message?.contains("already opened") == true || e.message?.contains("already loaded") == true) {
-                Log.d(TAG, "$libName already loaded, skipping")
+                FileLogger.d(TAG, "$libName already loaded, skipping")
                 return true
             }
-            Log.d(TAG, "System.loadLibrary failed for $libName, trying alternative methods...")
+            FileLogger.d(TAG, "System.loadLibrary failed for $libName, trying alternative methods...")
         }
         
         val nativeLibDir = context.applicationInfo?.nativeLibraryDir
@@ -46,16 +47,16 @@ object NativeOnnxEngine {
             if (libFile.exists()) {
                 try {
                     System.load(libFile.absolutePath)
-                    Log.d(TAG, "Loaded $libName from nativeLibraryDir: ${libFile.absolutePath}")
+                    FileLogger.d(TAG, "Loaded $libName from nativeLibraryDir: ${libFile.absolutePath}")
                     return true
                 } catch (e: UnsatisfiedLinkError) {
                     if (e.message?.contains("already opened") == true || e.message?.contains("already loaded") == true) {
-                        Log.d(TAG, "$libName already loaded, skipping")
+                        FileLogger.d(TAG, "$libName already loaded, skipping")
                         return true
                     }
-                    Log.e(TAG, "Failed to load from nativeLibraryDir: ${e.message}")
+                    FileLogger.e(TAG, "Failed to load from nativeLibraryDir: ${e.message}")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to load from nativeLibraryDir", e)
+                    FileLogger.e(TAG, "Failed to load from nativeLibraryDir", e)
                 }
             }
         }
@@ -66,22 +67,25 @@ object NativeOnnxEngine {
     fun initialize(context: Context, modelPath: String): Boolean {
         try {
             nativeInitialize(modelPath)
-            Log.d(TAG, "Native method already available")
+            FileLogger.d(TAG, "Native method already available")
             return true
         } catch (e: UnsatisfiedLinkError) {
-            Log.d(TAG, "Native method not available, loading libraries...")
+            FileLogger.d(TAG, "Native method not available, loading libraries...")
         }
         
         if (!loadNativeLibrary(context)) {
-            Log.e(TAG, "Native libraries not loaded")
+            FileLogger.e(TAG, "Native libraries not loaded")
             return false
         }
         
         return try {
             nativeInitialize(modelPath)
         } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "Native method still unavailable after loading: ${e.message}")
+            FileLogger.e(TAG, "Native method still unavailable after loading: ${e.message}")
             nativeLoaded = false
+            false
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "Native method failed: ${e.message}", e)
             false
         }
     }

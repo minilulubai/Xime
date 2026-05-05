@@ -26,11 +26,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,9 +76,58 @@ fun CandidateBar(
 ) {
     val displayCandidates = candidates.take(5)
     val hasMoreCandidates = candidates.size >= 5
-    val displayAssociation = associationCandidates.take(5)
     val hasMoreAssociation = associationCandidates.size >= 5
     val hasAnyMore = hasMoreCandidates || hasMoreAssociation
+    
+    val density = LocalDensity.current
+    val paint = remember { android.graphics.Paint().apply { this.textSize = with(density) { 15.sp.toPx() } } }
+    val itemPaddingPx = with(density) { 8.dp.toPx() }
+    val spacingPx = with(density) { 4.dp.toPx() }
+    
+    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    val rowPaddingPx = with(density) { 16.dp.toPx() }
+    val rightSidePx = with(density) { 
+        val moreBtn = if (hasAnyMore && onShowMoreCandidates != null) 38.dp.toPx() else 0f
+        val hideBtn = if (onHideKeyboard != null) 28.dp.toPx() else 0f
+        rowPaddingPx + moreBtn + hideBtn + 8.dp.toPx()
+    }
+    
+    val displayAssociation = remember(associationCandidates, displayCandidates, isComposing, inputText) {
+        if (displayCandidates.isEmpty()) {
+            associationCandidates.take(5)
+        } else {
+            val leftSidePx = with(density) {
+                var left = rowPaddingPx
+                if (isComposing && inputText.isNotEmpty()) {
+                    val inputWidth = paint.measureText(inputText) + 14.dp.toPx()
+                    left += inputWidth + 9.dp.toPx()
+                } else {
+                    left += 32.dp.toPx()
+                }
+                left
+            }
+            val lazyRowWidthPx = screenWidthPx - leftSidePx - rightSidePx
+            
+            val regularWidthPx = displayCandidates.sumOf { c ->
+                (paint.measureText(c) + itemPaddingPx).toDouble()
+            }.toFloat()
+            val dividerWidthPx = with(density) { 9.dp.toPx() }
+            val availablePx = lazyRowWidthPx - regularWidthPx - dividerWidthPx
+            
+            var usedPx = 0f
+            val result = mutableListOf<String>()
+            for (c in associationCandidates) {
+                val w = paint.measureText(c) + itemPaddingPx + (if (result.isEmpty()) 0f else spacingPx)
+                if (usedPx + w <= availablePx) {
+                    usedPx += w
+                    result.add(c)
+                } else break
+            }
+            if (result.isEmpty() && associationCandidates.isNotEmpty()) {
+                listOf(associationCandidates.first())
+            } else result
+        }
+    }
     
     Row(
         modifier = modifier
