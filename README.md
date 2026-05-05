@@ -110,7 +110,30 @@ git submodule update --init --recursive
 
 构建完成后，会在 `app/src/main/jniLibs/` 生成 `libsherpa-onnx-jni.so`。
 
-本地 ASR 模型需用户自行下载，放置到 `filesDir/asr_models/` 目录。
+本地 ASR 模型可在应用内设置页面下载。
+
+### AI 模型下载
+
+#### 智能联想词模型
+
+- **项目地址**: https://github.com/ximeiorg/predictive-text
+- **模型下载**: https://www.modelscope.cn/models/bikeand/predictive-text-small
+- **模型文件**: `model_int8_dynamic.onnx` (约 6MB)
+- **词表文件**: `vocab.json`
+- **存放位置**: `filesDir/` 目录（即应用私有目录根目录）
+- **功能**: 基于 Transformer 的中文联想词预测，提供智能候选词推荐
+
+#### 标点预测模型
+
+- **项目地址**: https://github.com/ximeiorg/srf-punctuation
+- **在线演示**: https://srf-punctuation.ximei.me/
+- **模型下载**: https://www.modelscope.cn/models/bikeand/srf-punctuation
+- **模型文件**: `punctuation_int8.onnx` (约 2.2MB)
+- **词表文件**: `vocab.json`
+- **存放位置**: `filesDir/punctuation_models/` 目录
+- **功能**: 基于 Transformer 的中文标点预测，语音识别后自动添加标点
+
+**注意**: 所有模型均可直接在应用内"设置 > 智能联想/语音识别"页面下载，无需手动放置。
 
 
 ## 技术栈
