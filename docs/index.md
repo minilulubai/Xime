@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "Xime 长距离依赖(曦码)"
+  name: "Xime (曦码)"
   text: "安卓五笔输入法"
   tagline: 基于 Rime 引擎构建，专注于简洁高效的中文输入体验
   actions:
