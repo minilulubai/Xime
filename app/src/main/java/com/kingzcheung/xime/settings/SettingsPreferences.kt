@@ -29,6 +29,12 @@ object SettingsPreferences {
     
     private const val KEY_SWIPE_DOWN_SHOW_ROOTS = "swipe_down_show_roots"
     
+    private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_PAIRED_SERVER = "paired_server"
+    private const val KEY_PAIRED_TOKEN = "paired_token"
+    private const val KEY_PAIRED_DEVICE_ID = "paired_device_id"
+    private const val KEY_PAIRED_DEVICE_NAME = "paired_device_name"
+    
     private const val KEY_KEYBOARD_HEIGHT_DP = "keyboard_height_dp"
     private const val DEFAULT_KEYBOARD_HEIGHT_DP = 290
     
@@ -196,6 +202,73 @@ object SettingsPreferences {
         getPrefs(context).edit().putBoolean(KEY_SWIPE_DOWN_SHOW_ROOTS, enabled).apply()
     }
     
+    fun getDeviceId(context: Context): String {
+        val prefs = getPrefs(context)
+        var id = prefs.getString(KEY_DEVICE_ID, null)
+        if (id == null) {
+            id = java.util.UUID.randomUUID().toString()
+            prefs.edit().putString(KEY_DEVICE_ID, id).apply()
+        }
+        return id
+    }
+
+    fun getPairedServer(context: Context): String? {
+        return getPrefs(context).getString(KEY_PAIRED_SERVER, null)
+    }
+
+    fun setPairedServer(context: Context, server: String?) {
+        if (server != null) {
+            getPrefs(context).edit().putString(KEY_PAIRED_SERVER, server).apply()
+        } else {
+            getPrefs(context).edit().remove(KEY_PAIRED_SERVER).apply()
+        }
+    }
+
+    fun getPairedToken(context: Context): String? {
+        return getPrefs(context).getString(KEY_PAIRED_TOKEN, null)
+    }
+
+    fun setPairedToken(context: Context, token: String?) {
+        if (token != null) {
+            getPrefs(context).edit().putString(KEY_PAIRED_TOKEN, token).apply()
+        } else {
+            getPrefs(context).edit().remove(KEY_PAIRED_TOKEN).apply()
+        }
+    }
+
+    fun getPairedDeviceId(context: Context): String? {
+        return getPrefs(context).getString(KEY_PAIRED_DEVICE_ID, null)
+    }
+
+    fun setPairedDeviceId(context: Context, deviceId: String?) {
+        if (deviceId != null) {
+            getPrefs(context).edit().putString(KEY_PAIRED_DEVICE_ID, deviceId).apply()
+        } else {
+            getPrefs(context).edit().remove(KEY_PAIRED_DEVICE_ID).apply()
+        }
+    }
+
+    fun getPairedDeviceName(context: Context): String? {
+        return getPrefs(context).getString(KEY_PAIRED_DEVICE_NAME, null)
+    }
+
+    fun setPairedDeviceName(context: Context, name: String?) {
+        if (name != null) {
+            getPrefs(context).edit().putString(KEY_PAIRED_DEVICE_NAME, name).apply()
+        } else {
+            getPrefs(context).edit().remove(KEY_PAIRED_DEVICE_NAME).apply()
+        }
+    }
+
+    fun clearPairedData(context: Context) {
+        getPrefs(context).edit()
+            .remove(KEY_PAIRED_SERVER)
+            .remove(KEY_PAIRED_TOKEN)
+            .remove(KEY_PAIRED_DEVICE_ID)
+            .remove(KEY_PAIRED_DEVICE_NAME)
+            .apply()
+    }
+
     fun getKeyboardHeightDp(context: Context): Int {
         return getPrefs(context).getInt(KEY_KEYBOARD_HEIGHT_DP, DEFAULT_KEYBOARD_HEIGHT_DP)
     }

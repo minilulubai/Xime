@@ -18,6 +18,7 @@ import androidx.compose.material.icons.twotone.Extension
 import androidx.compose.material.icons.twotone.GraphicEq
 import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.Keyboard
+import androidx.compose.material.icons.twotone.CastConnected
 import androidx.compose.material.icons.twotone.KeyboardAlt
 import androidx.compose.material.icons.twotone.Palette
 import androidx.compose.material.icons.twotone.Straighten
@@ -62,6 +63,7 @@ fun SettingsMainContent(
     onNavigateToPlugins: () -> Unit,
     onNavigateToSmartPrediction: () -> Unit,
     onNavigateToSpeechToText: () -> Unit,
+    onNavigateToDeviceAssociation: () -> Unit,
     onNavigateToAbout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -273,6 +275,18 @@ fun SettingsMainContent(
                                 }
                             }
                         }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.CastConnected,
+                        title = "设备关联",
+                        subtitle = "关联 PC 端输入法，同步剪贴板",
+                        onClick = onNavigateToDeviceAssociation,
+                        showArrow = true
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 56.dp),

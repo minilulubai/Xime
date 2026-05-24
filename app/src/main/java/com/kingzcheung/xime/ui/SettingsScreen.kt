@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kingzcheung.xime.ui.settings.DeviceAssociationContent
 import com.kingzcheung.xime.ui.settings.DictionarySettingsContent
 import com.kingzcheung.xime.ui.settings.KeyEffectSettingsContent
 import com.kingzcheung.xime.ui.settings.PluginSettingsContent
@@ -35,6 +36,7 @@ fun SettingsScreen(
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
                 onNavigateToSpeechToText = { navController.navigate(SettingsRoutes.SpeechToText) },
+                onNavigateToDeviceAssociation = { navController.navigate(SettingsRoutes.DeviceAssociation) },
                 onNavigateToAbout = { navController.navigate(SettingsRoutes.About) }
             )
         }
@@ -85,6 +87,11 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.FunAsrSettings) {
             FunAsrSettingsContent(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(SettingsRoutes.DeviceAssociation) {
+            DeviceAssociationContent(
                 onBack = { navController.popBackStack() }
             )
         }

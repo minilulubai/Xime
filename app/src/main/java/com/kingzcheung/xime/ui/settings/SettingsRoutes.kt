@@ -6,6 +6,7 @@ object SettingsRoutes {
     const val Theme = "theme"
     const val KeyEffect = "key_effect"
     const val Dictionary = "dictionary"
+    const val DeviceAssociation = "device_association"
     const val Plugins = "plugins"
     const val PluginSettings = "plugin_settings"
     const val SmartPrediction = "smart_prediction"
