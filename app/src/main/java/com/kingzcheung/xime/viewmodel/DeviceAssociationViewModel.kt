@@ -1,6 +1,7 @@
 package com.kingzcheung.xime.viewmodel
 
 import android.app.Application
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kingzcheung.xime.settings.SettingsPreferences
@@ -27,6 +28,11 @@ import java.net.Socket
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 
+data class PairedDeviceInfo(
+    val deviceId: String,
+    val deviceName: String
+)
+
 data class DeviceAssociationUiState(
     val isScanning: Boolean = false,
     val discoveredServers: List<String> = emptyList(),
@@ -35,8 +41,8 @@ data class DeviceAssociationUiState(
     val enteredCode: String = "",
     val isConfirming: Boolean = false,
     val token: String? = null,
-    val pairedDeviceName: String? = null,
-    val pairedDeviceId: String? = null,
+    val pairedDevices: List<PairedDeviceInfo> = emptyList(),
+    val pairedServerUrl: String? = null,
     val isUnpairing: Boolean = false,
     val errorMessage: String? = null,
     val statusMessage: String? = null
@@ -44,6 +50,7 @@ data class DeviceAssociationUiState(
 
 class DeviceAssociationViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
+    private val deviceName = Build.MODEL
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -54,10 +61,15 @@ class DeviceAssociationViewModel(application: Application) : AndroidViewModel(ap
 
     private val _uiState = MutableStateFlow(DeviceAssociationUiState(
         token = SettingsPreferences.getPairedToken(context),
-        pairedDeviceName = SettingsPreferences.getPairedDeviceName(context),
-        pairedDeviceId = SettingsPreferences.getPairedDeviceId(context)
+        pairedServerUrl = SettingsPreferences.getPairedServer(context)
     ))
     val uiState: StateFlow<DeviceAssociationUiState> = _uiState.asStateFlow()
+
+    init {
+        if (_uiState.value.token != null) {
+            fetchPairedDevices()
+        }
+    }
 
     fun startPairing() {
         viewModelScope.launch {
@@ -180,11 +192,12 @@ class DeviceAssociationViewModel(application: Application) : AndroidViewModel(ap
         viewModelScope.launch {
             _uiState.update { it.copy(isConfirming = true, errorMessage = null) }
 
-            val result = withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 try {
                     val json = JSONObject().apply {
                         put("code", code)
                         put("approve", true)
+                        put("device_name", deviceName)
                     }
                     val body = json.toString().toRequestBody(jsonMediaType)
                     val request = Request.Builder()
@@ -195,40 +208,46 @@ class DeviceAssociationViewModel(application: Application) : AndroidViewModel(ap
                     response.use { resp ->
                         if (resp.isSuccessful) {
                             val respBody = resp.body?.string() ?: ""
-                            JSONObject(respBody).optBoolean("success", false)
+                            val obj = JSONObject(respBody)
+                            val deviceId = obj.optString("device_id", "")
+                            val token = obj.optString("token", "")
+
+                            SettingsPreferences.setPairedToken(context, token)
+                            SettingsPreferences.setPairedDeviceId(context, deviceId)
+
+                            _uiState.update { it.copy(
+                                isConfirming = false,
+                                showCodeDialog = false,
+                                enteredCode = "",
+                                token = token,
+                                errorMessage = null,
+                                statusMessage = "关联成功"
+                            ) }
+
+                            fetchPairedDevices()
                         } else if (resp.code == 404) {
-                            throw Exception("配对码无效或已过期")
+                            _uiState.update { it.copy(
+                                isConfirming = false,
+                                errorMessage = "配对码无效或已过期"
+                            ) }
                         } else if (resp.code == 409) {
-                            throw Exception("配对码已被确认")
+                            _uiState.update { it.copy(
+                                isConfirming = false,
+                                errorMessage = "配对码已被确认"
+                            ) }
                         } else {
-                            throw Exception("确认失败: ${resp.code}")
+                            _uiState.update { it.copy(
+                                isConfirming = false,
+                                errorMessage = "确认失败: ${resp.code}"
+                            ) }
                         }
                     }
                 } catch (e: Exception) {
-                    throw e
-                }
-            }
-
-            try {
-                if (result) {
-                    SettingsPreferences.setPairedToken(context, code)
                     _uiState.update { it.copy(
                         isConfirming = false,
-                        showCodeDialog = false,
-                        enteredCode = "",
-                        token = code,
-                        pairedDeviceName = "PC",
-                        errorMessage = null,
-                        statusMessage = "关联成功"
+                        errorMessage = e.message ?: "配对失败"
                     ) }
-                } else {
-                    throw Exception("确认失败")
                 }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(
-                    isConfirming = false,
-                    errorMessage = e.message ?: "配对失败"
-                ) }
             }
         }
     }
@@ -239,9 +258,45 @@ class DeviceAssociationViewModel(application: Application) : AndroidViewModel(ap
         }
     }
 
-    fun unpair() {
+    private fun fetchPairedDevices() {
+        val token = _uiState.value.token ?: return
         val serverUrl = SettingsPreferences.getPairedServer(context) ?: return
-        val pairedDeviceId = _uiState.value.pairedDeviceId ?: return
+
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val request = Request.Builder()
+                        .url("$serverUrl/pair/list")
+                        .header("Authorization", "Bearer $token")
+                        .get()
+                        .build()
+                    val response = client.newCall(request).execute()
+                    response.use { resp ->
+                        if (resp.isSuccessful) {
+                            val respBody = resp.body?.string() ?: ""
+                            val arr = JSONObject(respBody).optJSONArray("devices")
+                            val devices = mutableListOf<PairedDeviceInfo>()
+                            if (arr != null) {
+                                for (i in 0 until arr.length()) {
+                                    val d = arr.getJSONObject(i)
+                                    devices.add(PairedDeviceInfo(
+                                        deviceId = d.optString("device_id", ""),
+                                        deviceName = d.optString("device_name", "")
+                                    ))
+                                }
+                            }
+                            _uiState.update { it.copy(pairedDevices = devices) }
+                        }
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
+    fun unpair(deviceId: String? = null) {
+        val serverUrl = SettingsPreferences.getPairedServer(context) ?: return
+        val token = _uiState.value.token ?: return
+        val targetDeviceId = deviceId ?: _uiState.value.pairedDevices.firstOrNull()?.deviceId ?: return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isUnpairing = true, errorMessage = null) }
@@ -249,7 +304,8 @@ class DeviceAssociationViewModel(application: Application) : AndroidViewModel(ap
             withContext(Dispatchers.IO) {
                 try {
                     val request = Request.Builder()
-                        .url("$serverUrl/pair/remove/$pairedDeviceId")
+                        .url("$serverUrl/pair/remove/$targetDeviceId")
+                        .header("Authorization", "Bearer $token")
                         .post("".toRequestBody(null))
                         .build()
                     client.newCall(request).execute().use { }
@@ -260,8 +316,8 @@ class DeviceAssociationViewModel(application: Application) : AndroidViewModel(ap
             _uiState.update { it.copy(
                 isUnpairing = false,
                 token = null,
-                pairedDeviceName = null,
-                pairedDeviceId = null,
+                pairedDevices = emptyList(),
+                pairedServerUrl = null,
                 errorMessage = null,
                 statusMessage = "已解除关联"
             ) }

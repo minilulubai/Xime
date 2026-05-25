@@ -18,12 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,7 +79,7 @@ fun DeviceAssociationContent(
         )
 
         if (uiState.token != null) {
-            PairedView(uiState, viewModel)
+            PairedDevicesList(uiState, viewModel)
         } else {
             UnpairedView(uiState, viewModel)
         }
@@ -160,60 +158,126 @@ private fun UnpairedView(
 }
 
 @Composable
-private fun PairedView(
+private fun PairedDevicesList(
     uiState: DeviceAssociationUiState,
     viewModel: DeviceAssociationViewModel
 ) {
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(
-            imageVector = Icons.Filled.CheckCircle,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(64.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "已关联",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = "与 PC 输入法已建立关联",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        OutlinedButton(
-            onClick = { viewModel.unpair() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isUnpairing,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-        ) {
-            if (uiState.isUnpairing) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.error)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("解除中...")
-            } else {
-                Icon(Icons.Filled.LinkOff, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("解除关联")
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "已关联设备",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        items(uiState.pairedDevices) { device ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Computer,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = device.deviceName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (uiState.pairedServerUrl != null) {
+                            Text(
+                                text = uiState.pairedServerUrl!!.removePrefix("http://"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.unpair(device.deviceId) },
+                        enabled = !uiState.isUnpairing,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        if (uiState.isUnpairing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Text("解除关联", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
         }
+
+        item {
+            Spacer(modifier = Modifier.height(4.dp))
+            Button(
+                onClick = { viewModel.startPairing() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isScanning
+            ) {
+                if (uiState.isScanning) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("正在搜索...")
+                } else {
+                    Icon(Icons.Filled.Link, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("关联新设备")
+                }
+            }
+        }
+
+        if (uiState.errorMessage != null && !uiState.isScanning) {
+            item {
+                Text(
+                    text = uiState.errorMessage ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
         if (uiState.statusMessage != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = uiState.statusMessage ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            item {
+                Text(
+                    text = uiState.statusMessage ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -307,7 +371,7 @@ private fun PairCodeDialog(
         text = {
             Column {
                 Text(
-                    text = "请在 PC 端 ximed 生成配对码后，将 6 位数字输入此处",
+                    text = "请在 PC 端 ximed 输入配对码后，将 6 位数字输入此处",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -354,13 +418,13 @@ private fun PairCodeDialog(
             ) {
                 if (uiState.isConfirming) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                 }
-                Text("确认")
+                Text("确认配对")
             }
         },
         dismissButton = {
