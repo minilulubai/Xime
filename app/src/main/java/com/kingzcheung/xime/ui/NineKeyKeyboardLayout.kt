@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,14 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.rime.T9Decoder
 
-/**
- * 拼音九宫格键盘布局（T9）
- *
- * 使用 T9Decoder 将数字序列解码为拼音串，发送到 Rime。
- *
- * @param onReplaceFullPinyin 发送完整拼音到 Rime（清除当前组合 + 逐字母发送）
- * @param onKeyPress 控制键回调
- */
 @Composable
 fun NineKeyKeyboardLayout(
     onReplaceFullPinyin: (String) -> Unit,
@@ -54,74 +47,63 @@ fun NineKeyKeyboardLayout(
     onKeyPressDown: ((String) -> Unit)? = null,
     resetSignal: Long = 0
 ) {
-        val context = LocalContext.current
-        val decoder = remember { T9Decoder(context) }
+    val context = LocalContext.current
+    val decoder = remember { T9Decoder(context) }
     var digits by remember { mutableStateOf("") }
-    var pinyinChoices by remember { mutableStateOf<List<String>?>(null) }
+    var confirmedPinyins by remember { mutableStateOf(listOf<String>()) }
+    var firstOptions by remember { mutableStateOf<List<T9Decoder.SyllableOption>>(emptyList()) }
 
-    // 已确认的拼音前缀（通过左栏候选选择累积）
-    // 新输入的 digits 解码后追加到其后，实现连续输入
-    var confirmedPinyinPrefix by remember { mutableStateOf("") }
-
-    // 当 resetSignal 变化时，立即重置 T9 输入状态
-    // 使用 LaunchedEffect 而非 remember(key)，确保在下次按键事件前完成重置
     LaunchedEffect(resetSignal) {
         digits = ""
-        pinyinChoices = null
-        confirmedPinyinPrefix = ""
+        confirmedPinyins = emptyList()
+        firstOptions = emptyList()
+    }
+
+    fun updateCandidates() {
+        firstOptions = decoder.firstSyllableOptions(digits)
+    }
+
+    fun sendToRime() {
+        val fullPinyin = confirmedPinyins.joinToString("") + decoder.bestPinyin(digits)
+        onReplaceFullPinyin(fullPinyin)
     }
 
     fun onDigitPressed(digit: String) {
         if (digit == "1") {
-            // 分词键：将当前 digits 解码的拼音作为已确认音节，追加分隔符
-            if (digits.isNotEmpty()) {
-                val currentPinyin = decoder.bestPinyin(digits)
-                if (currentPinyin.isNotEmpty()) {
-                    confirmedPinyinPrefix += currentPinyin + "'"
-                }
-            } else {
-                confirmedPinyinPrefix += "'"
+            val best = firstOptions.firstOrNull()
+            if (best != null) {
+                confirmedPinyins = confirmedPinyins + best.pinyin
+                digits = digits.drop(best.digitLength)
+                updateCandidates()
             }
-            digits = ""
-            pinyinChoices = null
-            onReplaceFullPinyin(confirmedPinyinPrefix)
+            sendToRime()
             return
         }
         digits += digit
-        val candidates = decoder.candidates(digits, maxResults = 4)
-        pinyinChoices = candidates.ifEmpty { null }
-        val bestPinyin = decoder.bestPinyin(digits)
-        if (bestPinyin.isNotEmpty()) {
-            // 已确认的前缀 + 当前数字解码的拼音 = 完整拼音
-            onReplaceFullPinyin(confirmedPinyinPrefix + bestPinyin)
-        }
+        updateCandidates()
+        sendToRime()
+    }
+
+    fun onChoiceSelected(option: T9Decoder.SyllableOption) {
+        confirmedPinyins = confirmedPinyins + option.pinyin
+        digits = digits.drop(option.digitLength)
+        updateCandidates()
+        sendToRime()
     }
 
     fun onDeleted() {
         if (digits.isNotEmpty()) {
             digits = digits.dropLast(1)
-            if (digits.isEmpty()) {
-                pinyinChoices = null
-                // 清空当前输入的拼音但保留已确认的前缀
-                val prefix = confirmedPinyinPrefix
-                if (prefix.isNotEmpty()) {
-                    onReplaceFullPinyin(prefix)
-                } else {
-                    onReplaceFullPinyin("")
-                }
+            updateCandidates()
+            if (digits.isEmpty() && confirmedPinyins.isEmpty()) {
+                onReplaceFullPinyin("")
             } else {
-                val candidates = decoder.candidates(digits, maxResults = 4)
-                pinyinChoices = candidates.ifEmpty { null }
-                val bestPinyin = decoder.bestPinyin(digits)
-                if (bestPinyin.isNotEmpty()) {
-                    onReplaceFullPinyin(confirmedPinyinPrefix + bestPinyin)
-                }
+                sendToRime()
             }
-        } else if (confirmedPinyinPrefix.isNotEmpty()) {
-            // 当前无 digits 但有已确认前缀 → 删除最后一个已确认音节的最后一个字母
-            confirmedPinyinPrefix = confirmedPinyinPrefix.dropLast(1)
-            if (confirmedPinyinPrefix.isNotEmpty()) {
-                onReplaceFullPinyin(confirmedPinyinPrefix)
+        } else if (confirmedPinyins.isNotEmpty()) {
+            confirmedPinyins = confirmedPinyins.dropLast(1)
+            if (confirmedPinyins.isNotEmpty()) {
+                onReplaceFullPinyin(confirmedPinyins.joinToString(""))
             } else {
                 onReplaceFullPinyin("")
             }
@@ -130,27 +112,11 @@ fun NineKeyKeyboardLayout(
         }
     }
 
-    fun onChoiceSelected(pinyin: String) {
-        // 用选中的拼音替换最后一个音节，保留前面的已确认音节
-        val paths = decoder.decode(digits, maxPaths = 5)
-        val fullPinyin = if (paths.isNotEmpty()) {
-            val bestPath = paths.first()
-            if (bestPath.pinyins.size > 1) {
-                (bestPath.pinyins.dropLast(1) + pinyin).joinToString("")
-            } else {
-                pinyin
-            }
-        } else {
-            pinyin
-        }
-        // 将选中的拼音设为已确认前缀，后续数字输入会追加在其后
-        confirmedPinyinPrefix = fullPinyin
-        onReplaceFullPinyin(confirmedPinyinPrefix)
-        digits = ""
-        pinyinChoices = null
-    }
-
-    Box(modifier = modifier.background(keyboardBackgroundColor).padding(horizontal = 4.dp)) {
+    Box(
+        modifier = modifier
+            .background(keyboardBackgroundColor)
+            .padding(horizontal = 4.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -171,7 +137,12 @@ fun NineKeyKeyboardLayout(
                         .weight(3f),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    val leftItems = pinyinChoices ?: listOf("，", "。", "？", "！")
+                    val showCandidates = firstOptions.isNotEmpty()
+                    val displayItems: List<String> = if (showCandidates) {
+                        firstOptions.map { it.pinyin }
+                    } else {
+                        listOf("，", "。", "？", "！")
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxHeight()
@@ -179,17 +150,18 @@ fun NineKeyKeyboardLayout(
                             .padding(end = 3.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
-                        leftItems.forEachIndexed { index, item ->
-                            if (pinyinChoices != null) {
+                        displayItems.forEachIndexed { index, item ->
+                            if (showCandidates) {
+                                val option = firstOptions[index]
                                 PinyinChoiceKey(
-                                    text = item,
-                                    onClick = { onChoiceSelected(item) },
+                                    text = option.pinyin,
+                                    onClick = { onChoiceSelected(option) },
                                     backgroundColor = keyBackgroundColor,
                                     textColor = keyTextColor,
                                     modifier = Modifier.weight(1f),
-                                    onPress = { onKeyPressDown?.invoke(item) },
+                                    onPress = { onKeyPressDown?.invoke(option.pinyin) },
                                     isFirst = index == 0,
-                                    isLast = index == leftItems.lastIndex
+                                    isLast = index == displayItems.lastIndex
                                 )
                             } else {
                                 PunctuationKey2(
@@ -200,7 +172,7 @@ fun NineKeyKeyboardLayout(
                                     modifier = Modifier.weight(1f),
                                     onPress = { onKeyPressDown?.invoke(item) },
                                     isFirst = index == 0,
-                                    isLast = index == leftItems.lastIndex
+                                    isLast = index == displayItems.lastIndex
                                 )
                             }
                         }
@@ -213,7 +185,9 @@ fun NineKeyKeyboardLayout(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             NineKeyButton2(
@@ -230,27 +204,29 @@ fun NineKeyKeyboardLayout(
                                 onClick = { onDeleted() },
                                 backgroundColor = keyBackgroundColor, iconColor = keyTextColor,
                                 modifier = Modifier.weight(1f),
-                                onSwipe = { digits = ""; pinyinChoices = null },
+                                onSwipe = { digits = ""; confirmedPinyins = emptyList(); firstOptions = emptyList(); onReplaceFullPinyin("") },
                                 onLongClick = { onDeleted() },
                                 onPress = { onKeyPressDown?.invoke("delete") }
                             )
                         }
                         Row(
-                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             NineKeyButton2(digit = "4", letters = "GHI", onClick = { onDigitPressed("4") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("4") })
                             NineKeyButton2(digit = "5", letters = "JKL", onClick = { onDigitPressed("5") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("5") })
                             NineKeyButton2(digit = "6", letters = "MNO", onClick = { onDigitPressed("6") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("6") })
-                            val hasInput = digits.isNotEmpty() || pinyinChoices != null || confirmedPinyinPrefix.isNotEmpty()
+                            val hasInput = digits.isNotEmpty() || firstOptions.isNotEmpty() || confirmedPinyins.isNotEmpty()
                             val resetKeyText = if (hasInput) "重输" else "换行"
                             KeyButton(
                                 text = resetKeyText,
                                 onClick = {
                                     if (hasInput) {
                                         digits = ""
-                                        pinyinChoices = null
-                                        confirmedPinyinPrefix = ""
+                                        confirmedPinyins = emptyList()
+                                        firstOptions = emptyList()
                                         onReplaceFullPinyin("")
                                     } else {
                                         onKeyPress("enter")
@@ -265,7 +241,9 @@ fun NineKeyKeyboardLayout(
                             )
                         }
                         Row(
-                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             NineKeyButton2(digit = "7", letters = "PQRS", onClick = { onDigitPressed("7") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("7") })
@@ -307,6 +285,8 @@ private fun PinyinChoiceKey(
     isLast: Boolean = false
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnPress by rememberUpdatedState(onPress)
     val shape = RoundedCornerShape(
         topStart = if (isFirst) 8.dp else 0.dp,
         topEnd = if (isFirst) 8.dp else 0.dp,
@@ -317,11 +297,11 @@ private fun PinyinChoiceKey(
         detectTapGestures(
             onPress = {
                 isPressed = true
-                onPress?.invoke()
+                currentOnPress?.invoke()
                 tryAwaitRelease()
                 isPressed = false
             },
-            onTap = { onClick() }
+            onTap = { currentOnClick() }
         )
     }, contentAlignment = Alignment.Center) {
         Text(text = text, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Normal, textAlign = TextAlign.Center)
@@ -340,6 +320,8 @@ private fun PunctuationKey2(
     isLast: Boolean = false
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnPress by rememberUpdatedState(onPress)
     val shape = RoundedCornerShape(
         topStart = if (isFirst) 8.dp else 0.dp,
         topEnd = if (isFirst) 8.dp else 0.dp,
@@ -350,11 +332,11 @@ private fun PunctuationKey2(
         detectTapGestures(
             onPress = {
                 isPressed = true
-                onPress?.invoke()
+                currentOnPress?.invoke()
                 tryAwaitRelease()
                 isPressed = false
             },
-            onTap = { onClick() }
+            onTap = { currentOnClick() }
         )
     }, contentAlignment = Alignment.Center) {
         Text(text = text, color = textColor, fontSize = 20.sp, fontWeight = FontWeight.Normal, textAlign = TextAlign.Center)
@@ -372,15 +354,17 @@ private fun NineKeyButton2(
     onPress: (() -> Unit)? = null
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnPress by rememberUpdatedState(onPress)
     Box(modifier = modifier.fillMaxHeight().shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000)).clip(RoundedCornerShape(8.dp)).background(if (isPressed) backgroundColor.copy(alpha = 0.7f) else backgroundColor).pointerInput(Unit) {
         detectTapGestures(
             onPress = {
                 isPressed = true
-                onPress?.invoke()
+                currentOnPress?.invoke()
                 tryAwaitRelease()
                 isPressed = false
             },
-            onTap = { onClick() }
+            onTap = { currentOnClick() }
         )
     }) {
         if (digit.isNotEmpty()) Text(text = digit, color = textColor.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Normal, textAlign = TextAlign.End, modifier = Modifier.align(Alignment.TopEnd).padding(top = 0.dp, end = 6.dp))

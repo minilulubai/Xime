@@ -48,11 +48,17 @@ class T9Decoder {
     data class Path(
         val pinyins: List<String>,
         val current: String,
-        val score: Double
+        val score: Double,
+        val digitLengths: List<Int> = emptyList()
     ) {
         val resolved: String get() = pinyins.joinToString("")
         val full: String get() = resolved + current
     }
+
+    data class SyllableOption(
+        val pinyin: String,
+        val digitLength: Int
+    )
 
     companion object {
         private const val BOS = "<BOS>"
@@ -155,17 +161,20 @@ class T9Decoder {
 
         for ((pinyin, score) in dp[n].entries.sortedByDescending { it.value }) {
             val syllables = mutableListOf<String>()
+            val lengths = mutableListOf<Int>()
             var pos = n
             var cur = pinyin
             while (pos > 0) {
-                syllables.add(0, cur)
                 val entry = back[pos][cur] ?: break
+                val digitLen = pos - entry.first
+                lengths.add(0, digitLen)
+                syllables.add(0, cur)
                 pos = entry.first
                 cur = entry.second
             }
             if (syllables.isNotEmpty()) {
                 val displayScore = kotlin.math.exp(score / 10.0)
-                results.add(Path(syllables, "", displayScore))
+                results.add(Path(syllables, "", displayScore, lengths))
                 if (results.size >= maxPaths) break
             }
         }
@@ -176,11 +185,14 @@ class T9Decoder {
                 if (dp[pos].isEmpty()) continue
                 for ((pinyin, score) in dp[pos].entries.sortedByDescending { it.value }.take(maxPaths)) {
                     val syllables = mutableListOf<String>()
+                    val lengths = mutableListOf<Int>()
                     var curPos = pos
                     var cur = pinyin
                     while (curPos > 0) {
-                        syllables.add(0, cur)
                         val entry = back[curPos][cur] ?: break
+                        val digitLen = curPos - entry.first
+                        lengths.add(0, digitLen)
+                        syllables.add(0, cur)
                         curPos = entry.first
                         cur = entry.second
                     }
@@ -189,7 +201,7 @@ class T9Decoder {
                             digitToLetters[d]?.firstOrNull()
                         }.joinToString("")
                         val displayScore = kotlin.math.exp(score / 10.0)
-                        results.add(Path(syllables, currentLetters, displayScore))
+                        results.add(Path(syllables, currentLetters, displayScore, lengths))
                         if (results.size >= maxPaths) break
                     }
                 }
@@ -273,6 +285,24 @@ class T9Decoder {
             if (p.current.isEmpty()) return p.resolved
         }
         return paths.first().full
+    }
+
+    /** 返回输入数字序列对应的第一个音节的候选项（用于逐音节提示） */
+    fun firstSyllableOptions(digits: String, maxResults: Int = 4): List<SyllableOption> {
+        if (digits.isEmpty()) return emptyList()
+        val allPinyins = codeToPinyins.values.flatten().toSet()
+        val paths = decode(digits, maxPaths = 50)
+        val seen = mutableSetOf<String>()
+        val result = mutableListOf<SyllableOption>()
+        for (path in paths) {
+            if (path.pinyins.isEmpty() || path.digitLengths.isEmpty()) continue
+            val first = path.pinyins[0]
+            if (first in seen || first !in allPinyins) continue
+            seen.add(first)
+            result.add(SyllableOption(first, path.digitLengths[0]))
+            if (result.size >= maxResults) break
+        }
+        return result
     }
 
     /** 返回拼音候选项列表（用于九宫格左侧列展示） */
