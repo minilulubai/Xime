@@ -150,9 +150,26 @@ fun SwipeBubble(
     modifier: Modifier = Modifier
 ) {
     val shouldShowBubble = swipeState.isSwiping || swipeState.isPressed
-    val displayText = if (swipeState.isPressed) swipeState.pressedText else swipeState.swipeText
-    if (!shouldShowBubble || displayText == null) return
-
+    val displayText = if (swipeState.isPressed) {
+        swipeState.pressedText
+    } else {
+        swipeState.swipeText
+    }
+    
+    if (!shouldShowBubble || displayText == null) {
+        return
+    }
+    
+    android.util.Log.d("SwipeBubble", "SwipeBubble called: keyBounds=$keyBounds, keyboardWidth=$keyboardWidth")
+    
+    val bubbleBgColor = if (swipeState.isDanger) {
+        if (swipeState.isSwipeDown) Color(0xFF1A73E8) // 下滑撤回用主题蓝色
+        else Color(0xFFD93025) // 上滑清空用红色
+    } else if (isDarkTheme) KeyBackgroundDark else KeyBackground
+    val bubbleTextColor = if (swipeState.isDanger) {
+        Color.White
+    } else if (isDarkTheme) Color(0xFFE8EAED) else Color(0xFF202124)
+    
     val density = LocalDensity.current
     val context = LocalContext.current
 
@@ -167,62 +184,19 @@ fun SwipeBubble(
     val pointerHeightPx = with(density) { (BubblePointerHeight + 5.dp).toPx() }
     val cornerRadiusPx = with(density) { BubbleCornerRadius.toPx() }
     val screenMarginPx = with(density) { BubbleScreenMargin.toPx() }
-    val keyWidthPx = keyWidth
-    val minBodyWidthPx = keyWidthPx + with(density) { 24.dp.toPx() }
-    val totalHeightPx = bodyHeightPx + pointerHeightPx
-
-    // ── 用 Paint 同步测量文本宽度，避免 constrained layout 的 chicken-and-egg ──
-    val textWidthPx = with(density) {
-        val paint = android.graphics.Paint().apply {
-            textSize = 14.sp.toPx()
-            isAntiAlias = true
-        }
-        paint.measureText(displayText)
-    }
-    val bodyWidth = maxOf(textWidthPx + with(density) { 20.dp.toPx() }, minBodyWidthPx) // textWidth + 10dp*2 padding
-
-    // ── pointer 居中于按键 ──
-    val pointerCenterX = keyBounds.left + keyBounds.width / 2f
-
-    // ── body 居中于 pointerCenterX，但 clamp 到键盘边界内 ──
-    val idealBodyLeft = pointerCenterX - bodyWidth / 2f
-    val bodyLeft = idealBodyLeft.coerceIn(
-        screenMarginPx,
-        keyboardWidth - bodyWidth - screenMarginPx
-    )
-    val bodyRight = bodyLeft + bodyWidth
-
-    // ── pointer 始终居中于按键 ──
-    val pointerLeft = pointerCenterX - keyWidthPx / 2f
-    val pointerRight = pointerLeft + keyWidthPx
-
-    // ── Box 容器同时包裹 body 和 pointer ──
-    val boxLeft = minOf(bodyLeft, pointerLeft)
-    val boxRight = maxOf(bodyRight, pointerRight)
-    val boxWidth = boxRight - boxLeft
-    // 气泡底部与按键底部对齐，窄体覆盖整个按键
-    val boxTop = keyBounds.top + keyBounds.height - totalHeightPx
-
-    // ── 检测宽窄体是否对齐（贴边时边缘侧肩膀应为直角直线） ──
-    val isLeftFlush = kotlin.math.abs(bodyLeft - pointerLeft) < 1f
-    val isRightFlush = kotlin.math.abs(bodyRight - pointerRight) < 1f
-
-    // ── Box 内部相对坐标 ──
-    val bodyLeftInBox = bodyLeft - boxLeft
-    val pointerLeftInBox = pointerLeft - boxLeft
-
-    // ── dp 值（Modifier 需要） ──
-    val boxWidthDp = with(density) { boxWidth.toDp() }
-    val totalHeightDp = with(density) { totalHeightPx.toDp() }
-
-    // 自定义 Shape，使阴影沿倒"凸"轮廓投射
-    val bubbleShape = remember(bodyLeftInBox, bodyWidth, bodyHeightPx,
-        pointerLeftInBox, keyWidthPx, pointerHeightPx, cornerRadiusPx,
-        isLeftFlush, isRightFlush) {
-        InvertedConvexShape { _ ->
-            buildInvertedConvexPath(
-                bodyLeft = bodyLeftInBox,
-                bodyWidth = bodyWidth,
+    // 预估最小宽度 (defaultMinSize 64dp + padding 20dp*2 = 104dp)
+    val minBodyWidthPx = with(density) { 104.dp.toPx() }
+    
+    var actualBodyWidth by remember { mutableStateOf(minBodyWidthPx) }
+    
+    val effectiveBodyWidth = maxOf(actualBodyWidth, minBodyWidthPx)
+    
+    val layoutInfo = remember(effectiveBodyWidth, keyBounds, keyboardWidth) {
+        android.util.Log.d("SwipeBubble", "calculateBubbleLayout: effectiveBodyWidth=$effectiveBodyWidth, keyBounds=$keyBounds, keyboardWidth=$keyboardWidth")
+        if (keyboardWidth > 0) {
+            calculateBubbleLayout(
+                keyBounds = keyBounds,
+                bodyWidth = effectiveBodyWidth,
                 bodyHeight = bodyHeightPx,
                 pointerLeft = pointerLeftInBox,
                 pointerWidth = keyWidthPx,
