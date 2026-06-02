@@ -915,7 +915,11 @@ onVoiceModeChange = { enabled ->
     }
 
     private fun handleKeyPress(key: String, isShifted: Boolean) {
-        serviceScope.launch(Dispatchers.Default) {
+        val targetDispatcher = when (key) {
+            "space", "enter", "delete", "clear_composition", "clear_all" -> Dispatchers.IO
+            else -> Dispatchers.Default
+        }
+        serviceScope.launch(targetDispatcher) {
             val state = uiState.value
             var needsUIUpdate = false
             
@@ -1235,10 +1239,16 @@ onVoiceModeChange = { enabled ->
                 }
                 withContext(Dispatchers.Main) {
                     commitText(committedText)
+                    uiState.value = uiState.value.copy(
+                        inputText = "",
+                        candidates = emptyArray(),
+                        candidateComments = emptyArray(),
+                        isComposing = false,
+                        hasNextPage = false,
+                        hasPrevPage = false,
+                        isShowingRecentClipboard = false
+                    )
                 }
-            }
-            withContext(Dispatchers.Main) {
-                updateUI()
             }
         }
     }
@@ -1479,8 +1489,10 @@ onVoiceModeChange = { enabled ->
         
         predictionManager.recordInput(text)
         
-        if (!uiState.value.isAsciiMode) {
-            getPredictionFromPlugin(predictionManager.lastCommittedText)
+        mainHandler.post {
+            if (!uiState.value.isAsciiMode) {
+                getPredictionFromPlugin(predictionManager.lastCommittedText)
+            }
         }
     }
     
