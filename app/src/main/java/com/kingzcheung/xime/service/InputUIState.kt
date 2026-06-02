@@ -1,6 +1,7 @@
 package com.kingzcheung.xime.service
 
 import com.kingzcheung.xime.settings.SchemaInfo
+import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.speech.RecognitionState
 
 data class InputUIState(
@@ -16,12 +17,12 @@ data class InputUIState(
     val darkMode: Int = 0,
     val themeId: String = "ocean_blue",
     val showBottomButtons: Boolean = false,
-    val keyboardHeightDp: Int = 290,
+    val keyboardHeightDp: Int = SettingsPreferences.DEFAULT_KEYBOARD_HEIGHT_DP,
     val keyboardBottomPaddingDp: Int = 0,
     val showKeyboardResize: Boolean = false,
-    val resizePreviewHeightDp: Int = 290,
+    val resizePreviewHeightDp: Int = SettingsPreferences.DEFAULT_KEYBOARD_HEIGHT_DP,
     val resizePreviewBottomPaddingDp: Int = 0,
-    val originalKeyboardHeightDp: Int = 290,
+    val originalKeyboardHeightDp: Int = SettingsPreferences.DEFAULT_KEYBOARD_HEIGHT_DP,
     val originalKeyboardBottomPaddingDp: Int = 0,
     val associationCandidates: Array<String> = emptyArray(),
     val associationEnabled: Boolean = false,

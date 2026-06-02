@@ -63,7 +63,7 @@ fun KeyboardResizeOverlay(
         maxKeyboardHeightDp = (screenHeightDp * 3) / 5
         maxBottomPaddingDp = maxKeyboardHeightDp - minKeyboardHeightDp
     } else {
-        minKeyboardHeightDp = defaultHeightDp.coerceAtMost(screenHeightDp / 2)
+        minKeyboardHeightDp = 290.coerceAtMost(screenHeightDp / 2)
         maxKeyboardHeightDp = screenHeightDp / 2
         maxBottomPaddingDp = maxKeyboardHeightDp - minKeyboardHeightDp
     }
@@ -196,14 +196,14 @@ fun KeyboardResizeOverlay(
                 }
             }
 
-            Text(
-                text = "高度: ${currentHeightDp.roundToInt()}dp | 底部: ${currentBottomPaddingDp.roundToInt()}dp",
-                color = Color.White,
-                fontSize = 14.sp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 8.dp)
-            )
+//            Text(
+//                text = "高度: ${currentHeightDp.roundToInt()}dp | 底部: ${currentBottomPaddingDp.roundToInt()}dp",
+//                color = Color.White,
+//                fontSize = 14.sp,
+//                modifier = Modifier
+//                    .align(Alignment.BottomCenter)
+//                    .padding(bottom = 8.dp)
+//            )
         }
     }
 }

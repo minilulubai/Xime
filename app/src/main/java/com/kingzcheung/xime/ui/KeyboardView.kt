@@ -66,7 +66,7 @@ fun KeyboardView(
     quickSendItems: List<ClipboardItem> = emptyList(),
     recentClipboardItems: List<ClipboardItem> = emptyList(),
     associationCandidates: Array<String> = emptyArray(),
-    keyboardHeightDp: Int = 290,
+    keyboardHeightDp: Int = com.kingzcheung.xime.settings.SettingsPreferences.DEFAULT_KEYBOARD_HEIGHT_DP,
     keyboardBottomPaddingDp: Int = 0,
     isDeploying: Boolean = false,
     deploymentMessage: String = "",
