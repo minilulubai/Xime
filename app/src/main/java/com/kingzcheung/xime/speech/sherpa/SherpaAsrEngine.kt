@@ -64,6 +64,9 @@ class SherpaAsrEngine(private val context: Context) {
     private val accumulatedText = StringBuilder()
     private var lastPartialText = ""
     
+    /** 当前已加载到 recognizer 中的模型 ID，用于检测模型切换 */
+    private var loadedModelId: String? = null
+    
     fun isAvailable(): Boolean {
         return try {
             System.loadLibrary("sherpa-onnx-jni")
@@ -83,14 +86,17 @@ class SherpaAsrEngine(private val context: Context) {
     }
     
     fun getSelectedModelDir(): File {
-        val sharedPrefs = context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
-        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
+        val modelId = getSelectedModelId()
         return File(context.filesDir, "asr_models/$modelId")
     }
 
-    fun getSelectedModelInfo(): AsrModelInfo? {
+    fun getSelectedModelId(): String {
         val sharedPrefs = context.getSharedPreferences("sherpa_asr", Context.MODE_PRIVATE)
-        val modelId = sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
+        return sharedPrefs.getString("selected_model", "zipformer-zh-int8") ?: "zipformer-zh-int8"
+    }
+
+    fun getSelectedModelInfo(): AsrModelInfo? {
+        val modelId = getSelectedModelId()
         return AVAILABLE_MODELS.find { it.id == modelId }
     }
     
@@ -210,10 +216,22 @@ class SherpaAsrEngine(private val context: Context) {
     }
     
     fun startRecognition(): Boolean {
+        val currentModelId = getSelectedModelId()
+        
+        // 如果用户切换了模型，释放旧的 recognizer，重新加载新模型
+        if (recognizer != null && currentModelId != loadedModelId) {
+            Log.d(TAG, "Model changed from $loadedModelId to $currentModelId, reinitializing")
+            recognizer?.release()
+            recognizer = null
+            loadedModelId = null
+        }
+        
         if (recognizer == null) {
             if (!initialize()) {
+                loadedModelId = null
                 return false
             }
+            loadedModelId = currentModelId
         }
         
         stream = recognizer?.createStream()
@@ -311,6 +329,7 @@ class SherpaAsrEngine(private val context: Context) {
         cancelRecognition()
         recognizer?.release()
         recognizer = null
+        loadedModelId = null
         coroutineScope.cancel()
         Log.d(TAG, "SherpaAsrEngine released")
     }
