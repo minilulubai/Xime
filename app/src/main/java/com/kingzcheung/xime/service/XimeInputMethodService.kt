@@ -303,21 +303,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         }
                     }
                 } else {
-                    // 词库已存在：快速刷新 schema 注册表，不显示"编译"提示
-                    rimeEngine.startMaintenance(false)
-                    // 等待 maintenance 完成（最多等 10 秒），否则 ensureSession 会因为
-                    // maintenance 还在运行而创建 session 失败
-                    var quickWaited = 0L
-                    while (rimeEngine.isMaintaining() && quickWaited < 10_000L) {
-                        Thread.sleep(100)
-                        quickWaited += 100
-                    }
-                    if (!rimeEngine.isMaintaining()) {
-                        rimeEngine.updateLastBuildTime()
-                    }
+                    Log.d(TAG, "initRimeEngine: Already deployed, creating session directly")
                 }
 
-                val sessionReady = rimeEngine.ensureSession()
+                // 创建 session（已部署时跳过 maintenance 直接创建）
+                val sessionReady = rimeEngine.ensureSession(180_000L)
                 if (sessionReady) {
                     Log.d(TAG, "initRimeEngine: Session ready")
                     // 确保部署成功后才标记完成，避免首次部署超时后误标记
@@ -339,6 +329,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     
                     if (savedSchema in availableSchemas && currentSchema != savedSchema) {
                         Log.d(TAG, "initRimeEngine: Switching to saved schema: $savedSchema")
+                        rimeEngine.switchSchema(savedSchema)
+                    } else if (savedSchema !in availableSchemas && SchemaManager.isSchemaCompiled(this@XimeInputMethodService, savedSchema)) {
+                        Log.d(TAG, "initRimeEngine: Schema compiled but not in get_schema_list, switching anyway")
                         rimeEngine.switchSchema(savedSchema)
                     }
                     
@@ -772,7 +765,7 @@ onVoiceModeChange = { enabled ->
             if (savedSchema != currentSchema) {
                 Log.d(TAG, "onStartInput: schema mismatch, saved=$savedSchema, current=$currentSchema")
                 val availableSchemas = rimeEngine.getAvailableSchemas()
-                if (savedSchema in availableSchemas) {
+                if (savedSchema in availableSchemas || SchemaManager.isSchemaCompiled(this@XimeInputMethodService, savedSchema)) {
                     rimeEngine.switchSchema(savedSchema)
                 }
             }
@@ -943,17 +936,12 @@ onVoiceModeChange = { enabled ->
     
     private fun updateSchemaName() {
         serviceScope.launch(Dispatchers.IO) {
-            val availableSchemaIds = if (RimeEngine.isInitialized()) {
-                rimeEngine.getAvailableSchemas().toList()
-            } else {
-                emptyList()
-            }
-
-            val enabledIds = SchemaManager.getEnabledSchemas(this@XimeInputMethodService)
-            val allSchemas = SchemaManager.discoverSchemas(this@XimeInputMethodService)
+            val context = this@XimeInputMethodService
+            val enabledIds = SchemaManager.getEnabledSchemas(context)
+            val allSchemas = SchemaManager.discoverSchemas(context)
 
             val schemas = allSchemas
-                .filter { meta -> meta.schemaId in enabledIds && meta.schemaId in availableSchemaIds }
+                .filter { meta -> meta.schemaId in enabledIds && SchemaManager.isSchemaCompiled(context, meta.schemaId) }
                 .map { meta ->
                     com.kingzcheung.xime.settings.SchemaInfo(
                         schemaId = meta.schemaId,

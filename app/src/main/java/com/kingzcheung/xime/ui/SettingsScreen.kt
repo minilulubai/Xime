@@ -18,10 +18,13 @@ import com.kingzcheung.xime.ui.settings.WebDavSyncContent
 @Composable
 fun SettingsScreen(
     initialRoute: String? = null,
-    onThemeChanged: () -> Unit = {}
+    onThemeChanged: () -> Unit = {},
+    onWizardBack: () -> Unit = {}
 ) {
     val navController = rememberNavController()
-    val startDestination = if (initialRoute == "manage_dict") SettingsRoutes.Dictionary else SettingsRoutes.Main
+    val startDestination = if (initialRoute == "manage_dict") SettingsRoutes.Dictionary
+    else if (initialRoute == "schema") SettingsRoutes.Schema
+    else SettingsRoutes.Main
     
     NavHost(
         navController = navController,
@@ -42,7 +45,16 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.Schema) {
             SchemaSettingsContent(
-                onBack = { navController.popBackStack() }
+                onBack = {
+                    if (initialRoute == "schema") {
+                        navController.navigate(SettingsRoutes.Main) {
+                            popUpTo(SettingsRoutes.Main) { inclusive = true }
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
+                    onWizardBack()
+                }
             )
         }
         composable(SettingsRoutes.Theme) {

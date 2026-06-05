@@ -3,6 +3,8 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/app/src/main/jni/librime" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/app/src/main/jni/librime-lua" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/app/src/main/jni/librime-lua-deps" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/app/src/main/jni/librime/deps/glog" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/app/src/main/jni/librime/deps/googletest" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/app/src/main/jni/librime/deps/leveldb" vcs="Git" />

@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,7 @@ import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.KeysConfigHelper
 import com.kingzcheung.xime.ui.SettingsScreen
+import com.kingzcheung.xime.ui.settings.SetupWizardScreen
 import com.kingzcheung.xime.ui.theme.XimeTheme
 import com.kingzcheung.xime.util.PermissionHelper
 import kotlinx.coroutines.CoroutineScope
@@ -91,8 +93,12 @@ class MainActivity : ComponentActivity() {
         
         enableEdgeToEdge()
         val openFragment = intent?.getStringExtra("open_fragment")
+
         setContent {
             val context = this
+            val setupCompleted = SettingsPreferences.isSetupCompleted(context)
+            var showWizard by remember { mutableStateOf(!setupCompleted) }
+            var wizardToSettings by remember { mutableStateOf(false) }
             var darkMode by remember { mutableIntStateOf(SettingsPreferences.getDarkMode(context)) }
             var keyboardTheme by remember { mutableStateOf(SettingsPreferences.getKeyboardTheme(context)) }
             
@@ -116,20 +122,54 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        SettingsScreen(
-                            initialRoute = openFragment,
-                            onThemeChanged = {
-                                darkMode = SettingsPreferences.getDarkMode(context)
-                                keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
+                if (showWizard) {
+                    // 使用 Box 叠加两层，确保 SetupWizardScreen 始终在 Compose 树中
+                    // 避免因条件渲染导致状态丢失（currentStep 等 remember 状态重置）
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SetupWizardScreen(
+                            visible = !wizardToSettings,
+                            onNavigateToSchemaSettings = { wizardToSettings = true },
+                            onCompleted = {
+                                showWizard = false
                             }
                         )
+                        if (wizardToSettings) {
+                            // 从向导跳转到设置页的方案列表
+                            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding),
+                                    color = MaterialTheme.colorScheme.background
+                                ) {
+                                    SettingsScreen(
+                                        initialRoute = "schema",
+                                        onThemeChanged = {
+                                            darkMode = SettingsPreferences.getDarkMode(context)
+                                            keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
+                                        },
+                                        onWizardBack = { wizardToSettings = false }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            SettingsScreen(
+                                initialRoute = openFragment,
+                                onThemeChanged = {
+                                    darkMode = SettingsPreferences.getDarkMode(context)
+                                    keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
+                                }
+                            )
+                        }
                     }
                 }
             }

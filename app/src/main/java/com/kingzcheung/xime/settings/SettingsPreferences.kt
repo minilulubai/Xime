@@ -8,6 +8,7 @@ object SettingsPreferences {
     private const val PREFS_NAME = "kime_settings"
     private const val KEY_CURRENT_SCHEMA = "current_schema"
     private const val KEY_DEPLOYMENT_DONE = "deployment_done"
+    private const val KEY_SETUP_COMPLETED = "setup_completed"
     private const val KEY_DARK_MODE = "dark_mode"
     
     private const val KEY_SOUND_ENABLED = "sound_enabled"
@@ -79,7 +80,15 @@ object SettingsPreferences {
     fun setDeploymentDone(context: Context, done: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_DEPLOYMENT_DONE, done).apply()
     }
-    
+
+    fun isSetupCompleted(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_SETUP_COMPLETED, false)
+    }
+
+    fun setSetupCompleted(context: Context, completed: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SETUP_COMPLETED, completed).apply()
+    }
+
     fun getDarkMode(context: Context): Int {
         // 0 = 浅色, 1 = 深色, 2 = 跟随系统（默认）
         return getPrefs(context).getInt(KEY_DARK_MODE, 2)

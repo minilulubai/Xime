@@ -7,3 +7,9 @@
 [submodule "app/src/main/jni/sherpa-onnx-src"]
 	path = app/src/main/jni/sherpa-onnx-src
 	url = https://github.com/k2-fsa/sherpa-onnx
+[submodule "app/src/main/jni/librime-lua"]
+	path = app/src/main/jni/librime-lua
+	url = https://github.com/hchunhui/librime-lua.git
+[submodule "app/src/main/jni/librime-lua-deps"]
+	path = app/src/main/jni/librime-lua-deps
+	url = https://github.com/hchunhui/librime-lua.git
