@@ -101,8 +101,6 @@ private fun parseGestureList(node: com.charleskorn.kaml.YamlNode): List<GestureD
 
 @Serializable
 data class XimeConfig(
-    @SerialName("wubi_radicals")
-    val wubiRadicals: WubiRadicalsConfig? = null,
     @SerialName("xime_index")
     val ximeIndex: XimeIndexConfig? = null,
 )
@@ -113,26 +111,9 @@ data class XimeIndexConfig(
     val baseUrls: List<String> = listOf("https://index.ximei.me/")
 )
 
-@Serializable
-data class WubiRadicalsConfig(
-    val hotkeys: HotkeysConfig? = null,
-    val action: String? = null,
-    @SerialName("schema_radicals")
-    val schemaRadicals: Map<String, Map<String, String>> = emptyMap()
-)
-
-@Serializable
-data class HotkeysConfig(
-    @SerialName("show_key")
-    val showKey: String? = null,
-    @SerialName("show_all_keys")
-    val showAllKeys: String? = null
-)
-
 data class KeysConfig(
     val swipeUp: Map<String, String> = emptyMap(),
-    val swipeDownEnglish: Map<String, String> = emptyMap(),
-    val schemaRadicals: Map<String, Map<String, String>> = emptyMap()
+    val swipeDownEnglish: Map<String, String> = emptyMap()
 )
 
 object KeysConfigHelper {
@@ -161,16 +142,11 @@ object KeysConfigHelper {
     
     private fun loadXimeConfig(context: Context) {
         try {
-            val merged = loadMergedConfig(context)
-            // 字根
-            val schemaRadicals = merged.wubiRadicals?.schemaRadicals ?: emptyMap()
-            config = config.copy(schemaRadicals = schemaRadicals)
             // 键盘手势（从原始 YAML 手动解析）
             keyGestureConfig = parseKeyboardFromAssets(context) ?: emptyMap()
-            Log.d(TAG, "Loaded config: ${schemaRadicals.keys.size} radicals, ${keyGestureConfig.size} keys")
+            Log.d(TAG, "Loaded config: ${keyGestureConfig.size} keys")
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load xime config, use default", e)
-            config = config.copy(schemaRadicals = getDefaultSchemaRadicals())
+            Log.w(TAG, "Failed to load xime config", e)
         }
     }
 
@@ -217,7 +193,6 @@ object KeysConfigHelper {
         if (custom == null) return default ?: XimeConfig()
         if (default == null) return custom
         return XimeConfig(
-            wubiRadicals = custom.wubiRadicals ?: default.wubiRadicals,
             ximeIndex = custom.ximeIndex ?: default.ximeIndex,
         )
     }
@@ -261,18 +236,24 @@ object KeysConfigHelper {
     
     fun getConfig(): KeysConfig = config
     
-    fun getSwipeUpText(key: String): String? = config.swipeUp[key.lowercase()]
-    
-    fun getSwipeDownEnglishText(key: String): String? = config.swipeDownEnglish[key.lowercase()]
-    
-    fun getSwipeDownWubiText(key: String, schemaId: String): String? {
-        val radicals = config.schemaRadicals[schemaId] ?: return null
-        return radicals[key.lowercase()]
+    fun getSwipeUpText(key: String): String? {
+        val fromYaml = keyGestureConfig[key.lowercase()]?.swipeUp?.value
+        if (fromYaml != null && fromYaml.isNotEmpty()) return fromYaml
+        return config.swipeUp[key.lowercase()]
     }
     
-    fun hasSchemaRadicals(schemaId: String): Boolean {
-        return config.schemaRadicals.containsKey(schemaId)
+    fun getSwipeDownEnglishText(key: String): String? {
+        val fromYaml = keyGestureConfig[key.lowercase()]?.swipeDown?.label
+        if (fromYaml != null && fromYaml.isNotEmpty()) return fromYaml
+        return config.swipeDownEnglish[key.lowercase()]
     }
+
+    /** 获取下滑动作类型：commit（默认上屏）或 none（仅显示） */
+    fun getSwipeDownAction(key: String): String? {
+        return keyGestureConfig[key.lowercase()]?.swipeDown?.action
+    }
+    
+
     
     private fun getDefaultSwipeUp(): Map<String, String> = mapOf(
         "q" to "1", "w" to "2", "e" to "3", "r" to "4", "t" to "5",
@@ -292,60 +273,5 @@ object KeysConfigHelper {
         "n" to "N", "m" to "M"
     )
     
-    private fun getDefaultSchemaRadicals(): Map<String, Map<String, String>> = mapOf(
-        "wubi86" to mapOf(
-            "g" to "王龶五一戋",
-            "f" to "土士二干十寸雨",
-            "d" to "大犬三古龵镸石厂丆",
-            "s" to "木丁西",
-            "a" to "工匚戈艹廿龷七弋戈",
-            "h" to "目丨卜⺊上止龰",
-            "j" to "日曰早廾刂虫丿Ⅱ",
-            "k" to "口Ⅲ川",
-            "l" to "田甲囗四罒车皿力",
-            "m" to "山由贝冂冎几",
-            "t" to "禾竹丿𠂉彳夂攵",
-            "r" to "白手龵扌斤𰀪𠂆",
-            "e" to "月⺼彡乃用爫彡𧘇豕",
-            "w" to "人亻八癶",
-            "q" to "金 钅𠂊勺㐅 犭𱼀",
-            "y" to "言讠文方广亠丶乀",
-            "u" to "立六辛冫丬门疒丷䒑",
-            "i" to "水氵小氺头𭕄⺌",
-            "o" to "火灬米",
-            "p" to "之辶冖宀廴礻",
-            "n" to "已己巳心忄羽乙𠃜",
-            "b" to "子耳了也阝卩㔾凵",
-            "v" to "女刀九臼巛彐",
-            "c" to "又巴马厶龴ス",
-            "x" to "弓匕纟幺弓𠤎"
-        ),
-        "wubi86_pinyin" to mapOf(
-            "g" to "王龶五一戋",
-            "f" to "土士二干十寸雨",
-            "d" to "大犬三古龵镸石厂丆",
-            "s" to "木丁西",
-            "a" to "工匚戈艹廿龷七弋戈",
-            "h" to "目丨卜⺊上止龰",
-            "j" to "日曰早廾刂虫丿Ⅱ",
-            "k" to "口Ⅲ川",
-            "l" to "田甲囗四罒车皿力",
-            "m" to "山由贝冂冎几",
-            "t" to "禾竹丿𠂉彳夂攵",
-            "r" to "白手龵扌斤𰀪𠂆",
-            "e" to "月⺼彡乃用爫彡𧘇豕",
-            "w" to "人亻八癶",
-            "q" to "金 钅𠂊勺㐅 犭𱼀",
-            "y" to "言讠文方广亠丶乀",
-            "u" to "立六辛冫丬门疒丷䒑",
-            "i" to "水氵小氺头𭕄⺌",
-            "o" to "火灬米",
-            "p" to "之辶冖宀廴礻",
-            "n" to "已己巳心忄羽乙𠃜",
-            "b" to "子耳了也阝卩㔾凵",
-            "v" to "女刀九臼巛彐",
-            "c" to "又巴马厶龴ス",
-            "x" to "弓匕纟幺弓𠤎"
-        )
-    )
+
 }

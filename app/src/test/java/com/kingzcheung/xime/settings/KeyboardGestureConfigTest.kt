@@ -117,6 +117,191 @@ class KeyboardGestureConfigTest {
         assertNull(a.longPress)
     }
 
+    // ── long_press flow-style 数组 ──
+
+    @Test
+    fun `long_press flow-style 字符串数组解析`() {
+        val keys = parseKeys("""
+            q: { tap: "q", swipe_up: "1", swipe_down: "Q", long_press: ["q", "Q"] }
+        """.trimIndent())
+        val lp = keys["q"]!!.longPress!!
+        assertEquals(2, lp.size)
+        assertEquals("q", lp[0].label)
+        assertEquals("commit", lp[0].action)
+        assertEquals("q", lp[0].value)
+        assertEquals("Q", lp[1].label)
+        assertEquals("commit", lp[1].action)
+        assertEquals("Q", lp[1].value)
+    }
+
+    @Test
+    fun `long_press flow-style 混合字符串和对象`() {
+        val keys = parseKeys("""
+            a: { tap: "a", swipe_up: "!", swipe_down: "A", long_press: [{ label: "全选", action: "select_all" }, "a", "A"] }
+        """.trimIndent())
+        val lp = keys["a"]!!.longPress!!
+        assertEquals(3, lp.size)
+        // 对象格式
+        assertEquals("全选", lp[0].label)
+        assertEquals("select_all", lp[0].action)
+        assertEquals("", lp[0].value) // 未指定 value 时默认为空字符串
+        // 字符串简写
+        assertEquals("a", lp[1].label)
+        assertEquals("commit", lp[1].action)
+        assertEquals("a", lp[1].value)
+        assertEquals("A", lp[2].label)
+        assertEquals("commit", lp[2].action)
+        assertEquals("A", lp[2].value)
+    }
+
+    @Test
+    fun `long_press flow-style 带变音符号`() {
+        val keys = parseKeys("""
+            u: { tap: "u", swipe_up: "7", swipe_down: "U", long_press: ["u", "U", "ù", "ú", "û", "ü"] }
+        """.trimIndent())
+        val lp = keys["u"]!!.longPress!!
+        assertEquals(6, lp.size)
+        assertEquals("u", lp[0].value)
+        assertEquals("U", lp[1].value)
+        assertEquals("ù", lp[2].value)
+        assertEquals("ú", lp[3].value)
+        assertEquals("û", lp[4].value)
+        assertEquals("ü", lp[5].value)
+    }
+
+    @Test
+    fun `long_press flow-style 单个元素`() {
+        val keys = parseKeys("""
+            p: { tap: "p", swipe_up: "0", swipe_down: "P", long_press: ["p", "P"] }
+        """.trimIndent())
+        val lp = keys["p"]!!.longPress!!
+        assertEquals(2, lp.size)
+    }
+
+    @Test
+    fun `long_press flow-style 带有特殊字符的反斜杠`() {
+        val keys = parseKeys("""
+            c: { tap: "c", swipe_up: "\\", swipe_down: "C", long_press: ["c", "C", "ç"] }
+        """.trimIndent())
+        val lp = keys["c"]!!.longPress!!
+        assertEquals(3, lp.size)
+        assertEquals("c", lp[0].value)
+        assertEquals("C", lp[1].value)
+        assertEquals("ç", lp[2].value)
+        assertEquals("\\", keys["c"]!!.swipeUp!!.value)
+    }
+
+    // ── 完整 26 键配置 ──
+
+    @Test
+    fun `完整 26 键全键盘配置解析`() {
+        val yaml = """
+            q: { tap: "q", swipe_up: "1", swipe_down: "Q", long_press: ["q", "Q"] }
+            w: { tap: "w", swipe_up: "2", swipe_down: "W", long_press: ["w", "W"] }
+            e: { tap: "e", swipe_up: "3", swipe_down: "E", long_press: ["e", "E", "è", "é", "ê", "ë"] }
+            r: { tap: "r", swipe_up: "4", swipe_down: "R", long_press: ["r", "R"] }
+            t: { tap: "t", swipe_up: "5", swipe_down: "T", long_press: ["t", "T"] }
+            y: { tap: "y", swipe_up: "6", swipe_down: "Y", long_press: ["y", "Y", "ÿ"] }
+            u: { tap: "u", swipe_up: "7", swipe_down: "U", long_press: ["u", "U", "ù", "ú", "û", "ü"] }
+            i: { tap: "i", swipe_up: "8", swipe_down: "I", long_press: ["i", "I", "ì", "í", "î", "ï"] }
+            o: { tap: "o", swipe_up: "9", swipe_down: "O", long_press: ["o", "O", "ò", "ó", "ô", "õ", "ö", "ø"] }
+            p: { tap: "p", swipe_up: "0", swipe_down: "P", long_press: ["p", "P"] }
+            a: { tap: "a", swipe_up: "!", swipe_down: "A", long_press: ["a", "A", "à", "á", "â", "ã", "ä", "å", "æ"] }
+            s: { tap: "s", swipe_up: "@", swipe_down: "S", long_press: ["s", "S", "ß"] }
+            d: { tap: "d", swipe_up: "#", swipe_down: "D", long_press: ["d", "D"] }
+            f: { tap: "f", swipe_up: "$", swipe_down: "F", long_press: ["f", "F"] }
+            g: { tap: "g", swipe_up: "%", swipe_down: "G", long_press: ["g", "G"] }
+            h: { tap: "h", swipe_up: "^", swipe_down: "H", long_press: ["h", "H"] }
+            j: { tap: "j", swipe_up: "&", swipe_down: "J", long_press: ["j", "J"] }
+            k: { tap: "k", swipe_up: "(", swipe_down: "K", long_press: ["k", "K"] }
+            l: { tap: "l", swipe_up: ")", swipe_down: "L", long_press: ["l", "L"] }
+            z: { tap: "z", swipe_up: "|", swipe_down: "Z", long_press: ["z", "Z"] }
+            x: { tap: "x", swipe_up: "*", swipe_down: "X", long_press: ["x", "X"] }
+            c: { tap: "c", swipe_up: "\\", swipe_down: "C", long_press: ["c", "C", "ç"] }
+            v: { tap: "v", swipe_up: "?", swipe_down: "V", long_press: ["v", "V"] }
+            b: { tap: "b", swipe_up: "_", swipe_down: "B", long_press: ["b", "B"] }
+            n: { tap: "n", swipe_up: "-", swipe_down: "N", long_press: ["n", "N", "ñ"] }
+            m: { tap: "m", swipe_up: "+", swipe_down: "M", long_press: ["m", "M"] }
+        """.trimIndent()
+        val keys = parseKeys(yaml)
+        assertEquals("应有 26 个字母键", 26, keys.size)
+
+        // 验证所有字母键都存在
+        val allLetters = ('a'..'z').map { it.toString() }
+        for (letter in allLetters) {
+            assertNotNull("键 $letter 应该存在", keys[letter])
+        }
+
+        // 验证每个键的 tap / swipe_up / swipe_down
+        for ((key, kc) in keys) {
+            assertNotNull("$key.tap 不能为空", kc.tap)
+            assertNotNull("$key.swipe_up 不能为空", kc.swipeUp)
+            assertNotNull("$key.swipe_down 不能为空", kc.swipeDown)
+            assertNotNull("$key.long_press 不能为空", kc.longPress)
+        }
+    }
+
+    @Test
+    fun `完整 26 键 long_press 顺序正确`() {
+        val yaml = """
+            q: { tap: "q", swipe_up: "1", swipe_down: "Q", long_press: ["q", "Q"] }
+            w: { tap: "w", swipe_up: "2", swipe_down: "W", long_press: ["w", "W"] }
+            e: { tap: "e", swipe_up: "3", swipe_down: "E", long_press: ["e", "E", "è", "é", "ê", "ë"] }
+            r: { tap: "r", swipe_up: "4", swipe_down: "R", long_press: ["r", "R"] }
+            t: { tap: "t", swipe_up: "5", swipe_down: "T", long_press: ["t", "T"] }
+            y: { tap: "y", swipe_up: "6", swipe_down: "Y", long_press: ["y", "Y", "ÿ"] }
+            u: { tap: "u", swipe_up: "7", swipe_down: "U", long_press: ["u", "U", "ù", "ú", "û", "ü"] }
+            i: { tap: "i", swipe_up: "8", swipe_down: "I", long_press: ["i", "I", "ì", "í", "î", "ï"] }
+            o: { tap: "o", swipe_up: "9", swipe_down: "O", long_press: ["o", "O", "ò", "ó", "ô", "õ", "ö", "ø"] }
+            p: { tap: "p", swipe_up: "0", swipe_down: "P", long_press: ["p", "P"] }
+            a: { tap: "a", swipe_up: "!", swipe_down: "A", long_press: ["a", "A", "à", "á", "â", "ã", "ä", "å", "æ"] }
+            s: { tap: "s", swipe_up: "@", swipe_down: "S", long_press: ["s", "S", "ß"] }
+            d: { tap: "d", swipe_up: "#", swipe_down: "D", long_press: ["d", "D"] }
+            f: { tap: "f", swipe_up: "$", swipe_down: "F", long_press: ["f", "F"] }
+            g: { tap: "g", swipe_up: "%", swipe_down: "G", long_press: ["g", "G"] }
+            h: { tap: "h", swipe_up: "^", swipe_down: "H", long_press: ["h", "H"] }
+            j: { tap: "j", swipe_up: "&", swipe_down: "J", long_press: ["j", "J"] }
+            k: { tap: "k", swipe_up: "(", swipe_down: "K", long_press: ["k", "K"] }
+            l: { tap: "l", swipe_up: ")", swipe_down: "L", long_press: ["l", "L"] }
+            z: { tap: "z", swipe_up: "|", swipe_down: "Z", long_press: ["z", "Z"] }
+            x: { tap: "x", swipe_up: "*", swipe_down: "X", long_press: ["x", "X"] }
+            c: { tap: "c", swipe_up: "\\", swipe_down: "C", long_press: ["c", "C", "ç"] }
+            v: { tap: "v", swipe_up: "?", swipe_down: "V", long_press: ["v", "V"] }
+            b: { tap: "b", swipe_up: "_", swipe_down: "B", long_press: ["b", "B"] }
+            n: { tap: "n", swipe_up: "-", swipe_down: "N", long_press: ["n", "N", "ñ"] }
+            m: { tap: "m", swipe_up: "+", swipe_down: "M", long_press: ["m", "M"] }
+        """.trimIndent()
+        val keys = parseKeys(yaml)
+
+        // 验证带变音符号的键
+        assertLongPressValues(keys["e"]!!, listOf("e", "E", "è", "é", "ê", "ë"))
+        assertLongPressValues(keys["y"]!!, listOf("y", "Y", "ÿ"))
+        assertLongPressValues(keys["u"]!!, listOf("u", "U", "ù", "ú", "û", "ü"))
+        assertLongPressValues(keys["i"]!!, listOf("i", "I", "ì", "í", "î", "ï"))
+        assertLongPressValues(keys["o"]!!, listOf("o", "O", "ò", "ó", "ô", "õ", "ö", "ø"))
+        assertLongPressValues(keys["a"]!!, listOf("a", "A", "à", "á", "â", "ã", "ä", "å", "æ"))
+        assertLongPressValues(keys["s"]!!, listOf("s", "S", "ß"))
+        assertLongPressValues(keys["c"]!!, listOf("c", "C", "ç"))
+        assertLongPressValues(keys["n"]!!, listOf("n", "N", "ñ"))
+
+        // 验证无变音符号的键（仅小写+大写）
+        val noAccentKeys = listOf("q", "w", "r", "t", "p", "d", "f", "g", "h", "j", "k", "l", "z", "x", "v", "b", "m")
+        for (key in noAccentKeys) {
+            val upper = key.uppercase()
+            assertLongPressValues(keys[key]!!, listOf(key, upper))
+        }
+    }
+
+    private fun assertLongPressValues(kc: KeyGestureConfig, expectedValues: List<String>) {
+        val lp = kc.longPress!!
+        assertEquals("long_press 数量不匹配: 期望 $expectedValues 实际 ${lp.map { it.value }}",
+            expectedValues.size, lp.size)
+        for (i in expectedValues.indices) {
+            assertEquals("索引 $i 的值不匹配", expectedValues[i], lp[i].value)
+            assertEquals("索引 $i 的动作应为 commit", "commit", lp[i].action)
+        }
+    }
+
     // ── 辅助 ──
 
     private fun parseKeys(yamlFragment: String): Map<String, KeyGestureConfig> {
@@ -161,11 +346,11 @@ class KeyboardGestureConfigTest {
             var value = ""
             for ((k, v) in node.entries) {
                 val key = (k as com.charleskorn.kaml.YamlScalar).content
-                val vStr = (v as com.charleskorn.kaml.YamlScalar).content
+                val vStr = (v as? com.charleskorn.kaml.YamlScalar)?.content
                 when (key) {
-                    "label" -> label = vStr
-                    "action" -> action = if (vStr == "null") null else vStr
-                    "value" -> value = vStr
+                    "label" -> if (vStr != null) label = vStr
+                    "action" -> action = vStr // YAML null → null
+                    "value" -> if (vStr != null) value = vStr
                 }
             }
             return GestureDef(label = label, action = action, value = value)

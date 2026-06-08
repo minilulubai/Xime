@@ -27,11 +27,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.settings.KeysConfigHelper
+import com.kingzcheung.xime.settings.SettingsPreferences
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * 横屏专用分体键盘布局
@@ -57,6 +61,8 @@ fun SplitKeyboardLayout(
     onKeyPressDown: ((String) -> Unit)? = null
 ) {
     val staggerStep = 10.dp
+    val context = LocalContext.current
+    val swipeDownShowRootsEnabled = SettingsPreferences.isSwipeDownShowRootsEnabled(context)
     val landscapeFontSize = 12.sp
     val landscapeSwipeFontSize = 7.sp
 
@@ -94,7 +100,8 @@ fun SplitKeyboardLayout(
                         keyboardBackgroundColor = keyboardBackgroundColor,
                         fontSize = landscapeFontSize,
                         swipeFontSize = landscapeSwipeFontSize,
-                        onKeyPressDown = onKeyPressDown
+                        onKeyPressDown = onKeyPressDown,
+                        swipeDownShowRootsEnabled = swipeDownShowRootsEnabled
                     )
                 }
 
@@ -110,7 +117,8 @@ fun SplitKeyboardLayout(
                         keyboardBackgroundColor = keyboardBackgroundColor,
                         fontSize = landscapeFontSize,
                         swipeFontSize = landscapeSwipeFontSize,
-                        onKeyPressDown = onKeyPressDown
+                        onKeyPressDown = onKeyPressDown,
+                        swipeDownShowRootsEnabled = swipeDownShowRootsEnabled
                     )
                 }
 
@@ -126,7 +134,8 @@ fun SplitKeyboardLayout(
                         keyboardBackgroundColor = keyboardBackgroundColor,
                         fontSize = landscapeFontSize,
                         swipeFontSize = landscapeSwipeFontSize,
-                        onKeyPressDown = onKeyPressDown
+                        onKeyPressDown = onKeyPressDown,
+                        swipeDownShowRootsEnabled = swipeDownShowRootsEnabled
                     )
                 }
 
@@ -184,7 +193,8 @@ fun SplitKeyboardLayout(
                         fontSize = landscapeFontSize,
                         swipeFontSize = landscapeSwipeFontSize,
                         keyboardBackgroundColor = keyboardBackgroundColor,
-                        onKeyPressDown = onKeyPressDown
+                        onKeyPressDown = onKeyPressDown,
+                        swipeDownShowRootsEnabled = swipeDownShowRootsEnabled
                     )
                 }
 
@@ -200,7 +210,8 @@ fun SplitKeyboardLayout(
                         fontSize = landscapeFontSize,
                         swipeFontSize = landscapeSwipeFontSize,
                         keyboardBackgroundColor = keyboardBackgroundColor,
-                        onKeyPressDown = onKeyPressDown
+                        onKeyPressDown = onKeyPressDown,
+                        swipeDownShowRootsEnabled = swipeDownShowRootsEnabled
                     )
                 }
 
@@ -223,7 +234,8 @@ fun SplitKeyboardLayout(
                             keyboardBackgroundColor = keyboardBackgroundColor,
                             fontSize = landscapeFontSize,
                             swipeFontSize = landscapeSwipeFontSize,
-                            onKeyPressDown = onKeyPressDown
+                            onKeyPressDown = onKeyPressDown,
+                            swipeDownShowRootsEnabled = swipeDownShowRootsEnabled
                         )
                     }
                     SwipeableIconKeyButton(
@@ -310,6 +322,15 @@ fun CompactSwipeableKeyButton(
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 8.sp
 ) {
     var isPressed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var dragOffsetY by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0f) }
+    var hasTriggeredSwipeUp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var hasTriggeredSwipeDown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var isSwiping by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var isSwipeDown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val swipeUpThreshold = with(density) { (-15).dp.toPx() }
+    val swipeDownThreshold = with(density) { 15.dp.toPx() }
 
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(
@@ -326,7 +347,7 @@ fun CompactSwipeableKeyButton(
             .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
             .clip(RoundedCornerShape(8.dp))
             .background(if (isPressed) darkenColor(backgroundColor) else backgroundColor)
-            .pointerInput(onClick) {
+            .pointerInput(onClick, swipeText, swipeDownText) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
@@ -334,7 +355,55 @@ fun CompactSwipeableKeyButton(
                         tryAwaitRelease()
                         isPressed = false
                     },
-                    onTap = { onClick() }
+                    onTap = {
+                        if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown) onClick()
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = {
+                        isPressed = true
+                        dragOffsetY = 0f
+                        hasTriggeredSwipeUp = false
+                        hasTriggeredSwipeDown = false
+                        isSwiping = false
+                        isSwipeDown = false
+                    },
+                    onDragEnd = {
+                        if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown && dragOffsetY > swipeUpThreshold && dragOffsetY < swipeDownThreshold) {
+                            onClick()
+                        }
+                        isPressed = false
+                        dragOffsetY = 0f
+                        hasTriggeredSwipeUp = false
+                        hasTriggeredSwipeDown = false
+                        isSwiping = false
+                        isSwipeDown = false
+                    },
+                    onDragCancel = {
+                        isPressed = false
+                        dragOffsetY = 0f
+                        hasTriggeredSwipeUp = false
+                        hasTriggeredSwipeDown = false
+                        isSwiping = false
+                        isSwipeDown = false
+                    },
+                    onDrag = { change: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: androidx.compose.ui.geometry.Offset ->
+                        dragOffsetY += dragAmount.y
+
+                        if (dragOffsetY < 0 && !hasTriggeredSwipeUp && swipeText != null && onSwipe != null) {
+                            if (dragOffsetY < swipeUpThreshold) {
+                                hasTriggeredSwipeUp = true
+                                onSwipe(swipeText)
+                            }
+                        } else if (dragOffsetY > 0 && !hasTriggeredSwipeDown && swipeDownText != null && onSwipeDown != null) {
+                            if (dragOffsetY > swipeDownThreshold) {
+                                hasTriggeredSwipeDown = true
+                                onSwipeDown(swipeDownText)
+                            }
+                        }
+                    }
                 )
             },
         contentAlignment = Alignment.Center
@@ -343,7 +412,7 @@ fun CompactSwipeableKeyButton(
             Text(
                 text = text,
                 color = textColor,
-                fontSize = 14.sp,
+                fontSize = if (fontSize != androidx.compose.ui.unit.TextUnit.Unspecified) fontSize else 14.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -360,6 +429,19 @@ fun CompactSwipeableKeyButton(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(top = 0.dp, end = 4.dp)
+                )
+            }
+            if (!swipeDownText.isNullOrEmpty()) {
+                Text(
+                    text = swipeDownText,
+                    color = textColor.copy(alpha = 0.5f),
+                    fontSize = swipeFontSize,
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.Start,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 4.dp, bottom = 0.dp)
                 )
             }
         }
@@ -380,6 +462,7 @@ fun CompactKeyboardRowWithConfig(
     keyboardBackgroundColor: Color = Color.Transparent,
     modifier: Modifier = Modifier,
     onKeyPressDown: ((String) -> Unit)? = null,
+    swipeDownShowRootsEnabled: Boolean = false,
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 9.sp
 ) {
@@ -391,6 +474,11 @@ fun CompactKeyboardRowWithConfig(
     ) {
         keys.forEach { key ->
             val swipeUpText = KeysConfigHelper.getSwipeUpText(key)
+            val swipeDownText = if (swipeDownShowRootsEnabled) {
+                KeysConfigHelper.getSwipeDownEnglishText(key)
+            } else null
+            val swipeDownAction = if (swipeDownText != null) KeysConfigHelper.getSwipeDownAction(key) else null
+            
             CompactSwipeableKeyButton(
                 text = if (isShifted || !isAsciiMode) key.uppercase() else key,
                 onClick = { onKeyPress(key) },
@@ -398,7 +486,9 @@ fun CompactKeyboardRowWithConfig(
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
                 swipeText = swipeUpText,
+                swipeDownText = swipeDownText,
                 onSwipe = if (swipeUpText != null) onKeyPress else null,
+                onSwipeDown = if (swipeDownAction == "commit" && swipeDownText != null) onKeyPress else null,
                 onPress = { onKeyPressDown?.invoke(key) },
                 fontSize = fontSize,
                 swipeFontSize = swipeFontSize
