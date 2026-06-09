@@ -244,13 +244,14 @@ fun EnglishKeyboardLayout(
                             onPress = { onKeyPressDown?.invoke("mode_change") }
                         )
 
+                        // 标点键 .
                         KeyButton(
-                            text = "英",
-                            onClick = { onKeyPress("ime_switch") },
-                            backgroundColor = specialKeyBackgroundColor,
+                            text = ".",
+                            onClick = { onKeyPress(".") },
+                            backgroundColor = keyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(0.8f),
-                            onPress = { onKeyPressDown?.invoke("ime_switch") }
+                            onPress = { onKeyPressDown?.invoke(".") }
                         )
 
                         // 空格键 — 使用 KeyButton 以获得震动/音效和按下效果
@@ -263,14 +264,13 @@ fun EnglishKeyboardLayout(
                             onPress = { onKeyPressDown?.invoke("space") }
                         )
 
-                        // 标点键 .
                         KeyButton(
-                            text = ".",
-                            onClick = { onKeyPress(".") },
-                            backgroundColor = keyBackgroundColor,
+                            text = "英",
+                            onClick = { onKeyPress("ime_switch") },
+                            backgroundColor = specialKeyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(0.8f),
-                            onPress = { onKeyPressDown?.invoke(".") }
+                            onPress = { onKeyPressDown?.invoke("ime_switch") }
                         )
 
                         // 回车键
@@ -389,6 +389,14 @@ private fun LandscapeEnglishKeyboardContent(
                     modifier = Modifier.weight(1.2f),
                     onPress = { onKeyPressDown?.invoke("emoji") }
                 )
+                KeyButton(
+                    text = ".",
+                    onClick = { onKeyPress(".") },
+                    backgroundColor = keyBackgroundColor,
+                    textColor = keyTextColor,
+                    modifier = Modifier.weight(0.8f),
+                    onPress = { onKeyPressDown?.invoke(".") }
+                )
                 SplitSpaceKey(
                     onClick = { onKeyPress("space") },
                     backgroundColor = keyBackgroundColor,
@@ -498,12 +506,12 @@ private fun LandscapeEnglishKeyboardContent(
                     onPress = { onKeyPressDown?.invoke("mode_change") }
                 )
                 KeyButton(
-                    text = ".",
-                    onClick = { onKeyPress(".") },
-                    backgroundColor = keyBackgroundColor,
+                    text = "英",
+                    onClick = { onKeyPress("ime_switch") },
+                    backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(0.8f),
-                    onPress = { onKeyPressDown?.invoke(".") }
+                    onPress = { onKeyPressDown?.invoke("ime_switch") }
                 )
                 KeyButton(
                     text = enterKeyText,

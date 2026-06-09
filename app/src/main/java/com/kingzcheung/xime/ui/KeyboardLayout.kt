@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -175,6 +176,7 @@ fun KeyboardLayout(
                 swipeUpHintsEnabled = swipeUpHintsEnabled,
                 swipeDownHintsEnabled = swipeDownHintsEnabled,
                 onCommitText = onCommitText,
+                onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
             )
         } else {
             Column(
@@ -427,13 +429,21 @@ fun KeyboardLayout(
                                 onPress = { onKeyPressDown?.invoke("mode_change") }
                             )
 
-                            KeyButton(
-                                text = if (isAsciiMode) "英" else "中",
-                                onClick = { onKeyPress("ime_switch") },
-                                backgroundColor = specialKeyBackgroundColor,
+                            SwipeableKeyButton(
+                                text = if (isAsciiMode) "." else "，",
+                                onClick = { onKeyPress(if (isAsciiMode) "." else "，") },
+                                backgroundColor = keyBackgroundColor,
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(0.8f),
-                                onPress = { onKeyPressDown?.invoke("ime_switch") }
+                                swipeText = if (isAsciiMode) "," else "。",
+                                onSwipe = { onSwipeText -> onKeyPress(onSwipeText) },
+                                onSwipeStateChange = { state, bounds ->
+                                    processSwipeState(
+                                        state,
+                                        bounds
+                                    )
+                                },
+                                onPress = { onKeyPressDown?.invoke(if (isAsciiMode) "," else "。") }
                             )
                         }
 
@@ -584,21 +594,13 @@ fun KeyboardLayout(
                                 modifier = Modifier.weight(1.2f)
                             )
                         } else {
-                            SwipeableKeyButton(
-                                text = if (isAsciiMode) "." else "，",
-                                onClick = { onKeyPress(if (isAsciiMode) "." else "，") },
-                                backgroundColor = keyBackgroundColor,
+                            KeyButton(
+                                text = if (isAsciiMode) "英" else "中",
+                                onClick = { onKeyPress("ime_switch") },
+                                backgroundColor = specialKeyBackgroundColor,
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(0.8f),
-                                swipeText = if (isAsciiMode) "," else "。",
-                                onSwipe = { onSwipeText -> onKeyPress(onSwipeText) },
-                                onSwipeStateChange = { state, bounds ->
-                                    processSwipeState(
-                                        state,
-                                        bounds
-                                    )
-                                },
-                                onPress = { onKeyPressDown?.invoke(if (isAsciiMode) "," else "。") }
+                                onPress = { onKeyPressDown?.invoke("ime_switch") }
                             )
 
                             KeyButton(
@@ -827,6 +829,7 @@ private fun LandscapeKeyboardContent(
     swipeUpHintsEnabled: Boolean,
     swipeDownHintsEnabled: Boolean,
     onCommitText: ((String) -> Unit)?,
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
 ) {
     val staggerStep = 10.dp
     val landscapeFontSize = 12.sp
@@ -861,6 +864,7 @@ private fun LandscapeKeyboardContent(
                     swipeUpHintsEnabled = swipeUpHintsEnabled,
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
+                    onSwipeStateChange = onSwipeStateChange,
                 )
             }
             Box(
@@ -883,6 +887,7 @@ private fun LandscapeKeyboardContent(
                     swipeUpHintsEnabled = swipeUpHintsEnabled,
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
+                    onSwipeStateChange = onSwipeStateChange,
                 )
             }
             Box(
@@ -905,6 +910,7 @@ private fun LandscapeKeyboardContent(
                     swipeUpHintsEnabled = swipeUpHintsEnabled,
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
+                    onSwipeStateChange = onSwipeStateChange,
                 )
             }
             Row(
@@ -920,6 +926,17 @@ private fun LandscapeKeyboardContent(
                     iconColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
                     onPress = { onKeyPressDown?.invoke("emoji") }
+                )
+                CompactSwipeableKeyButton(
+                    text = if (isAsciiMode) "." else "，",
+                    onClick = { onKeyPress(if (isAsciiMode) "." else "，") },
+                    backgroundColor = keyBackgroundColor,
+                    textColor = keyTextColor,
+                    modifier = Modifier.weight(0.8f),
+                    swipeText = if (isAsciiMode) "," else "。",
+                    swipeFontSize = landscapeSwipeFontSize,
+                    onSwipe = { onSwipeText -> onKeyPress(onSwipeText) },
+                    onPress = { onKeyPressDown?.invoke(if (isAsciiMode) "," else "。") }
                 )
                 SplitSpaceKey(
                     onClick = { onKeyPress("space") },
@@ -959,6 +976,7 @@ private fun LandscapeKeyboardContent(
                     swipeUpHintsEnabled = swipeUpHintsEnabled,
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
+                    onSwipeStateChange = onSwipeStateChange,
                 )
             }
             Box(
@@ -981,6 +999,7 @@ private fun LandscapeKeyboardContent(
                     swipeUpHintsEnabled = swipeUpHintsEnabled,
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
+                    onSwipeStateChange = onSwipeStateChange,
                 )
             }
             Row(
@@ -1006,6 +1025,7 @@ private fun LandscapeKeyboardContent(
                         swipeUpHintsEnabled = swipeUpHintsEnabled,
                         onCommitText = onCommitText,
                         onGestureAction = onGestureAction,
+                        onSwipeStateChange = onSwipeStateChange,
                     )
                 }
                 SwipeableIconKeyButton(
@@ -1016,6 +1036,7 @@ private fun LandscapeKeyboardContent(
                     modifier = Modifier
                         .width(48.dp)
                         .fillMaxHeight(),
+                    swipeText = "",
                     onSwipe = { onKeyPress("clear_composition") },
                     onLongClick = { onKeyPress("delete") },
                     onPress = { onKeyPressDown?.invoke("delete") },
@@ -1023,7 +1044,8 @@ private fun LandscapeKeyboardContent(
                     swipeDownLabel = "下滑撤回",
                     onSwipeUp = { onKeyPress("clear_all") },
                     onSwipeDown = { onKeyPress("undo_clear") },
-                    onSwipeLeft = { onKeyPress("clear_composition") }
+                    onSwipeLeft = { onKeyPress("clear_composition") },
+                    onSwipeStateChange = onSwipeStateChange,
                 )
             }
             Row(
@@ -1048,16 +1070,13 @@ private fun LandscapeKeyboardContent(
                     modifier = Modifier.weight(1.2f),
                     onPress = { onKeyPressDown?.invoke("mode_change") }
                 )
-                CompactSwipeableKeyButton(
-                    text = if (isAsciiMode) "." else "，",
-                    onClick = { onKeyPress(if (isAsciiMode) "." else "，") },
-                    backgroundColor = keyBackgroundColor,
+                KeyButton(
+                    text = if (isAsciiMode) "英" else "中",
+                    onClick = { onKeyPress("ime_switch") },
+                    backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(0.8f),
-                    swipeText = if (isAsciiMode) "," else "。",
-                    swipeFontSize = landscapeSwipeFontSize,
-                    onSwipe = { onSwipeText -> onKeyPress(onSwipeText) },
-                    onPress = { onKeyPressDown?.invoke(if (isAsciiMode) "," else "。") }
+                    onPress = { onKeyPressDown?.invoke("ime_switch") }
                 )
                 KeyButton(
                     text = enterKeyText,
@@ -1090,7 +1109,8 @@ fun CompactSwipeableKeyButton(
     onLongPressSelect: ((String) -> Unit)? = null,
     longPressItems: List<String>? = null,
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
-    swipeFontSize: androidx.compose.ui.unit.TextUnit = 8.sp
+    swipeFontSize: androidx.compose.ui.unit.TextUnit = 8.sp,
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null
 ) {
     var isPressed by remember { mutableStateOf(false) }
     var dragOffsetY by remember { mutableStateOf(0f) }
@@ -1098,11 +1118,26 @@ fun CompactSwipeableKeyButton(
     var hasTriggeredSwipeDown by remember { mutableStateOf(false) }
     var isSwiping by remember { mutableStateOf(false) }
     var isSwipeDown by remember { mutableStateOf(false) }
-    var longPressCycleIndex by remember { mutableStateOf(0) }
+    var buttonBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
+
+    val currentText by rememberUpdatedState(text)
+    val currentSwipeText by rememberUpdatedState(swipeText)
+    val currentSwipeDownText by rememberUpdatedState(swipeDownText)
+    val currentOnSwipe by rememberUpdatedState(onSwipe)
+    val currentOnSwipeDown by rememberUpdatedState(onSwipeDown)
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnPress by rememberUpdatedState(onPress)
+    val currentOnLongPressSelect by rememberUpdatedState(onLongPressSelect)
+    val currentLongPressItems by rememberUpdatedState(longPressItems)
+    val currentOnSwipeStateChange by rememberUpdatedState(onSwipeStateChange)
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
 
     val density = LocalDensity.current
     val swipeUpThreshold = with(density) { (-15).dp.toPx() }
     val swipeDownThreshold = with(density) { 15.dp.toPx() }
+    val bubbleShowThresholdUp = swipeUpThreshold * 0.3f
+    val bubbleShowThresholdDown = swipeDownThreshold * 0.3f
 
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(
@@ -1122,39 +1157,114 @@ fun CompactSwipeableKeyButton(
                 ambientColor = Color(0x80000000),
                 spotColor = Color(0x80000000)
             )
+            .onGloballyPositioned { coordinates ->
+                buttonBounds = coordinates.boundsInRoot()
+            }
             .clip(RoundedCornerShape(8.dp))
             .background(if (isPressed) darkenColor(backgroundColor) else backgroundColor)
-            .pointerInput(onClick, swipeText, swipeDownText, longPressItems, onLongPressSelect) {
-                if (longPressItems.isNullOrEmpty() || onLongPressSelect == null) {
+            .pointerInput(currentLongPressItems, currentOnLongPressSelect) {
+                if (currentLongPressItems.isNullOrEmpty() || currentOnLongPressSelect == null) {
                     detectTapGestures(
                         onPress = {
                             isPressed = true
-                            onPress?.invoke()
+                            currentOnSwipeStateChange?.invoke(SwipeState(isPressed = true, pressedText = currentText), buttonBounds)
+                            currentOnPress?.invoke()
                             tryAwaitRelease()
                             isPressed = false
+                            currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
                         },
                         onTap = {
-                            if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown) onClick()
+                            if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown) currentOnClick()
                         }
                     )
                 } else {
-                    detectTapGestures(
-                        onPress = {
-                            isPressed = true
-                            onPress?.invoke()
-                            tryAwaitRelease()
-                            isPressed = false
-                        },
-                        onLongPress = {
-                            val items = longPressItems
-                            val idx = longPressCycleIndex % items.size
-                            longPressCycleIndex = (idx + 1) % items.size
-                            onLongPressSelect(items[idx])
-                        },
-                        onTap = {
-                            if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown) onClick()
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+                        var localLongPressTriggered = false
+                        var selectedIdx = 0
+                        val downX = down.position.x
+                        val items = currentLongPressItems ?: return@awaitEachGesture
+
+                        currentOnSwipeStateChange?.invoke(SwipeState(isPressed = true, pressedText = currentText), buttonBounds)
+                        currentOnPress?.invoke()
+
+                        val longPressJob = scope.launch {
+                            delay(400L)
+                            localLongPressTriggered = true
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                            currentOnSwipeStateChange?.invoke(
+                                SwipeState(
+                                    isPressed = true,
+                                    isLongPress = true,
+                                    longPressItems = items,
+                                    selectedLongPressIndex = 0
+                                ),
+                                buttonBounds
+                            )
                         }
-                    )
+
+                        val cancelThresholdPx = with(density) { 5.dp.toPx() }
+                        val downY = down.position.y
+                        var swipeDetected = false
+
+                        try {
+                            var lastReportedIdx = -1
+                            var completed = false
+                            while (!completed) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+
+                                if (change.isConsumed) continue
+
+                                if (!localLongPressTriggered) {
+                                    val deltaX = change.position.x - downX
+                                    val deltaY = change.position.y - downY
+                                    if (kotlin.math.abs(deltaX) > cancelThresholdPx || kotlin.math.abs(deltaY) > cancelThresholdPx) {
+                                        swipeDetected = true
+                                        longPressJob.cancel()
+                                    }
+                                }
+
+                                if (localLongPressTriggered) {
+                                    val deltaX = change.position.x - downX
+                                    val itemWidth = buttonBounds.width / items.size
+                                    selectedIdx = ((deltaX / itemWidth) + if (items.size > 1) 0.5f else 0f).toInt()
+                                        .coerceIn(0, items.size - 1)
+
+                                    if (selectedIdx != lastReportedIdx) {
+                                        lastReportedIdx = selectedIdx
+                                        currentOnSwipeStateChange?.invoke(
+                                            SwipeState(
+                                                isPressed = true,
+                                                isLongPress = true,
+                                                longPressItems = items,
+                                                selectedLongPressIndex = selectedIdx
+                                            ),
+                                            buttonBounds
+                                        )
+                                    }
+                                    change.consume()
+                                }
+
+                                if (event.type == androidx.compose.ui.input.pointer.PointerEventType.Release) {
+                                    completed = true
+                                    if (localLongPressTriggered) {
+                                        val selected = items.getOrNull(selectedIdx)
+                                        if (selected != null) {
+                                            currentOnLongPressSelect?.invoke(selected)
+                                        }
+                                    } else if (!swipeDetected) {
+                                        currentOnClick()
+                                    }
+                                }
+                            }
+                        } finally {
+                            longPressJob.cancel()
+                            isPressed = false
+                            currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
+                        }
+                    }
                 }
             }
             .pointerInput(Unit) {
@@ -1166,6 +1276,7 @@ fun CompactSwipeableKeyButton(
                         hasTriggeredSwipeDown = false
                         isSwiping = false
                         isSwipeDown = false
+                        currentOnSwipeStateChange?.invoke(SwipeState(isPressed = true, pressedText = currentText), buttonBounds)
                     },
                     onDragEnd = {
                         if (!hasTriggeredSwipeUp && !hasTriggeredSwipeDown && dragOffsetY > swipeUpThreshold && dragOffsetY < swipeDownThreshold) {
@@ -1177,6 +1288,7 @@ fun CompactSwipeableKeyButton(
                         hasTriggeredSwipeDown = false
                         isSwiping = false
                         isSwipeDown = false
+                        currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
                     },
                     onDragCancel = {
                         isPressed = false
@@ -1185,18 +1297,48 @@ fun CompactSwipeableKeyButton(
                         hasTriggeredSwipeDown = false
                         isSwiping = false
                         isSwipeDown = false
+                        currentOnSwipeStateChange?.invoke(SwipeState(), buttonBounds)
                     },
                     onDrag = { _: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: Offset ->
                         dragOffsetY += dragAmount.y
-                        if (dragOffsetY < 0 && !hasTriggeredSwipeUp && swipeText != null && onSwipe != null) {
+
+                        val swipeTextValue = currentSwipeText
+                        val swipeDownTextValue = currentSwipeDownText
+                        val onSwipeAction = currentOnSwipe
+                        val onSwipeDownAction = currentOnSwipeDown
+                        val onSwipeStateChangeAction = currentOnSwipeStateChange
+
+                        if (dragOffsetY < 0) {
+                            val shouldShowBubble = swipeTextValue != null && dragOffsetY < bubbleShowThresholdUp
+                            if (shouldShowBubble != isSwiping) {
+                                isSwiping = shouldShowBubble
+                                isSwipeDown = false
+                                onSwipeStateChangeAction?.invoke(
+                                    SwipeState(isSwiping = shouldShowBubble, swipeText = swipeTextValue, isSwipeDown = false),
+                                    buttonBounds
+                                )
+                            }
+                        } else if (dragOffsetY > 0) {
+                            val shouldShowBubble = swipeDownTextValue != null && dragOffsetY > bubbleShowThresholdDown
+                            if (shouldShowBubble != isSwipeDown) {
+                                isSwipeDown = shouldShowBubble
+                                isSwiping = shouldShowBubble
+                                onSwipeStateChangeAction?.invoke(
+                                    SwipeState(isSwiping = shouldShowBubble, swipeText = swipeDownTextValue, isSwipeDown = true),
+                                    buttonBounds
+                                )
+                            }
+                        }
+
+                        if (dragOffsetY < 0 && !hasTriggeredSwipeUp && swipeTextValue != null && onSwipeAction != null) {
                             if (dragOffsetY < swipeUpThreshold) {
                                 hasTriggeredSwipeUp = true
-                                onSwipe(swipeText)
+                                onSwipeAction(swipeTextValue)
                             }
-                        } else if (dragOffsetY > 0 && !hasTriggeredSwipeDown && swipeDownText != null && onSwipeDown != null) {
+                        } else if (dragOffsetY > 0 && !hasTriggeredSwipeDown && swipeDownTextValue != null && onSwipeDownAction != null) {
                             if (dragOffsetY > swipeDownThreshold) {
                                 hasTriggeredSwipeDown = true
-                                onSwipeDown(swipeDownText)
+                                onSwipeDownAction(swipeDownTextValue)
                             }
                         }
                     }
@@ -1271,7 +1413,9 @@ fun CompactKeyboardRowWithConfig(
     onCommitText: ((String) -> Unit)? = null,
     onGestureAction: ((GestureAction, String) -> Unit)? = null,
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
-    swipeFontSize: androidx.compose.ui.unit.TextUnit = 9.sp
+    swipeFontSize: androidx.compose.ui.unit.TextUnit = 9.sp,
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
+    configVersion: Int = 0,
 ) {
     Row(
         modifier = modifier
@@ -1308,19 +1452,20 @@ fun CompactKeyboardRowWithConfig(
                 modifier = Modifier.weight(1f),
                 swipeText = swipeUpText,
                 swipeDownText = swipeDownBubbleText,
-                onSwipe = if (swipeUpText != null) onKeyPress else null,
-                onSwipeDown = if (swipeDownAction != null && swipeDownHintsEnabled && swipeDownLabel != null) {
-                    { _ ->
-                        if (swipeDownAction == GestureAction.COMMIT) {
-                            onKeyPress(key)
-                        } else {
-                            onGestureAction?.invoke(
-                                swipeDownAction,
-                                swipeDownValue?.ifEmpty { swipeDownLabel!! } ?: swipeDownLabel!!)
+                    onSwipe = if (swipeUpText != null) onKeyPress else null,
+                    onSwipeDown = if (swipeDownAction != null && swipeDownHintsEnabled && swipeDownLabel != null) {
+                        { _ ->
+                            if (swipeDownAction == GestureAction.COMMIT) {
+                                onKeyPress(key)
+                            } else {
+                                onGestureAction?.invoke(
+                                    swipeDownAction,
+                                    swipeDownValue?.ifEmpty { swipeDownLabel!! } ?: swipeDownLabel!!)
+                            }
                         }
-                    }
-                } else null,
-                onPress = { onKeyPressDown?.invoke(key) },
+                    } else null,
+                    onSwipeStateChange = onSwipeStateChange,
+                    onPress = { onKeyPressDown?.invoke(key) },
                 onLongPressSelect = { selectedLabel ->
                     val gesture = longPressGestureMap?.get(selectedLabel)
                     if (gesture != null && gesture.action != GestureAction.COMMIT) {
