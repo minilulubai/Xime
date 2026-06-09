@@ -29,6 +29,10 @@ object SettingsPreferences {
     
     private const val KEY_PUNCTUATION_MODEL_ENABLED = "punctuation_model_enabled"
     
+    /** 默认主题 ID，可从 xime.yaml 的 style.color_scheme 初始化。 */
+    @JvmStatic
+    var defaultKeyboardTheme: String = "lavender_purple"
+    
     const val KEY_SWIPE_UP_HINTS_ENABLED = "swipe_up_hints_enabled"
     const val KEY_SWIPE_DOWN_HINTS_ENABLED = "swipe_down_hints_enabled"
     
@@ -134,7 +138,7 @@ object SettingsPreferences {
     }
     
     fun getKeyboardTheme(context: Context): String {
-        return getPrefs(context).getString(KEY_KEYBOARD_THEME, "lavender_purple") ?: "lavender_purple"
+        return getPrefs(context).getString(KEY_KEYBOARD_THEME, defaultKeyboardTheme) ?: defaultKeyboardTheme
     }
     
     fun setKeyboardTheme(context: Context, themeId: String) {

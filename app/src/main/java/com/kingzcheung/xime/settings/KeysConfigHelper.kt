@@ -11,6 +11,7 @@ import com.kingzcheung.xime.keyboard.GestureAction
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 
 // ── 键盘手势配置 ──
@@ -136,9 +137,26 @@ private fun parseGestureList(node: com.charleskorn.kaml.YamlNode): List<GestureD
 // ── 原有配置类 ──
 
 @Serializable
+data class ColorSchemeEntry(
+    val name: String = "",
+    @SerialName("primary_color")
+    val primaryColor: Long = 0,
+)
+
+@Serializable
+data class StyleConfig(
+    @SerialName("color_scheme")
+    val colorScheme: String? = null,
+)
+
+@Serializable
 data class XimeConfig(
     @SerialName("xime_index")
     val ximeIndex: XimeIndexConfig? = null,
+    @SerialName("color_schemes")
+    val colorSchemes: Map<String, ColorSchemeEntry>? = null,
+    @SerialName("style")
+    val style: StyleConfig? = null,
 )
 
 @Serializable
@@ -211,7 +229,10 @@ object KeysConfigHelper {
 
     private fun loadMergedConfig(context: Context): XimeConfig {
         val default = parseConfig(readAssetText(context, XIME_CONFIG_FILE))
-        val custom = parseConfig(readAssetText(context, XIME_CUSTOM_CONFIG_FILE))
+        // 先从用户数据目录读取自定义覆盖，没有则尝试 assets（兼容旧版）
+        val customText = readUserDataText(context, XIME_CUSTOM_CONFIG_FILE)
+            ?: readAssetText(context, XIME_CUSTOM_CONFIG_FILE)
+        val custom = parseConfig(customText)
         return mergeConfig(default, custom)
     }
 
@@ -230,6 +251,8 @@ object KeysConfigHelper {
         if (default == null) return custom
         return XimeConfig(
             ximeIndex = custom.ximeIndex ?: default.ximeIndex,
+            colorSchemes = custom.colorSchemes ?: default.colorSchemes,
+            style = custom.style ?: default.style,
         )
     }
 
@@ -246,9 +269,32 @@ object KeysConfigHelper {
         }
     }
 
+    /** 从用户数据目录 (context.filesDir/rime/) 读取文件。 */
+    private fun readUserDataText(context: Context, fileName: String): String? {
+        val file = File(context.filesDir, "rime/$fileName")
+        if (!file.exists()) return null
+        return try {
+            file.readText()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     fun loadXimeIndexConfig(context: Context): XimeIndexConfig {
         val merged = loadMergedConfig(context)
         return merged.ximeIndex ?: XimeIndexConfig()
+    }
+
+    /** 从 xime.yaml 加载 color_schemes 配置。 */
+    fun loadColorSchemes(context: Context): Map<String, ColorSchemeEntry> {
+        val merged = loadMergedConfig(context)
+        return merged.colorSchemes ?: emptyMap()
+    }
+
+    /** 从 xime.yaml 加载默认主题 ID（style.color_scheme）。 */
+    fun loadDefaultThemeId(context: Context): String {
+        val merged = loadMergedConfig(context)
+        return merged.style?.colorScheme ?: "lavender_purple"
     }
 
     // ── 新公开 API ──

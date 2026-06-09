@@ -6,7 +6,9 @@ import com.kingzcheung.xime.plugin.ExtensionManager
 import com.kingzcheung.xime.plugin.core.runtime.PluginManager
 import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.rime.RimeEngine
+import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.SettingsPreferences
+import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -46,7 +48,14 @@ class XimeApplication : Application() {
         
         Log.d(TAG, "Initializing ExtensionManager...")
         ExtensionManager.initialize(this)
-        
+
+        // 从 xime.yaml 加载配色方案
+        KeyboardThemes.initFromConfig(this)
+
+        // 从 xime.yaml 的 style.color_scheme 读取默认主题
+        SettingsPreferences.defaultKeyboardTheme = KeysConfigHelper.loadDefaultThemeId(this)
+        Log.d(TAG, "Default keyboard theme: ${SettingsPreferences.defaultKeyboardTheme}")
+
         preInitializeRimeEngine()
         
         Log.d(TAG, "Initialization complete")

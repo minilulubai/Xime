@@ -48,6 +48,7 @@ import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.KeyboardView
+import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.ui.theme.XimeTheme
 import com.kingzcheung.xime.util.FileLogger
@@ -1491,6 +1492,8 @@ onVoiceModeChange = { enabled ->
         Thread {
             try {
                 KeysConfigHelper.loadConfig(this)
+                // 重新加载配色方案（用户可能在 xime.custom.yaml 中修改了 color_schemes）
+                KeyboardThemes.reload(this)
                 
                 val userDataDir = File(filesDir, "rime")
                 
