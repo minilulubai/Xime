@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.R
 import com.kingzcheung.xime.keyboard.KeyboardRoute
 import com.kingzcheung.xime.keyboard.ToolbarAction
+import com.kingzcheung.xime.settings.SettingsPreferences
 
 /**
  * 候选栏组件
@@ -81,6 +83,8 @@ fun CandidateBar(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val horizontalPadding = if (isLandscape) 50.dp else 8.dp
+    val context = LocalContext.current
+    val showComments = SettingsPreferences.showCandidateComments(context)
     val hasMoreAssociation = associationCandidates.size >= 5
     val hasAnyMore = hasMoreCandidates || hasMoreAssociation
 
@@ -245,7 +249,7 @@ fun CandidateBar(
                             index = index,
                             onClick = { onCandidateSelect(index) },
                             textColor = textColor,
-                            comment = candidateComments.getOrElse(index) { "" },
+                            comment = if (showComments) candidateComments.getOrElse(index) { "" } else "",
                             isSelected = index == 0,
                             accentColor = accentColor
                         )

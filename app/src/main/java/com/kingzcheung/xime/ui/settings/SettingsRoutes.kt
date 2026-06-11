@@ -6,6 +6,7 @@ object SettingsRoutes {
     const val SchemaMarket = "schema_market"
     const val Theme = "theme"
     const val KeyEffect = "key_effect"
+    const val LayoutDisplay = "layout_display"
     const val Dictionary = "dictionary"
     const val Plugins = "plugins"
     const val PluginSettings = "plugin_settings"

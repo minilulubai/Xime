@@ -29,6 +29,7 @@ import androidx.compose.material.icons.twotone.Palette
 import androidx.compose.material.icons.twotone.Storefront
 import androidx.compose.material.icons.twotone.Straighten
 import androidx.compose.material.icons.twotone.ToggleOn
+import androidx.compose.material.icons.twotone.ViewAgenda
 import androidx.compose.material.icons.twotone.Vibration
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +67,7 @@ fun SettingsMainContent(
     onNavigateToSchemaMarket: () -> Unit = {},
     onNavigateToTheme: () -> Unit,
     onNavigateToKeyEffect: () -> Unit,
+    onNavigateToLayoutDisplay: () -> Unit,
     onNavigateToDictionary: () -> Unit,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSmartPrediction: () -> Unit,
@@ -247,6 +249,18 @@ fun SettingsMainContent(
                         title = "按键效果",
                         subtitle = "按键音效和振动反馈",
                         onClick = onNavigateToKeyEffect,
+                        showArrow = true
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.ViewAgenda,
+                        title = "布局与显示",
+                        subtitle = "候选词显示、键盘布局等",
+                        onClick = onNavigateToLayoutDisplay,
                         showArrow = true
                     )
                     HorizontalDivider(

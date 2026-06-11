@@ -64,6 +64,7 @@ object SettingsPreferences {
 
     private const val KEY_INSTALLED_MARKET_IDS = "installed_market_ids"
     private const val KEY_COMPACT_MODE = "compact_mode"
+    private const val KEY_SHOW_CANDIDATE_COMMENTS = "show_candidate_comments"
 
     fun isCompactModeEnabled(context: Context): Boolean {
         return getPrefs(context).getBoolean(KEY_COMPACT_MODE, true)
@@ -71,6 +72,14 @@ object SettingsPreferences {
 
     fun setCompactModeEnabled(context: Context, enabled: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_COMPACT_MODE, enabled).apply()
+    }
+
+    fun showCandidateComments(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_SHOW_CANDIDATE_COMMENTS, true)
+    }
+
+    fun setShowCandidateComments(context: Context, show: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_SHOW_CANDIDATE_COMMENTS, show).apply()
     }
 
     private fun getPrefs(context: Context): SharedPreferences {

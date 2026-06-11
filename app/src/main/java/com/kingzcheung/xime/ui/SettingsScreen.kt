@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kingzcheung.xime.ui.settings.DictionarySettingsContent
 import com.kingzcheung.xime.ui.settings.KeyEffectSettingsContent
+import com.kingzcheung.xime.ui.settings.LayoutDisplaySettingsContent
 import com.kingzcheung.xime.ui.settings.PluginSettingsContent
 import com.kingzcheung.xime.ui.settings.SchemaMarketContent
 import com.kingzcheung.xime.ui.settings.SchemaSettingsContent
@@ -37,6 +38,7 @@ fun SettingsScreen(
                 onNavigateToSchemaMarket = { navController.navigate(SettingsRoutes.SchemaMarket) },
                 onNavigateToTheme = { navController.navigate(SettingsRoutes.Theme) },
                 onNavigateToKeyEffect = { navController.navigate(SettingsRoutes.KeyEffect) },
+                onNavigateToLayoutDisplay = { navController.navigate(SettingsRoutes.LayoutDisplay) },
                 onNavigateToDictionary = { navController.navigate(SettingsRoutes.Dictionary) },
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
@@ -91,6 +93,11 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.KeyEffect) {
             KeyEffectSettingsContent(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(SettingsRoutes.LayoutDisplay) {
+            LayoutDisplaySettingsContent(
                 onBack = { navController.popBackStack() }
             )
         }
