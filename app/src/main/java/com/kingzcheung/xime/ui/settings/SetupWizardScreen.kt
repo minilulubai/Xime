@@ -126,6 +126,7 @@ fun SetupWizardScreen(
                             }
                             SettingsPreferences.setSetupCompleted(context, true)
                             SettingsPreferences.setDeploymentDone(context, true)
+                            RimeConfigHelper.storeDeploymentHash(context)
                             onCompleted()
                         }
                     )

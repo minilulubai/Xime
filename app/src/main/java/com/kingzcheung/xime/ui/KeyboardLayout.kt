@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.util.PermissionHelper
@@ -86,6 +87,9 @@ fun KeyboardLayout(
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
     keyboardBackgroundColor: Color = Color.Transparent,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
     onVoiceModeChange: ((Boolean) -> Unit)? = null,
     onCommitText: ((String) -> Unit)? = null,
     isSttEnabled: Boolean = true,
@@ -179,6 +183,9 @@ fun KeyboardLayout(
                 swipeDownHintsEnabled = swipeDownHintsEnabled,
                 onCommitText = onCommitText,
                 onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         } else {
             Column(
@@ -223,7 +230,10 @@ fun KeyboardLayout(
                                 swipeDownHintsEnabled = swipeDownHintsEnabled,
                                 swipeUpHintsEnabled = swipeUpHintsEnabled,
                                 onCommitText = onCommitText,
-                                configVersion = cfgVer
+                                configVersion = cfgVer,
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                     }
@@ -261,7 +271,10 @@ fun KeyboardLayout(
                                 swipeDownHintsEnabled = swipeDownHintsEnabled,
                                 swipeUpHintsEnabled = swipeUpHintsEnabled,
                                 onCommitText = onCommitText,
-                                configVersion = cfgVer
+                                configVersion = cfgVer,
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                     }
@@ -291,7 +304,10 @@ fun KeyboardLayout(
                                 modifier = Modifier
                                     .width(40.dp)
                                     .fillMaxHeight(),
-                                onPress = { onKeyPressDown?.invoke("emoji") }
+                                onPress = { onKeyPressDown?.invoke("emoji") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
 
                             Row(
@@ -369,7 +385,10 @@ fun KeyboardLayout(
                                                 (onCommitText ?: onKeyPress)(selectedLabel)
                                             }
                                         },
-                                        longPressItems = longPressLabels
+                                        longPressItems = longPressLabels,
+                                        shadowEnabled = shadowEnabled,
+                                        shadowElevation = shadowElevation,
+                                        shadowShapeRadius = shadowShapeRadius,
                                     )
                                 }
                             }
@@ -395,7 +414,10 @@ fun KeyboardLayout(
                                         state,
                                         bounds
                                     )
-                                }
+                                },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                     }
@@ -425,7 +447,10 @@ fun KeyboardLayout(
                                 backgroundColor = specialKeyBackgroundColor,
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(1.2f),
-                                onPress = { onKeyPressDown?.invoke("mode_change") }
+                                onPress = { onKeyPressDown?.invoke("mode_change") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
 
                             SwipeableKeyButton(
@@ -442,7 +467,10 @@ fun KeyboardLayout(
                                         bounds
                                     )
                                 },
-                                onPress = { onKeyPressDown?.invoke("。") }
+                                onPress = { onKeyPressDown?.invoke("。") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
 
@@ -456,13 +484,11 @@ fun KeyboardLayout(
                             modifier = Modifier
                                 .weight(3f)
                                 .fillMaxHeight()
-                                .shadow(
-                                    1.dp,
-                                    RoundedCornerShape(8.dp),
-                                    ambientColor = Color(0x80000000),
-                                    spotColor = Color(0x80000000)
+                                .then(
+                                    if (shadowEnabled) Modifier.shadow(shadowElevation, RoundedCornerShape(shadowShapeRadius), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+                                    else Modifier
                                 )
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(shadowShapeRadius))
                                 .background(keyBackgroundColor)
                                 .pointerInput(isSttEnabled) {
                                     awaitEachGesture {
@@ -599,7 +625,10 @@ fun KeyboardLayout(
                                 backgroundColor = specialKeyBackgroundColor,
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(0.8f),
-                                onPress = { onKeyPressDown?.invoke("ime_switch") }
+                                onPress = { onKeyPressDown?.invoke("ime_switch") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
 
                             KeyButton(
@@ -608,7 +637,10 @@ fun KeyboardLayout(
                                 backgroundColor = specialKeyBackgroundColor,
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(1.2f),
-                                onPress = { onKeyPressDown?.invoke("enter") }
+                                onPress = { onKeyPressDown?.invoke("enter") },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                     }
@@ -731,6 +763,9 @@ fun KeyboardRowWithConfig(
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 9.sp,
     configVersion: Int = 0,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
     Row(
         modifier = modifier
@@ -800,7 +835,10 @@ fun KeyboardRowWithConfig(
                 },
                 longPressItems = longPressLabels,
                 fontSize = fontSize,
-                swipeFontSize = swipeFontSize
+                swipeFontSize = swipeFontSize,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         }
     }
@@ -827,6 +865,9 @@ private fun LandscapeKeyboardContent(
     swipeDownHintsEnabled: Boolean,
     onCommitText: ((String) -> Unit)?,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
     val staggerStep = 10.dp
     val landscapeFontSize = 12.sp
@@ -861,6 +902,9 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Box(
@@ -883,6 +927,9 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Box(
@@ -905,6 +952,9 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Row(
@@ -919,7 +969,10 @@ private fun LandscapeKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     iconColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("emoji") }
+                    onPress = { onKeyPressDown?.invoke("emoji") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 CompactSwipeableKeyButton(
                     text = "，",
@@ -930,7 +983,10 @@ private fun LandscapeKeyboardContent(
                     swipeText = "。",
                     swipeFontSize = landscapeSwipeFontSize,
                     onSwipe = { onSwipeText -> onKeyPress(onSwipeText) },
-                    onPress = { onKeyPressDown?.invoke("。") }
+                    onPress = { onKeyPressDown?.invoke("。") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 SplitSpaceKey(
                     onClick = { onKeyPress("space") },
@@ -938,7 +994,10 @@ private fun LandscapeKeyboardContent(
                     textColor = keyTextColor,
                     schemaName = schemaName,
                     modifier = Modifier.weight(3f),
-                    onPress = { onKeyPressDown?.invoke("space") }
+                    onPress = { onKeyPressDown?.invoke("space") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
         }
@@ -970,6 +1029,9 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Box(
@@ -992,6 +1054,9 @@ private fun LandscapeKeyboardContent(
                     onCommitText = onCommitText,
                     onGestureAction = onGestureAction,
                     onSwipeStateChange = onSwipeStateChange,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Row(
@@ -1017,6 +1082,9 @@ private fun LandscapeKeyboardContent(
                         onCommitText = onCommitText,
                         onGestureAction = onGestureAction,
                         onSwipeStateChange = onSwipeStateChange,
+                        shadowEnabled = shadowEnabled,
+                        shadowElevation = shadowElevation,
+                        shadowShapeRadius = shadowShapeRadius,
                     )
                 }
                 SwipeableIconKeyButton(
@@ -1036,6 +1104,9 @@ private fun LandscapeKeyboardContent(
                     onSwipeUp = { onKeyPress("clear_all") },
                     onSwipeDown = { onKeyPress("undo_clear") },
                     onSwipeStateChange = onSwipeStateChange,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Row(
@@ -1050,7 +1121,10 @@ private fun LandscapeKeyboardContent(
                     textColor = keyTextColor,
                     schemaName = "",
                     modifier = Modifier.weight(2f),
-                    onPress = { onKeyPressDown?.invoke("space") }
+                    onPress = { onKeyPressDown?.invoke("space") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = "123",
@@ -1058,7 +1132,10 @@ private fun LandscapeKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("mode_change") }
+                    onPress = { onKeyPressDown?.invoke("mode_change") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = "中",
@@ -1066,7 +1143,10 @@ private fun LandscapeKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(0.8f),
-                    onPress = { onKeyPressDown?.invoke("ime_switch") }
+                    onPress = { onKeyPressDown?.invoke("ime_switch") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = enterKeyText,
@@ -1074,7 +1154,10 @@ private fun LandscapeKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("enter") }
+                    onPress = { onKeyPressDown?.invoke("enter") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
         }
@@ -1100,7 +1183,10 @@ fun CompactSwipeableKeyButton(
     longPressItems: List<String>? = null,
     fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 8.sp,
-    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
     var isPressed by remember { mutableStateOf(false) }
     var dragOffsetY by remember { mutableStateOf(0f) }
@@ -1133,6 +1219,11 @@ fun CompactSwipeableKeyButton(
     val bubbleShowThresholdUp = swipeUpThreshold * 0.3f
     val bubbleShowThresholdDown = swipeDownThreshold * 0.3f
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
+
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(
             red = (color.red * (1 - factor)).coerceIn(0f, 1f),
@@ -1145,16 +1236,11 @@ fun CompactSwipeableKeyButton(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .shadow(
-                1.dp,
-                RoundedCornerShape(8.dp),
-                ambientColor = Color(0x80000000),
-                spotColor = Color(0x80000000)
-            )
+            .then(shadowModifier)
             .onGloballyPositioned { coordinates ->
                 buttonBounds = coordinates.boundsInRoot()
             }
-            .clip(RoundedCornerShape(8.dp))
+            .clip(shadowShape)
             .background(if (isPressed) darkenColor(backgroundColor) else backgroundColor)
             .pointerInput(currentLongPressItems, currentOnLongPressSelect) {
                 if (currentLongPressItems.isNullOrEmpty() || currentOnLongPressSelect == null) {
@@ -1410,6 +1496,9 @@ fun CompactKeyboardRowWithConfig(
     swipeFontSize: androidx.compose.ui.unit.TextUnit = 9.sp,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
     configVersion: Int = 0,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
     Row(
         modifier = modifier
@@ -1472,7 +1561,10 @@ fun CompactKeyboardRowWithConfig(
                 },
                 longPressItems = longPressLabels,
                 fontSize = fontSize,
-                swipeFontSize = swipeFontSize
+                swipeFontSize = swipeFontSize,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         }
     }
@@ -1488,18 +1580,21 @@ private fun SplitSpaceKey(
     textColor: Color,
     schemaName: String = "",
     modifier: Modifier = Modifier,
-    onPress: (() -> Unit)? = null
+    onPress: (() -> Unit)? = null,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
+
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .shadow(
-                1.dp,
-                RoundedCornerShape(8.dp),
-                ambientColor = Color(0x80000000),
-                spotColor = Color(0x80000000)
-            )
-            .clip(RoundedCornerShape(8.dp))
+            .then(shadowModifier)
+            .clip(shadowShape)
             .background(backgroundColor)
             .clickable(
                 interactionSource = null,

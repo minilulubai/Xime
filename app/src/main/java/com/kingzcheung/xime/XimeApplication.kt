@@ -79,6 +79,7 @@ class XimeApplication : Application() {
                     Log.d(TAG, "First launch: silently deploying schemas...")
                     engine.deploy()
                     SettingsPreferences.setDeploymentDone(this@XimeApplication, true)
+                    RimeConfigHelper.storeDeploymentHash(this@XimeApplication)
                     Log.d(TAG, "Silent deploy completed")
                 }
 

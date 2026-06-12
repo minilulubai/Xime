@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
+import com.kingzcheung.xime.settings.SettingsPreferences
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import java.io.File
@@ -25,7 +26,6 @@ object RimeConfigHelper {
         }
         
         copyAssetsToRimeDir(context, rimeDir)
-        stripLuaTranslatorFromSchemas(rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         
@@ -65,22 +65,66 @@ object RimeConfigHelper {
         return Pair(rimeDir.absolutePath, rimeDir.absolutePath)
     }
     
+    fun storeDeploymentHash(context: Context) {
+        val hash = computeDeploymentHash(context)
+        if (hash.isNotEmpty()) {
+            SettingsPreferences.setDeploymentHash(context, hash)
+            Log.d(TAG, "Deployment hash stored: $hash")
+        }
+    }
+
     fun isDeploymentComplete(context: Context): Boolean {
-        val buildDir = File(File(context.filesDir, "rime"), "build")
+        val rimeDir = File(context.filesDir, "rime")
+        val buildDir = File(rimeDir, "build")
         if (!buildDir.exists()) return false
 
         val enabledSchemas = SchemaManager.getEnabledSchemas(context)
         if (enabledSchemas.isEmpty()) return false
 
         for (schemaId in enabledSchemas) {
-            // 优先检查 prism.bin（每个独立方案都会生成）
-            if (File(buildDir, "$schemaId.prism.bin").exists()) continue
-            // 没有 prism.bin 可能是共享词典的多翻译器方案（如 wubi86_pinyin），
-            // 检查 schema.yaml 是否已部署到 build 目录即可
-            if (File(buildDir, "$schemaId.schema.yaml").exists()) continue
+            if (!File(buildDir, "$schemaId.prism.bin").exists() &&
+                !File(buildDir, "$schemaId.schema.yaml").exists()) {
+                return false
+            }
+        }
+
+        val currentHash = computeDeploymentHash(context)
+        if (currentHash.isEmpty()) return false
+
+        val storedHash = SettingsPreferences.getDeploymentHash(context)
+        if (storedHash.isEmpty()) {
+            SettingsPreferences.setDeploymentHash(context, currentHash)
+            return true
+        }
+
+        if (currentHash != storedHash) {
+            Log.d(TAG, "Schema files changed, re-deploy needed")
             return false
         }
+
         return true
+    }
+
+    private fun computeDeploymentHash(context: Context): String {
+        val rimeDir = File(context.filesDir, "rime")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+
+        val enabledSchemas = SchemaManager.getEnabledSchemas(context)
+        for (schemaId in enabledSchemas.sorted()) {
+            val schemaFile = File(rimeDir, "$schemaId.schema.yaml")
+            if (schemaFile.exists()) {
+                digest.update(schemaId.toByteArray())
+                digest.update(schemaFile.readBytes())
+            }
+        }
+
+        val defaultYaml = File(rimeDir, "default.yaml")
+        if (defaultYaml.exists()) {
+            digest.update("default".toByteArray())
+            digest.update(defaultYaml.readBytes())
+        }
+
+        return digest.digest().joinToString("") { String.format("%02x", it) }
     }
 
     private fun checkAndCleanBuildDir(rimeDir: File) {
@@ -150,9 +194,21 @@ object RimeConfigHelper {
                     if (copyAssetsRecursively(context, fullAssetPath, targetFile)) {
                         copiedAny = true
                     }
-                } else if (fileName.endsWith(".yaml")) {
-                    copyAssetFile(context, fullAssetPath, targetFile)
-                    copiedAny = true
+                } else if (fileName.endsWith(".yaml") || fileName.endsWith(".lua")) {
+                    val needsCopy = try {
+                        if (targetFile.exists()) {
+                            val fd = context.assets.openFd(fullAssetPath)
+                            val sameSize = targetFile.length() == fd.length
+                            fd.close()
+                            !sameSize
+                        } else true
+                    } catch (_: Exception) {
+                        true
+                    }
+                    if (needsCopy) {
+                        copyAssetFile(context, fullAssetPath, targetFile)
+                        copiedAny = true
+                    }
                 }
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to process: $fullAssetPath", e)
@@ -170,33 +226,13 @@ object RimeConfigHelper {
 
             targetFile.parentFile?.mkdirs()
             context.assets.open(assetPath).use { input ->
-                val text = input.bufferedReader().readText()
-                val cleaned = if (targetFile.name.endsWith(".schema.yaml")) {
-                    text.lines().filter { !it.trimStart().startsWith("- lua_translator") }.joinToString("\n")
-                } else text
                 FileOutputStream(targetFile).use { output ->
-                    output.write(cleaned.toByteArray())
+                    input.copyTo(output)
                 }
             }
             Log.d(TAG, "Copied: $assetPath -> ${targetFile.absolutePath}")
         } catch (e: IOException) {
             Log.e(TAG, "Failed to copy: $assetPath", e)
-        }
-    }
-
-    private fun stripLuaTranslatorFromSchemas(rimeDir: File) {
-        val schemaFiles = rimeDir.listFiles { f -> f.name.endsWith(".schema.yaml") } ?: return
-        for (file in schemaFiles) {
-            try {
-                val lines = file.readLines()
-                val filtered = lines.filter { !it.trimStart().startsWith("- lua_translator") }
-                if (filtered.size != lines.size) {
-                    file.writeText(filtered.joinToString("\n"))
-                    Log.d(TAG, "Stripped lua_translator from ${file.name}")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to process ${file.name}", e)
-            }
         }
     }
 

@@ -138,6 +138,7 @@ fun KeyboardView(
     }
 
     val kbColors = KeysConfigHelper.getKeyboardColors()
+    val kbShadow = KeysConfigHelper.getKeyboardShadow()
     val longToColor: (Long) -> Color = { Color(0xFF000000 or it) }
     val keyboardBgColor = if (isDarkTheme) longToColor(kbColors.keyboardBgColorDark)
         else longToColor(kbColors.keyboardBgColor)
@@ -346,6 +347,9 @@ fun KeyboardView(
                         keyTextColor = keyTextColor,
                         specialKeyBackgroundColor = specialKeyBgColor,
                         keyboardBackgroundColor = keyboardBgColor,
+                        shadowEnabled = kbShadow.enabled,
+                        shadowElevation = kbShadow.elevation.dp,
+                        shadowShapeRadius = kbShadow.shapeRadius.dp,
                         modifier = Modifier.weight(1f).then(cursorMod),
                         onKeyPressDown = onKeyPressDown,
                         onVoiceModeChange = onVoiceModeChange,

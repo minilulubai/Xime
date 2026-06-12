@@ -3,6 +3,8 @@ package com.kingzcheung.xime.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.kingzcheung.xime.keyboard.GestureAction
 
 /**
@@ -25,6 +27,9 @@ fun KeyboardLayoutScreen(
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
     keyboardBackgroundColor: Color,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
     modifier: Modifier = Modifier,
     onKeyPressDown: ((String) -> Unit)? = null,
     // Chinese-only 参数
@@ -50,6 +55,9 @@ fun KeyboardLayoutScreen(
                 keyTextColor = keyTextColor,
                 specialKeyBackgroundColor = specialKeyBackgroundColor,
                 keyboardBackgroundColor = keyboardBackgroundColor,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
                 modifier = modifier,
                 onVoiceModeChange = onVoiceModeChange,
                 onCommitText = onCommitText,
@@ -72,6 +80,9 @@ fun KeyboardLayoutScreen(
                 keyTextColor = keyTextColor,
                 specialKeyBackgroundColor = specialKeyBackgroundColor,
                 keyboardBackgroundColor = keyboardBackgroundColor,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
                 modifier = modifier,
                 onKeyPressDown = onKeyPressDown,
             )
@@ -84,6 +95,9 @@ fun KeyboardLayoutScreen(
                 keyTextColor = keyTextColor,
                 specialKeyBackgroundColor = specialKeyBackgroundColor,
                 keyboardBackgroundColor = keyboardBackgroundColor,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
                 modifier = modifier,
                 onKeyPressDown = onKeyPressDown,
             )

@@ -8,6 +8,7 @@ object SettingsPreferences {
     private const val PREFS_NAME = "kime_settings"
     private const val KEY_CURRENT_SCHEMA = "current_schema"
     private const val KEY_DEPLOYMENT_DONE = "deployment_done"
+    private const val KEY_DEPLOYMENT_HASH = "deployment_hash"
     private const val KEY_SETUP_COMPLETED = "setup_completed"
     private const val KEY_DARK_MODE = "dark_mode"
     
@@ -104,6 +105,14 @@ object SettingsPreferences {
     
     fun setDeploymentDone(context: Context, done: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_DEPLOYMENT_DONE, done).apply()
+    }
+
+    fun getDeploymentHash(context: Context): String {
+        return getPrefs(context).getString(KEY_DEPLOYMENT_HASH, "") ?: ""
+    }
+
+    fun setDeploymentHash(context: Context, hash: String) {
+        getPrefs(context).edit().putString(KEY_DEPLOYMENT_HASH, hash).apply()
     }
 
     fun isSetupCompleted(context: Context): Boolean {

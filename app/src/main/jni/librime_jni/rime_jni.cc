@@ -18,6 +18,16 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
+struct ProcessResult {
+    bool processed;
+    std::string committedText;
+    std::string inputText;
+    std::vector<std::pair<std::string, std::string>> candidates;
+    bool isAsciiMode;
+    bool hasNextPage;
+    bool hasPrevPage;
+};
+
 // Rime 单例类
 class Rime {
 public:
@@ -118,6 +128,55 @@ public:
         LOGD("processKey: keycode=%d, mask=%d", keycode, mask);
         bool result = rime->process_key(session_id_, keycode, mask);
         LOGD("processKey result: %d", result);
+        return result;
+    }
+
+    ProcessResult processKeyAndGetResult(int keycode, int mask) {
+        ProcessResult result;
+        result.processed = false;
+        result.isAsciiMode = false;
+        result.hasNextPage = false;
+        result.hasPrevPage = false;
+
+        if (!rime || !session_id_) {
+            LOGE("processKeyAndGetResult: rime or session not available");
+            return result;
+        }
+
+        result.processed = rime->process_key(session_id_, keycode, mask);
+
+        RIME_STRUCT(RimeCommit, commit);
+        if (rime->get_commit(session_id_, &commit)) {
+            result.committedText = commit.text ? commit.text : "";
+            rime->free_commit(&commit);
+        }
+
+        const char* input = rime->get_input(session_id_);
+        result.inputText = input ? input : "";
+
+        RIME_STRUCT(RimeContext, context);
+        if (rime->get_context(session_id_, &context)) {
+            if (context.menu.num_candidates > 0) {
+                for (int i = 0; i < context.menu.num_candidates; ++i) {
+                    const char* text = context.menu.candidates[i].text;
+                    const char* comment = context.menu.candidates[i].comment;
+                    result.candidates.push_back(std::make_pair(
+                        text ? text : "",
+                        comment ? comment : ""
+                    ));
+                }
+            }
+            result.hasNextPage = !context.menu.is_last_page;
+            result.hasPrevPage = context.menu.page_no > 0;
+            rime->free_context(&context);
+        }
+
+        RIME_STRUCT(RimeStatus, status);
+        if (rime->get_status(session_id_, &status)) {
+            result.isAsciiMode = status.is_ascii_mode;
+            rime->free_status(&status);
+        }
+
         return result;
     }
 
@@ -509,6 +568,28 @@ private:
 
 extern "C" {
 
+static jclass gRimeProcessResultClass = nullptr;
+static jmethodID gRimeProcessResultCtor = nullptr;
+static jclass gRimeCandidateClass = nullptr;
+static jmethodID gRimeCandidateCtor = nullptr;
+
+static void ensureJniCache(JNIEnv* env) {
+    if (!gRimeCandidateClass) {
+        jclass cls = env->FindClass("com/kingzcheung/xime/rime/RimeCandidate");
+        gRimeCandidateClass = (jclass)env->NewGlobalRef(cls);
+        gRimeCandidateCtor = env->GetMethodID(gRimeCandidateClass, "<init>",
+            "(Ljava/lang/String;Ljava/lang/String;)V");
+        env->DeleteLocalRef(cls);
+    }
+    if (!gRimeProcessResultClass) {
+        jclass cls = env->FindClass("com/kingzcheung/xime/rime/RimeProcessResult");
+        gRimeProcessResultClass = (jclass)env->NewGlobalRef(cls);
+        gRimeProcessResultCtor = env->GetMethodID(gRimeProcessResultClass, "<init>",
+            "(ZLjava/lang/String;Ljava/lang/String;[Lcom/kingzcheung/xime/rime/RimeCandidate;ZZZ)V");
+        env->DeleteLocalRef(cls);
+    }
+}
+
 // 初始化 Rime 引擎
 JNIEXPORT void JNICALL
 Java_com_kingzcheung_xime_rime_RimeEngine_nativeInitialize(
@@ -573,6 +654,49 @@ Java_com_kingzcheung_xime_rime_RimeEngine_nativeProcessKey(
     jint mask
 ) {
     return Rime::Instance().processKey(keycode, mask) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jobject JNICALL
+Java_com_kingzcheung_xime_rime_RimeEngine_nativeProcessKeyAndGetResult(
+    JNIEnv* env,
+    jobject thiz,
+    jint keycode,
+    jint mask
+) {
+    ensureJniCache(env);
+
+    ProcessResult result = Rime::Instance().processKeyAndGetResult(keycode, mask);
+
+    jobjectArray candidateArray = env->NewObjectArray(
+        result.candidates.size(), gRimeCandidateClass, nullptr);
+
+    for (size_t i = 0; i < result.candidates.size(); ++i) {
+        jstring text = env->NewStringUTF(result.candidates[i].first.c_str());
+        jstring comment = env->NewStringUTF(result.candidates[i].second.c_str());
+        jobject candidate = env->NewObject(gRimeCandidateClass, gRimeCandidateCtor, text, comment);
+        env->SetObjectArrayElement(candidateArray, i, candidate);
+        env->DeleteLocalRef(text);
+        env->DeleteLocalRef(comment);
+        env->DeleteLocalRef(candidate);
+    }
+
+    jstring jCommitted = env->NewStringUTF(result.committedText.c_str());
+    jstring jInput = env->NewStringUTF(result.inputText.c_str());
+
+    jobject jResult = env->NewObject(gRimeProcessResultClass, gRimeProcessResultCtor,
+        result.processed ? JNI_TRUE : JNI_FALSE,
+        jCommitted,
+        jInput,
+        candidateArray,
+        result.isAsciiMode ? JNI_TRUE : JNI_FALSE,
+        result.hasNextPage ? JNI_TRUE : JNI_FALSE,
+        result.hasPrevPage ? JNI_TRUE : JNI_FALSE);
+
+    env->DeleteLocalRef(jCommitted);
+    env->DeleteLocalRef(jInput);
+    env->DeleteLocalRef(candidateArray);
+
+    return jResult;
 }
 
 // 获取候选词列表

@@ -36,6 +36,7 @@ engine:
   translators:
     - punct_translator
     - table_translator
+    - lua_translator@*uuid
   filters:
     - uniquifier
 

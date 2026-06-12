@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -44,7 +45,10 @@ fun SpaceKeyButton(
     onSwipeRight: (() -> Unit)? = null,
     onPress: (() -> Unit)? = null,
     isVoiceMode: Boolean = false,
-    onVoiceModeChange: ((Boolean) -> Unit)? = null
+    onVoiceModeChange: ((Boolean) -> Unit)? = null,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
     // 使用 remember 保存手势相关状态
     var isPressed by remember { mutableStateOf(false) }
@@ -59,8 +63,11 @@ fun SpaceKeyButton(
     Box(
         modifier = modifier
             .height((44 * LocalStretchFactor.current).dp)
-            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
-            .clip(RoundedCornerShape(8.dp))
+            .then(
+                if (shadowEnabled) Modifier.shadow(shadowElevation, RoundedCornerShape(shadowShapeRadius), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+                else Modifier
+            )
+            .clip(RoundedCornerShape(shadowShapeRadius))
             .background(
                 if (isPressed) backgroundColor.copy(alpha = 0.7f)
                 else backgroundColor

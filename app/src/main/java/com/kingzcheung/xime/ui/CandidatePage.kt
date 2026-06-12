@@ -155,57 +155,54 @@ fun CandidatePage(
             }
         }
 
-        Box(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
                 .padding(horizontal = 8.dp)
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                if (page == centerPage) {
-                    Column {
-                        if (candidates.isNotEmpty()) {
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                candidates.forEachIndexed { index, candidate ->
-                                    CandidatePageItem(
-                                        text = candidate,
-                                        comment = candidateComments.getOrElse(index) { "" },
-                                        onClick = { onCandidateSelect(index) },
-                                        textColor = textColor
-                                    )
-                                }
+        ) { page ->
+            if (page == centerPage) {
+                Column {
+                    if (candidates.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            candidates.forEachIndexed { index, candidate ->
+                                CandidatePageItem(
+                                    text = candidate,
+                                    comment = candidateComments.getOrElse(index) { "" },
+                                    onClick = { onCandidateSelect(index) },
+                                    textColor = textColor
+                                )
                             }
                         }
+                    }
 
-                        if (associationCandidates.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                    if (associationCandidates.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                associationCandidates.forEachIndexed { index, candidate ->
-                                    CandidatePageItem(
-                                        text = candidate,
-                                        comment = "",
-                                        onClick = { onAssociationSelect?.invoke(index) },
-                                        textColor = textColor
-                                    )
-                                }
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            associationCandidates.forEachIndexed { index, candidate ->
+                                CandidatePageItem(
+                                    text = candidate,
+                                    comment = "",
+                                    onClick = { onAssociationSelect?.invoke(index) },
+                                    textColor = textColor
+                                )
                             }
                         }
                     }
                 }
             }
         }
+
+        Spacer(modifier = Modifier.weight(1f))
 
         // 底部留空
         Spacer(

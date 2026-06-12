@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -34,6 +35,9 @@ fun NumberKeyboardLayout(
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
     keyboardBackgroundColor: Color = Color.Transparent,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
     modifier: Modifier = Modifier,
     onKeyPressDown: ((String) -> Unit)? = null
 ) {
@@ -77,7 +81,10 @@ fun NumberKeyboardLayout(
                                     backgroundColor = keyBackgroundColor,
                                     textColor = keyTextColor,
                                     modifier = Modifier.weight(1f),
-                                    onPress = { onKeyPressDown?.invoke(sym) }
+                                    onPress = { onKeyPressDown?.invoke(sym) },
+                                    shadowEnabled = shadowEnabled,
+                                    shadowElevation = shadowElevation,
+                                    shadowShapeRadius = shadowShapeRadius,
                                 )
                             }
                             repeat(6 - rowSymbols.size) {
@@ -99,38 +106,38 @@ fun NumberKeyboardLayout(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        KeyButton(text = "+", onClick = { onKeyPress("+") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("+") })
-                        listOf("1","2","3").forEach { k -> KeyButton(text = k, onClick = { onKeyPress(k) }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(k) }) }
-                        SwipeableIconKeyButton(icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace), onClick = { onKeyPress("delete") }, backgroundColor = specialKeyBackgroundColor, iconColor = keyTextColor, modifier = Modifier.weight(1f), onSwipe = { onKeyPress("clear_composition") }, onLongClick = { onKeyPress("delete") }, onPress = { onKeyPressDown?.invoke("delete") })
+                        KeyButton(text = "+", onClick = { onKeyPress("+") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("+") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        listOf("1","2","3").forEach { k -> KeyButton(text = k, onClick = { onKeyPress(k) }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(k) }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius) }
+                        SwipeableIconKeyButton(icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace), onClick = { onKeyPress("delete") }, backgroundColor = specialKeyBackgroundColor, iconColor = keyTextColor, modifier = Modifier.weight(1f), onSwipe = { onKeyPress("clear_composition") }, onLongClick = { onKeyPress("delete") }, onPress = { onKeyPressDown?.invoke("delete") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
                     }
                     // 第二行：符号 | 4 | 5 | 6 | 空格
                     Row(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        KeyButton(text = "-", onClick = { onKeyPress("-") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("-") })
-                        listOf("4","5","6").forEach { k -> KeyButton(text = k, onClick = { onKeyPress(k) }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(k) }) }
-                        KeyButton(text = "符号", onClick = { onKeyPress("symbol") }, backgroundColor = specialKeyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("symbol") })
+                        KeyButton(text = "-", onClick = { onKeyPress("-") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("-") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        listOf("4","5","6").forEach { k -> KeyButton(text = k, onClick = { onKeyPress(k) }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(k) }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius) }
+                        KeyButton(text = "符号", onClick = { onKeyPress("symbol") }, backgroundColor = specialKeyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("symbol") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
                     }
                     // 第三行：符号 | 7 | 8 | 9 | 表情
                     Row(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        KeyButton(text = "*", onClick = { onKeyPress("*") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("*") })
-                        listOf("7","8","9").forEach { k -> KeyButton(text = k, onClick = { onKeyPress(k) }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(k) }) }
-                        IconKeyButton(icon = rememberVectorPainter(Icons.Default.EmojiEmotions), onClick = { onKeyPress("emoji") }, backgroundColor = specialKeyBackgroundColor, iconColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("emoji") })
+                        KeyButton(text = "*", onClick = { onKeyPress("*") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("*") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        listOf("7","8","9").forEach { k -> KeyButton(text = k, onClick = { onKeyPress(k) }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(k) }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius) }
+                        IconKeyButton(icon = rememberVectorPainter(Icons.Default.EmojiEmotions), onClick = { onKeyPress("emoji") }, backgroundColor = specialKeyBackgroundColor, iconColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("emoji") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
                     }
                     // 第四行：返回 | 符号切换 | 0 | . | 确定
                     Row(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        IconKeyButton(icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack), onClick = { onKeyPress("abc") }, backgroundColor = specialKeyBackgroundColor, iconColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("abc") })
-                        KeyButton(text = "/", onClick = { onKeyPress("/") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("/") })
-                        KeyButton(text = "0", onClick = { onKeyPress("0") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1.5f), onPress = { onKeyPressDown?.invoke("0") })
-                        KeyButton(text = ".", onClick = { onKeyPress(".") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(".") })
-                        KeyButton(text = "确定", onClick = { onKeyPress("enter") }, backgroundColor = specialKeyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1.2f), onPress = { onKeyPressDown?.invoke("enter") })
+                        IconKeyButton(icon = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack), onClick = { onKeyPress("abc") }, backgroundColor = specialKeyBackgroundColor, iconColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("abc") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        KeyButton(text = "/", onClick = { onKeyPress("/") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke("/") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        KeyButton(text = "0", onClick = { onKeyPress("0") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1.5f), onPress = { onKeyPressDown?.invoke("0") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        KeyButton(text = ".", onClick = { onKeyPress(".") }, backgroundColor = keyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1f), onPress = { onKeyPressDown?.invoke(".") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
+                        KeyButton(text = "确定", onClick = { onKeyPress("enter") }, backgroundColor = specialKeyBackgroundColor, textColor = keyTextColor, modifier = Modifier.weight(1.2f), onPress = { onKeyPressDown?.invoke("enter") }, shadowEnabled = shadowEnabled, shadowElevation = shadowElevation, shadowShapeRadius = shadowShapeRadius)
                     }
                 }
             }
@@ -149,6 +156,9 @@ fun NumberKeyboardLayout(
                     keyBackgroundColor = keyBackgroundColor,
                     keyTextColor = keyTextColor,
                     specialKeyBackgroundColor = specialKeyBackgroundColor,
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                     onKeyPressDown = onKeyPressDown
                 )
             }
@@ -162,6 +172,9 @@ private fun NumberRows(
     keyBackgroundColor: Color,
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
     onKeyPressDown: ((String) -> Unit)? = null
 ) {
     val symbols = listOf("+", "-", "*")
@@ -184,7 +197,10 @@ private fun NumberRows(
                 backgroundColor = keyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke(symbols[0]) }
+                onPress = { onKeyPressDown?.invoke(symbols[0]) },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             listOf("1", "2", "3").forEach { key ->
                 KeyButton(
@@ -193,7 +209,10 @@ private fun NumberRows(
                     backgroundColor = keyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1f),
-                    onPress = { onKeyPressDown?.invoke(key) }
+                    onPress = { onKeyPressDown?.invoke(key) },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             SwipeableIconKeyButton(
@@ -205,7 +224,10 @@ private fun NumberRows(
                 swipeText = "清空",
                 onSwipe = { onKeyPress("clear_composition") },
                 onLongClick = { onKeyPress("delete") },
-                onPress = { onKeyPressDown?.invoke("delete") }
+                onPress = { onKeyPressDown?.invoke("delete") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         }
 
@@ -222,7 +244,10 @@ private fun NumberRows(
                 backgroundColor = keyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke(symbols[1]) }
+                onPress = { onKeyPressDown?.invoke(symbols[1]) },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             listOf("4", "5", "6").forEach { key ->
                 KeyButton(
@@ -231,7 +256,10 @@ private fun NumberRows(
                     backgroundColor = keyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1f),
-                    onPress = { onKeyPressDown?.invoke(key) }
+                    onPress = { onKeyPressDown?.invoke(key) },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             KeyButton(
@@ -240,7 +268,10 @@ private fun NumberRows(
                 backgroundColor = specialKeyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke("symbol") }
+                onPress = { onKeyPressDown?.invoke("symbol") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         }
 
@@ -257,7 +288,10 @@ private fun NumberRows(
                 backgroundColor = keyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke(symbols[2]) }
+                onPress = { onKeyPressDown?.invoke(symbols[2]) },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             listOf("7", "8", "9").forEach { key ->
                 KeyButton(
@@ -266,7 +300,10 @@ private fun NumberRows(
                     backgroundColor = keyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1f),
-                    onPress = { onKeyPressDown?.invoke(key) }
+                    onPress = { onKeyPressDown?.invoke(key) },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             IconKeyButton(
@@ -275,7 +312,10 @@ private fun NumberRows(
                 backgroundColor = specialKeyBackgroundColor,
                 iconColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke("emoji") }
+                onPress = { onKeyPressDown?.invoke("emoji") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         }
 
@@ -292,7 +332,10 @@ private fun NumberRows(
                 backgroundColor = specialKeyBackgroundColor,
                 iconColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke("abc") }
+                onPress = { onKeyPressDown?.invoke("abc") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             KeyButton(
                 text = "/",
@@ -300,7 +343,10 @@ private fun NumberRows(
                 backgroundColor = keyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke("/") }
+                onPress = { onKeyPressDown?.invoke("/") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             KeyButton(
                 text = "0",
@@ -308,7 +354,10 @@ private fun NumberRows(
                 backgroundColor = keyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1.5f),
-                onPress = { onKeyPressDown?.invoke("0") }
+                onPress = { onKeyPressDown?.invoke("0") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             KeyButton(
                 text = ".",
@@ -316,7 +365,10 @@ private fun NumberRows(
                 backgroundColor = keyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1f),
-                onPress = { onKeyPressDown?.invoke(".") }
+                onPress = { onKeyPressDown?.invoke(".") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
             KeyButton(
                 text = "确定",
@@ -324,7 +376,10 @@ private fun NumberRows(
                 backgroundColor = specialKeyBackgroundColor,
                 textColor = keyTextColor,
                 modifier = Modifier.weight(1.2f),
-                onPress = { onKeyPressDown?.invoke("enter") }
+                onPress = { onKeyPressDown?.invoke("enter") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
             )
         }
     }

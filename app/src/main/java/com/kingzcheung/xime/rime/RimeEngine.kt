@@ -7,6 +7,39 @@ data class RimeCandidate(
     val comment: String
 )
 
+data class RimeProcessResult(
+    val processed: Boolean,
+    val committedText: String,
+    val inputText: String,
+    val candidates: Array<RimeCandidate>,
+    val isAsciiMode: Boolean,
+    val hasNextPage: Boolean,
+    val hasPrevPage: Boolean
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is RimeProcessResult) return false
+        return processed == other.processed &&
+                committedText == other.committedText &&
+                inputText == other.inputText &&
+                candidates.contentEquals(other.candidates) &&
+                isAsciiMode == other.isAsciiMode &&
+                hasNextPage == other.hasNextPage &&
+                hasPrevPage == other.hasPrevPage
+    }
+
+    override fun hashCode(): Int {
+        var result = processed.hashCode()
+        result = 31 * result + committedText.hashCode()
+        result = 31 * result + inputText.hashCode()
+        result = 31 * result + candidates.contentHashCode()
+        result = 31 * result + isAsciiMode.hashCode()
+        result = 31 * result + hasNextPage.hashCode()
+        result = 31 * result + hasPrevPage.hashCode()
+        return result
+    }
+}
+
 class RimeEngine {
 
     companion object {
@@ -131,6 +164,13 @@ class RimeEngine {
         return nativeProcessKey(keycode, mask)
     }
 
+    fun processKeyAndGetResult(keycode: Int, mask: Int): RimeProcessResult {
+        if (!isInitialized) return RimeProcessResult(false, "", "", emptyArray(), false, false, false)
+        if (!nativeHasSession() && !nativeCreateSession())
+            return RimeProcessResult(false, "", "", emptyArray(), false, false, false)
+        return nativeProcessKeyAndGetResult(keycode, mask)
+    }
+
     fun getCandidates(): Array<String> {
         if (!nativeHasSession()) return emptyArray()
         return nativeGetCandidates() ?: emptyArray()
@@ -233,6 +273,7 @@ class RimeEngine {
     private external fun nativeIsMaintaining(): Boolean
     private external fun nativeGetCurrentSchema(): String?
     private external fun nativeProcessKey(keycode: Int, mask: Int): Boolean
+    private external fun nativeProcessKeyAndGetResult(keycode: Int, mask: Int): RimeProcessResult
     private external fun nativeGetCandidates(): Array<String>?
     private external fun nativeGetCandidatesWithComments(): Array<Array<String>>?
     private external fun nativeGetInput(): String?

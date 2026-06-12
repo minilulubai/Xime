@@ -349,6 +349,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     // 确保部署成功后才标记完成，避免首次部署超时后误标记
                     if (needsDeployment) {
                         SettingsPreferences.setDeploymentDone(this@XimeInputMethodService, true)
+                        RimeConfigHelper.storeDeploymentHash(this@XimeInputMethodService)
                     }
                 } else {
                     Log.w(TAG, "initRimeEngine: Session not ready after 60s, continuing in background")
@@ -728,9 +729,12 @@ onVoiceModeChange = { enabled ->
                                    SettingsPreferences.setToolbarButtons(this@XimeInputMethodService, buttons)
                                    uiState.value = uiState.value.copy(toolbarButtons = buttons)
                                },
-                               onKeyboardModeChange = { chineseMode ->
-                                   isChineseMode = chineseMode
-                               }
+                                onKeyboardModeChange = { chineseMode ->
+                                    isChineseMode = chineseMode
+                                    if (!chineseMode) {
+                                        uiState.value = uiState.value.copy(associationCandidates = emptyArray())
+                                    }
+                                }
                                 )
                          }
                      }
@@ -1128,7 +1132,7 @@ onVoiceModeChange = { enabled ->
             candidateComments = filteredComments,
             isComposing = inputText.isNotEmpty(),
             isAsciiMode = isAsciiMode,
-            associationCandidates = if (isAsciiMode && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
+            associationCandidates = if ((isAsciiMode || !isChineseMode) && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
             isShowingRecentClipboard = false,
             hasNextPage = hasNextPage,
             hasPrevPage = hasPrevPage
@@ -1138,7 +1142,45 @@ onVoiceModeChange = { enabled ->
         
         if (pendingEnglish.isNotEmpty()) {
             serviceScope.launch {
-                val candidates = predictionManager.getEnglishAssociations(pendingEnglish, 5)
+                val candidates = predictionManager.getEnglishAssociations(pendingEnglish, PredictionManager.MAX_ASSOCIATION_COUNT)
+                Log.d(TAG, "English association for pending '$pendingEnglish': ${candidates.joinToString()}")
+                withContext(Dispatchers.Main) {
+                    uiState.value = uiState.value.copy(associationCandidates = candidates)
+                }
+            }
+        }
+    }
+
+    private fun updateUIWithResult(result: com.kingzcheung.xime.rime.RimeProcessResult) {
+        val isAsciiMode = result.isAsciiMode
+        val candidatesWithComments = result.candidates
+        
+        val pendingEnglish = uiState.value.pendingEnglishText
+        
+        val (filteredTexts, filteredComments) = if (isAsciiMode) {
+            val filtered = candidatesWithComments.filterNot { candidate ->
+                candidate.text.any { it.code in 0x4E00..0x9FFF }
+            }
+            filtered.map { it.text }.toTypedArray() to filtered.map { it.comment }.toTypedArray()
+        } else {
+            candidatesWithComments.map { it.text }.toTypedArray() to candidatesWithComments.map { it.comment }.toTypedArray()
+        }
+        
+        uiState.value = uiState.value.copy(
+            inputText = result.inputText,
+            candidates = filteredTexts,
+            candidateComments = filteredComments,
+            isComposing = result.inputText.isNotEmpty(),
+            isAsciiMode = isAsciiMode,
+            associationCandidates = if ((isAsciiMode || !isChineseMode) && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
+            isShowingRecentClipboard = false,
+            hasNextPage = result.hasNextPage,
+            hasPrevPage = result.hasPrevPage
+        )
+        
+        if (pendingEnglish.isNotEmpty()) {
+            serviceScope.launch {
+                val candidates = predictionManager.getEnglishAssociations(pendingEnglish, PredictionManager.MAX_ASSOCIATION_COUNT)
                 Log.d(TAG, "English association for pending '$pendingEnglish': ${candidates.joinToString()}")
                 withContext(Dispatchers.Main) {
                     uiState.value = uiState.value.copy(associationCandidates = candidates)
@@ -1183,6 +1225,7 @@ onVoiceModeChange = { enabled ->
         serviceScope.launch(keyProcessingDispatcher) {
             val state = uiState.value
             var needsUIUpdate = false
+            var pendingResult: com.kingzcheung.xime.rime.RimeProcessResult? = null
             
             when (key) {
                 "delete" -> {
@@ -1204,21 +1247,18 @@ onVoiceModeChange = { enabled ->
                         needsUIUpdate = true
                         Log.d(TAG, "Delete English pending: '$newPending'")
                     } else if (state.isComposing || state.inputText.isNotEmpty()) {
-                        rimeEngine.processKey(0xff08, 0)
-                        
-                        val currentInput = rimeEngine.getInput()
-                        if (currentInput.isEmpty()) {
+                        val result = rimeEngine.processKeyAndGetResult(0xff08, 0)
+                        if (result.inputText.isEmpty()) {
                             rimeEngine.clearComposition()
-                            Log.d(TAG, "Delete: encoding cleared, cleared composition and candidates")
                         }
-                        
+                        pendingResult = result
                         needsUIUpdate = true
                     } else {
                         predictionManager.deleteLastChar()
                         Log.d(TAG, "Delete committed text, remaining: '${predictionManager.lastCommittedText}'")
                         
                         if (!state.isAsciiMode && isChineseMode && SettingsPreferences.isSmartPredictionEnabled(this@XimeInputMethodService) && predictionManager.lastCommittedText.isNotEmpty()) {
-                            val candidates = predictionManager.getChineseAssociations(predictionManager.lastCommittedText, 20)
+                            val candidates = predictionManager.getChineseAssociations(predictionManager.lastCommittedText, PredictionManager.MAX_ASSOCIATION_COUNT)
                             uiState.value = uiState.value.copy(associationCandidates = candidates)
                         } else {
                             uiState.value = uiState.value.copy(
@@ -1441,15 +1481,15 @@ onVoiceModeChange = { enabled ->
                         val keyCode = key.lowercase()[0].code
                         val mask = if (isShifted) KeyEvent.META_SHIFT_ON else 0
                         
-                        val processed = rimeEngine.processKey(keyCode, mask)
+                        val result = rimeEngine.processKeyAndGetResult(keyCode, mask)
                         
-                        if (processed) {
+                        if (result.processed) {
                             needsUIUpdate = true
+                            pendingResult = result
                             
-                            val committedText = rimeEngine.commit()
-                            if (committedText.isNotEmpty()) {
+                            if (result.committedText.isNotEmpty()) {
                                 withContext(Dispatchers.Main) {
-                                    commitText(committedText)
+                                    commitText(result.committedText)
                                 }
                                 needsUIUpdate = true
                             }
@@ -1483,8 +1523,13 @@ onVoiceModeChange = { enabled ->
             }
             
             if (needsUIUpdate) {
+                val result = pendingResult
                 withContext(Dispatchers.Main) {
-                    updateUI()
+                    if (result != null) {
+                        updateUIWithResult(result)
+                    } else {
+                        updateUI()
+                    }
                 }
             }
         }

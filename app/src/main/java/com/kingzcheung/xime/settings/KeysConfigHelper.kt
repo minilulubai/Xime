@@ -44,6 +44,15 @@ data class KeyboardConfig(
 )
 
 /**
+ * 键盘阴影配置，从 xime.yaml keyboard.shadow 加载。
+ */
+data class KeyboardShadowConfig(
+    val enabled: Boolean = true,
+    val elevation: Int = 1,
+    val shapeRadius: Int = 8,
+)
+
+/**
  * 键盘颜色配置，从 xime.yaml keyboard.colors 加载。
  * 所有颜色值为 0xRRGGBB 格式（不含 alpha）。
  */
@@ -225,6 +234,9 @@ object KeysConfigHelper {
     // 键盘颜色配置缓存
     private var keyboardColorsConfig: KeyboardColorsConfig = KeyboardColorsConfig()
     
+    // 键盘阴影配置缓存
+    private var keyboardShadowConfig: KeyboardShadowConfig = KeyboardShadowConfig()
+    
     /** 配置版本号，每次 loadConfig 时递增，用于 Compose 感知配置变更。 */
     private val _configVersion = MutableStateFlow(0)
     val configVersion: StateFlow<Int> = _configVersion.asStateFlow()
@@ -247,6 +259,8 @@ object KeysConfigHelper {
             keyGestureConfig = parseKeyboardFromAssets(context) ?: emptyMap()
             // 键盘颜色（从原始 YAML 手动解析）
             keyboardColorsConfig = parseKeyboardColorsFromAssets(context)
+            // 键盘阴影（从原始 YAML 手动解析）
+            keyboardShadowConfig = parseKeyboardShadowFromAssets(context)
             _configVersion.value++
             Log.d(TAG, "Loaded config: ${keyGestureConfig.size} keys (v${_configVersion.value})")
         } catch (e: Exception) {
@@ -326,6 +340,36 @@ object KeysConfigHelper {
             candidateTextColor = candTxt,
             candidateTextColorDark = candTxtDark,
         )
+    }
+
+    /** 从 xime.yaml + xime.custom.yaml 合并解析键盘阴影配置。 */
+    private fun parseKeyboardShadowFromAssets(context: Context): KeyboardShadowConfig {
+        val defaultText = readAssetText(context, XIME_CONFIG_FILE) ?: return KeyboardShadowConfig()
+        val default = parseKeyboardShadowYamlText(defaultText) ?: return KeyboardShadowConfig()
+        val customText = readUserDataText(context, XIME_CUSTOM_CONFIG_FILE)
+            ?: readAssetText(context, XIME_CUSTOM_CONFIG_FILE) ?: return default
+        val custom = parseKeyboardShadowYamlText(customText)
+        return custom ?: default
+    }
+
+    /** 从 YAML 文本中提取 keyboard.shadow 段。 */
+    private fun parseKeyboardShadowYamlText(yamlText: String): KeyboardShadowConfig? {
+        val root = yaml.parseToYamlNode(yamlText) as? YamlMap ?: return null
+        val keyboardNode = root["keyboard"] as? YamlMap ?: return null
+        val shadowNode = keyboardNode["shadow"] as? YamlMap ?: return null
+        var enabled = true
+        var elevation = 1
+        var shapeRadius = 8
+        for ((kNode, vNode) in shadowNode.entries) {
+            val key = (kNode as? YamlScalar)?.content ?: continue
+            val value = (vNode as? YamlScalar)?.content ?: continue
+            when (key) {
+                "enabled" -> enabled = value.toBooleanStrictOrNull() ?: true
+                "elevation" -> elevation = value.toIntOrNull() ?: 1
+                "shape_radius" -> shapeRadius = value.toIntOrNull() ?: 8
+            }
+        }
+        return KeyboardShadowConfig(enabled = enabled, elevation = elevation, shapeRadius = shapeRadius)
     }
 
     /** 从 YAML 文本中提取 keyboard.keys 段。 */
@@ -428,6 +472,9 @@ object KeysConfigHelper {
 
     /** 获取键盘颜色配置（从 xime.yaml keyboard.colors 加载）。 */
     fun getKeyboardColors(): KeyboardColorsConfig = keyboardColorsConfig
+
+    /** 获取键盘阴影配置（从 xime.yaml keyboard.shadow 加载）。 */
+    fun getKeyboardShadow(): KeyboardShadowConfig = keyboardShadowConfig
 
     /** 获取某个按键的手势配置。 */
     fun getKeyGesture(key: String): KeyGestureConfig? = keyGestureConfig[key.lowercase()]

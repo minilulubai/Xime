@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.util.CharInfo
@@ -55,6 +56,9 @@ fun EnglishKeyboardLayout(
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
     keyboardBackgroundColor: Color = Color.Transparent,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
     modifier: Modifier = Modifier,
     onKeyPressDown: ((String) -> Unit)? = null,
 ) {
@@ -105,6 +109,9 @@ fun EnglishKeyboardLayout(
                 keyTextColor = keyTextColor,
                 specialKeyBackgroundColor = specialKeyBackgroundColor,
                 keyboardBackgroundColor = keyboardBackgroundColor,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
                 onKeyPressDown = onKeyPressDown,
             )
         } else {
@@ -139,7 +146,10 @@ fun EnglishKeyboardLayout(
                                     onPress = { onKeyPressDown?.invoke(key) },
                                     onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
                                     longPressItems = longPressItems,
-                                    onLongPressSelect = { selected -> onKeyPress(selected) }
+                                    onLongPressSelect = { selected -> onKeyPress(selected) },
+                                    shadowEnabled = shadowEnabled,
+                                    shadowElevation = shadowElevation,
+                                    shadowShapeRadius = shadowShapeRadius,
                                 )
                             }
                         }
@@ -167,7 +177,10 @@ fun EnglishKeyboardLayout(
                                     onPress = { onKeyPressDown?.invoke(key) },
                                     onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
                                     longPressItems = longPressItems,
-                                    onLongPressSelect = { selected -> onKeyPress(selected) }
+                                    onLongPressSelect = { selected -> onKeyPress(selected) },
+                                    shadowEnabled = shadowEnabled,
+                                    shadowElevation = shadowElevation,
+                                    shadowShapeRadius = shadowShapeRadius,
                                 )
                             }
                         }
@@ -189,7 +202,10 @@ fun EnglishKeyboardLayout(
                             iconColor = keyTextColor,
                             modifier = Modifier.width(40.dp).fillMaxHeight(),
                             isHighlighted = isShifted,
-                            onPress = { onKeyPressDown?.invoke("shift") }
+                            onPress = { onKeyPressDown?.invoke("shift") },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
                         row3.forEach { key ->
                             val swipeText = swipeSymbols[key]
@@ -205,7 +221,10 @@ fun EnglishKeyboardLayout(
                                 onPress = { onKeyPressDown?.invoke(key) },
                                 onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
                                 longPressItems = longPressItems,
-                                onLongPressSelect = { selected -> onKeyPress(selected) }
+                                onLongPressSelect = { selected -> onKeyPress(selected) },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                         // 退格键 — 对齐 KeyboardLayout 功能：长按连续删除、上滑清空等
@@ -223,7 +242,10 @@ fun EnglishKeyboardLayout(
                             swipeDownLabel = "下滑撤回",
                             onSwipeUp = { onKeyPress("clear_all") },
                             onSwipeDown = { onKeyPress("undo_clear") },
-                            onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) }
+                            onSwipeStateChange = { state, bounds -> processSwipeState(state, bounds) },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
                     }
 
@@ -241,7 +263,10 @@ fun EnglishKeyboardLayout(
                             backgroundColor = specialKeyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(1.2f),
-                            onPress = { onKeyPressDown?.invoke("mode_change") }
+                            onPress = { onKeyPressDown?.invoke("mode_change") },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
 
                         // 标点键 .
@@ -251,7 +276,10 @@ fun EnglishKeyboardLayout(
                             backgroundColor = keyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(0.8f),
-                            onPress = { onKeyPressDown?.invoke(".") }
+                            onPress = { onKeyPressDown?.invoke(".") },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
 
                         // 空格键 — 使用 KeyButton 以获得震动/音效和按下效果
@@ -262,7 +290,10 @@ fun EnglishKeyboardLayout(
                             textColor = keyTextColor,
                             modifier = Modifier.weight(3f),
                             fontSize = 14.sp,
-                            onPress = { onKeyPressDown?.invoke("space") }
+                            onPress = { onKeyPressDown?.invoke("space") },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
 
                         KeyButton(
@@ -271,7 +302,10 @@ fun EnglishKeyboardLayout(
                             backgroundColor = specialKeyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(0.8f),
-                            onPress = { onKeyPressDown?.invoke("ime_switch") }
+                            onPress = { onKeyPressDown?.invoke("ime_switch") },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
 
                         // 回车键
@@ -281,7 +315,10 @@ fun EnglishKeyboardLayout(
                             backgroundColor = specialKeyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(1.2f),
-                            onPress = { onKeyPressDown?.invoke("enter") }
+                            onPress = { onKeyPressDown?.invoke("enter") },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
                     }
                 }
@@ -310,6 +347,9 @@ private fun LandscapeEnglishKeyboardContent(
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
     keyboardBackgroundColor: Color,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
     onKeyPressDown: ((String) -> Unit)?,
 ) {
     val staggerStep = 10.dp
@@ -339,7 +379,10 @@ private fun LandscapeEnglishKeyboardContent(
                             backgroundColor = keyBackgroundColor,
                             textColor = keyTextColor,
                             modifier = Modifier.weight(1f),
-                            onPress = { onKeyPressDown?.invoke(key) }
+                            onPress = { onKeyPressDown?.invoke(key) },
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
                         )
                     }
                 }
@@ -388,7 +431,10 @@ private fun LandscapeEnglishKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     iconColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("emoji") }
+                    onPress = { onKeyPressDown?.invoke("emoji") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = ".",
@@ -396,7 +442,10 @@ private fun LandscapeEnglishKeyboardContent(
                     backgroundColor = keyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(0.8f),
-                    onPress = { onKeyPressDown?.invoke(".") }
+                    onPress = { onKeyPressDown?.invoke(".") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 SplitSpaceKey(
                     onClick = { onKeyPress("space") },
@@ -404,7 +453,10 @@ private fun LandscapeEnglishKeyboardContent(
                     textColor = keyTextColor,
                     schemaName = "英文",
                     modifier = Modifier.weight(3f),
-                    onPress = { onKeyPressDown?.invoke("space") }
+                    onPress = { onKeyPressDown?.invoke("space") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
         }
@@ -472,7 +524,10 @@ private fun LandscapeEnglishKeyboardContent(
                                 backgroundColor = keyBackgroundColor,
                                 textColor = keyTextColor,
                                 modifier = Modifier.weight(1f),
-                                onPress = { onKeyPressDown?.invoke(key) }
+                                onPress = { onKeyPressDown?.invoke(key) },
+                                shadowEnabled = shadowEnabled,
+                                shadowElevation = shadowElevation,
+                                shadowShapeRadius = shadowShapeRadius,
                             )
                         }
                     }
@@ -483,7 +538,10 @@ private fun LandscapeEnglishKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     iconColor = keyTextColor,
                     modifier = Modifier.width(48.dp).fillMaxHeight(),
-                    onPress = { onKeyPressDown?.invoke("delete") }
+                    onPress = { onKeyPressDown?.invoke("delete") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
             Row(
@@ -496,7 +554,10 @@ private fun LandscapeEnglishKeyboardContent(
                     textColor = keyTextColor,
                     schemaName = "",
                     modifier = Modifier.weight(2f),
-                    onPress = { onKeyPressDown?.invoke("space") }
+                    onPress = { onKeyPressDown?.invoke("space") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = "123",
@@ -504,7 +565,10 @@ private fun LandscapeEnglishKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("mode_change") }
+                    onPress = { onKeyPressDown?.invoke("mode_change") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = "英",
@@ -512,7 +576,10 @@ private fun LandscapeEnglishKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(0.8f),
-                    onPress = { onKeyPressDown?.invoke("ime_switch") }
+                    onPress = { onKeyPressDown?.invoke("ime_switch") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
                 KeyButton(
                     text = enterKeyText,
@@ -520,7 +587,10 @@ private fun LandscapeEnglishKeyboardContent(
                     backgroundColor = specialKeyBackgroundColor,
                     textColor = keyTextColor,
                     modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("enter") }
+                    onPress = { onKeyPressDown?.invoke("enter") },
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
                 )
             }
         }
@@ -537,13 +607,21 @@ private fun SplitSpaceKey(
     textColor: Color,
     schemaName: String = "",
     modifier: Modifier = Modifier,
-    onPress: (() -> Unit)? = null
+    onPress: (() -> Unit)? = null,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
 ) {
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
+
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .shadow(1.dp, RoundedCornerShape(8.dp), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
-            .clip(RoundedCornerShape(8.dp))
+            .then(shadowModifier)
+            .clip(shadowShape)
             .background(backgroundColor)
             .clickable(
                 interactionSource = null,

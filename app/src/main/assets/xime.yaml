@@ -99,7 +99,16 @@ keyboard:
     key_text_color_dark: 0xE8EAED
     candidate_text_color: 0x202124
     candidate_text_color_dark: 0xE8EAED
- 
+  
+  # ── 按键阴影配置（可选，不设置则使用默认值）──
+  # enabled:            是否启用阴影（true/false）
+  # elevation:          阴影高度（dp，默认 1）
+  # shape_radius:       阴影圆角半径（dp，默认 8）
+  shadow:
+    enabled: true
+    elevation: 1
+    shape_radius: 8
+  
   keys:
     # ── 第一行 ──
     # long_press 顺序：小写 → 大写 → 带变音符号的相似字母

@@ -1,5 +1,6 @@
 package com.kingzcheung.xime.ui
 
+import com.kingzcheung.xime.service.PredictionManager
 import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -87,7 +88,7 @@ fun CandidateBar(
     val horizontalPadding = if (isLandscape) 50.dp else 8.dp
     val context = LocalContext.current
     val showComments = SettingsPreferences.showCandidateComments(context)
-    val hasMoreAssociation = associationCandidates.size >= 5
+    val hasMoreAssociation = associationCandidates.size >= PredictionManager.MAX_ASSOCIATION_COUNT
     val hasAnyMore = hasMoreCandidates || hasMoreAssociation
 
     val density = LocalDensity.current
@@ -108,7 +109,7 @@ fun CandidateBar(
     val displayAssociation =
         remember(associationCandidates, displayCandidates, isComposing, inputText) {
             if (displayCandidates.isEmpty()) {
-                associationCandidates.take(5)
+                associationCandidates.take(PredictionManager.MAX_ASSOCIATION_COUNT)
             } else {
                 val leftSidePx = with(density) {
                     // inputText 已移到上方行，底部行只需留出 Logo 区域
