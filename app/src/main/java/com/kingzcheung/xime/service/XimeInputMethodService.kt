@@ -728,9 +728,12 @@ onVoiceModeChange = { enabled ->
                                    SettingsPreferences.setToolbarButtons(this@XimeInputMethodService, buttons)
                                    uiState.value = uiState.value.copy(toolbarButtons = buttons)
                                },
-                               onKeyboardModeChange = { chineseMode ->
-                                   isChineseMode = chineseMode
-                               }
+                                onKeyboardModeChange = { chineseMode ->
+                                    isChineseMode = chineseMode
+                                    if (!chineseMode) {
+                                        uiState.value = uiState.value.copy(associationCandidates = emptyArray())
+                                    }
+                                }
                                 )
                          }
                      }
@@ -1128,7 +1131,7 @@ onVoiceModeChange = { enabled ->
             candidateComments = filteredComments,
             isComposing = inputText.isNotEmpty(),
             isAsciiMode = isAsciiMode,
-            associationCandidates = if (isAsciiMode && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
+            associationCandidates = if ((isAsciiMode || !isChineseMode) && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
             isShowingRecentClipboard = false,
             hasNextPage = hasNextPage,
             hasPrevPage = hasPrevPage
@@ -1168,7 +1171,7 @@ onVoiceModeChange = { enabled ->
             candidateComments = filteredComments,
             isComposing = result.inputText.isNotEmpty(),
             isAsciiMode = isAsciiMode,
-            associationCandidates = if (isAsciiMode && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
+            associationCandidates = if ((isAsciiMode || !isChineseMode) && pendingEnglish.isEmpty()) emptyArray() else uiState.value.associationCandidates,
             isShowingRecentClipboard = false,
             hasNextPage = result.hasNextPage,
             hasPrevPage = result.hasPrevPage
