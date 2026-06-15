@@ -161,8 +161,9 @@ fun CandidateBar(
             .background(visuals.backgroundColor)
             .padding(horizontal = horizontalPadding)
     ) {
-        // 上方行：输入编码（拼音），仅在打字时显示
-        if (currentRoute !is KeyboardRoute.Clipboard && isComposing && inputText.isNotEmpty()) {
+        // 上方行：输入编码（拼音），始终占位保持候选行垂直位置固定
+        if (currentRoute !is KeyboardRoute.Clipboard) {
+            val showInputText = isComposing && inputText.isNotEmpty()
             val inputTextInteractionSource = remember { MutableInteractionSource() }
             val isInputTextPressed by inputTextInteractionSource.collectIsPressedAsState()
 
@@ -174,25 +175,27 @@ fun CandidateBar(
                 contentAlignment = Alignment.CenterStart,
 
             ) {
-                Text(
-                    text = inputText,
-                    color = visuals.textColor.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal,
-                    lineHeight = 16.sp,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(
-                            if (isInputTextPressed && callbacks.onInputTextClick != null)
-                                (if (visuals.isDarkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(
-                                    alpha = 0.1f
-                                ))
-                            else
-                                Color.Transparent
-                        )
-                        .padding(horizontal = 0.dp)
-                )
+                if (showInputText) {
+                    Text(
+                        text = inputText,
+                        color = visuals.textColor.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 16.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (isInputTextPressed && callbacks.onInputTextClick != null)
+                                    (if (visuals.isDarkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(
+                                        alpha = 0.1f
+                                    ))
+                                else
+                                    Color.Transparent
+                            )
+                            .padding(horizontal = 0.dp)
+                    )
+                }
             }
         }
 
@@ -203,7 +206,7 @@ fun CandidateBar(
                 .weight(1f).padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-                if (!isComposing && inputText.isEmpty()) {
+                if (!isComposing && inputText.isEmpty() && displayCandidates.isEmpty() && associationCandidates.isEmpty()) {
                     if (currentRoute is KeyboardRoute.SchemaList && callbacks.onBack != null) {
                         Box(
                             modifier = Modifier
@@ -295,7 +298,9 @@ fun CandidateBar(
                                 index = -1,
                                 onClick = { callbacks.onAssociationSelect?.invoke(index) },
                                 textColor = visuals.textColor,
-                                comment = ""
+                                comment = "",
+                                isSelected = index == 0,
+                                accentColor = visuals.accentColor
                             )
                         }
                     }

@@ -1468,6 +1468,16 @@ onVoiceModeChange = { enabled ->
                                 needsUIUpdate = true
                             }
                         }
+                    } else if (candState.associationCandidates.isNotEmpty()) {
+                        // 联想预测词模式：按空格选中第一个联想词
+                        val text = candState.associationCandidates[0]
+                        withContext(Dispatchers.Main) {
+                            commitText(text)
+                            candidateState.value = candidateState.value.copy(
+                                associationCandidates = emptyArray()
+                            )
+                        }
+                        updateUI()
                     } else {
                         withContext(Dispatchers.Main) {
                             commitText(" ")
