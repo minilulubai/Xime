@@ -149,9 +149,7 @@ fun CandidateBar(
                             result.add(c)
                         } else break
                     }
-                    if (result.isEmpty() && s.associationCandidates.isNotEmpty()) {
-                        listOf(s.associationCandidates.first())
-                    } else result
+                    result
                 }
             }
         }
@@ -335,7 +333,7 @@ fun CandidateBar(
                             onClick = { callbacks.onAssociationSelect?.invoke(index) },
                             textColor = visuals.textColor,
                             comment = "",
-                            isSelected = index == 0 && displayCandidates.isEmpty(),
+                            isSelected = false,
                             accentColor = visuals.accentColor
                         )
                     }
