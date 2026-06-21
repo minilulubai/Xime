@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kingzcheung.xime.viewmodel.KeyboardViewModel
 import kotlin.math.max
 
 /**
@@ -102,8 +103,8 @@ private fun splitText(text: String): List<String> {
 fun SplitWordsView(
     text: String,
     backgroundColor: Color,
+    viewModel: KeyboardViewModel,
     onBack: () -> Unit,
-    onAddQuickSendText: (String) -> Unit,
     onNavigateToQuickSend: (() -> Unit)? = null,
     onSelectChar: (String) -> Unit,
     onDeleteText: ((Int) -> Unit)? = null,
@@ -176,7 +177,7 @@ fun SplitWordsView(
                 onClick = {
                     val text = selectedIndices.joinToString("") { splitParts[it] }
                     if (text.isNotEmpty()) {
-                        onAddQuickSendText(text)
+                        viewModel.addQuickSendText(text)
                         onNavigateToQuickSend?.invoke()
                     }
                 }

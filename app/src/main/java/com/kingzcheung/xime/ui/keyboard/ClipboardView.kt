@@ -27,7 +27,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,6 +51,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.clipboard.ClipboardItem
+import com.kingzcheung.xime.viewmodel.KeyboardViewModel
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -62,11 +62,9 @@ fun ClipboardView(
     selectedTab: Int,
     isDarkTheme: Boolean,
     backgroundColor: Color,
+    viewModel: KeyboardViewModel,
     onSelectItem: (String) -> Unit,
-    onRemoveItem: (Long) -> Unit,
-    onAddToQuickSend: (Long) -> Unit,
     onSplitWords: (String, Long) -> Unit,
-    onRemoveFromQuickSend: (Long) -> Unit,
     onBack: (() -> Unit)? = null,
     onClipboardTabChange: ((Int) -> Unit)? = null,
     bottomPaddingDp: Int = 0,
@@ -85,7 +83,6 @@ fun ClipboardView(
             .fillMaxWidth()
             .background(backgroundColor)
     ) {
-        // 标签切换栏（原在 CandidateBar 中，现搬到这里）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -164,12 +161,10 @@ fun ClipboardView(
             pageCount = { 2 }
         )
 
-        // 外部切换标签时同步到 Pager
         LaunchedEffect(selectedTab) {
             pagerState.animateScrollToPage(selectedTab)
         }
 
-        // Pager 滑动时同步到外部
         LaunchedEffect(pagerState.currentPage) {
             if (pagerState.currentPage != selectedTab) {
                 onClipboardTabChange?.invoke(pagerState.currentPage)
@@ -190,8 +185,8 @@ fun ClipboardView(
                     subTextColor = subTextColor,
                     accentColor = accentColor,
                     onSelect = onSelectItem,
-                    onRemove = onRemoveItem,
-                    onAddToQuickSend = onAddToQuickSend,
+                    onRemove = { id -> viewModel.removeClipboardItem(id) },
+                    onAddToQuickSend = { id -> viewModel.addToQuickSend(id) },
                     onSplitWords = onSplitWords
                 )
             } else {
@@ -201,13 +196,12 @@ fun ClipboardView(
                     textColor = textColor,
                     subTextColor = subTextColor,
                     accentColor = accentColor,
-                    onSelect = onSelectItem,
-                    onRemove = onRemoveFromQuickSend
+                    viewModel = viewModel,
+                    onSelect = onSelectItem
                 )
             }
         }
 
-        // 底部留空（竖屏至少 40dp）
         Spacer(modifier = Modifier.height(if (isLandscape) 15.dp else max(bottomPaddingDp, 40).dp))
     }
 }
@@ -259,49 +253,6 @@ fun ClipboardTabContent(
     }
 }
 
-@Composable
-fun QuickSendTabContent(
-    items: List<ClipboardItem>,
-    itemBgColor: Color,
-    textColor: Color,
-    subTextColor: Color,
-    accentColor: Color,
-    onSelect: (String) -> Unit,
-    onRemove: (Long) -> Unit
-) {
-    if (items.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "快捷发送为空",
-                color = subTextColor,
-                fontSize = 13.sp
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            items(items, key = { it.id }) { item ->
-                CompactQuickSendItem(
-                    item = item,
-                    bgColor = itemBgColor,
-                    textColor = textColor,
-                    subTextColor = subTextColor,
-                    accentColor = accentColor,
-                    onSelect = { onSelect(item.text) },
-                    onRemove = { onRemove(item.id) }
-                )
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompactClipboardItem(
@@ -330,7 +281,6 @@ fun CompactClipboardItem(
             .height(40.dp)
             .clip(RoundedCornerShape(8.dp))
     ) {
-        // 背景层：操作按钮（始终在右侧），无背景色
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
@@ -344,7 +294,6 @@ fun CompactClipboardItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // 拆词：图标 + 文本
                 Row(
                     modifier = Modifier
                         .height(38.dp)
@@ -369,7 +318,6 @@ fun CompactClipboardItem(
                     )
                 }
 
-                // 添加快捷发送：图标 + 文本
                 Row(
                     modifier = Modifier
                         .height(38.dp)
@@ -394,7 +342,6 @@ fun CompactClipboardItem(
                     )
                 }
 
-                // 删除：仅图标 + 红色浅背景
                 Box(
                     modifier = Modifier
                         .size(38.dp)
@@ -413,7 +360,6 @@ fun CompactClipboardItem(
             }
         }
 
-        // 前景层：内容区域（滑动后露出背景层的操作按钮）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -448,60 +394,6 @@ fun CompactClipboardItem(
                     modifier = Modifier.size(18.dp)
                 )
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CompactQuickSendItem(
-    item: ClipboardItem,
-    bgColor: Color,
-    textColor: Color,
-    subTextColor: Color,
-    accentColor: Color,
-    onSelect: () -> Unit,
-    onRemove: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(bgColor)
-            .clickable { onSelect() },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Star,
-            contentDescription = "快捷发送",
-            tint = accentColor,
-            modifier = Modifier
-                .size(16.dp)
-                .padding(horizontal = 4.dp)
-        )
-
-        Text(
-            text = item.text,
-            color = textColor,
-            fontSize = 13.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 4.dp)
-        )
-
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Delete,
-                contentDescription = "删除",
-                tint = subTextColor,
-                modifier = Modifier.size(16.dp)
-            )
         }
     }
 }

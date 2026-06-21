@@ -260,6 +260,18 @@ class ClipboardManager private constructor(private val context: Context) {
         _quickSendItems.value = currentQuickSend
         saveQuickSendItems()
     }
+
+    fun togglePinQuickSend(id: Long) {
+        val currentItems = _quickSendItems.value.toMutableList()
+        val index = currentItems.indexOfFirst { it.id == id }
+        if (index > 0) {
+            val item = currentItems.removeAt(index)
+            currentItems.add(0, item)
+            _quickSendItems.value = currentItems
+            saveQuickSendItems()
+        }
+    }
+
     
     fun addQuickSendItem(text: String) {
         if (text.isBlank()) return

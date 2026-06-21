@@ -481,14 +481,12 @@ fun KeyboardView(
                     selectedTab = clipboardTab,
                     isDarkTheme = state.isDarkTheme,
                     backgroundColor = keyboardBgColor,
+                    viewModel = viewModel,
                     onSelectItem = { text ->
                         callbacks.onClipboardSelect?.invoke(text)
                         viewModel.setRoute(KeyboardRoute.Keyboard)
                     },
-                    onRemoveItem = { id -> callbacks.onClipboardRemove?.invoke(id) },
-                    onAddToQuickSend = { id -> callbacks.onAddToQuickSend?.invoke(id) },
                     onSplitWords = { text, _ -> viewModel.setRoute(KeyboardRoute.SplitWords(text)) },
-                    onRemoveFromQuickSend = { id -> callbacks.onRemoveFromQuickSend?.invoke(id) },
                     onBack = { viewModel.setRoute(KeyboardRoute.Keyboard) },
                     onClipboardTabChange = { viewModel.setRoute(KeyboardRoute.Clipboard(it)) },
                     bottomPaddingDp = state.keyboardBottomPaddingDp,
@@ -543,8 +541,8 @@ fun KeyboardView(
                 is KeyboardRoute.SplitWords -> SplitWordsView(
                     text = (currentRoute as KeyboardRoute.SplitWords).text,
                     backgroundColor = keyboardBgColor,
+                    viewModel = viewModel,
                     onBack = { viewModel.setRoute(KeyboardRoute.Clipboard(clipboardTab)) },
-                    onAddQuickSendText = { text -> callbacks.onAddQuickSendText?.invoke(text) },
                     onNavigateToQuickSend = { viewModel.setRoute(KeyboardRoute.Clipboard(1)) },
                     onSelectChar = { char -> callbacks.onCommitText?.invoke(char) },
                     onDeleteText = { count -> callbacks.onDeleteText?.invoke(count) },

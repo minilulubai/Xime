@@ -1,11 +1,13 @@
 package com.kingzcheung.xime.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import com.kingzcheung.xime.clipboard.ClipboardItem
+import com.kingzcheung.xime.clipboard.ClipboardManager
 import com.kingzcheung.xime.keyboard.KeyboardRoute
 import com.kingzcheung.xime.keyboard.ToolbarButton
 import com.kingzcheung.xime.settings.SchemaInfo
@@ -53,7 +55,9 @@ data class KeyboardUiState(
     val isShowingRecentClipboard: Boolean = false,
 )
 
-class KeyboardViewModel : ViewModel() {
+class KeyboardViewModel(application: Application) : AndroidViewModel(application) {
+
+    val clipboardManager = ClipboardManager.getInstance(application)
 
     private val _isShifted = MutableStateFlow(false)
     val isShifted: StateFlow<Boolean> = _isShifted.asStateFlow()
@@ -84,5 +88,35 @@ class KeyboardViewModel : ViewModel() {
         _isShifted.value = false
         _keyboardState.value = initialKeyboardLayoutState(isAsciiMode)
         _currentRoute.value = KeyboardRoute.Keyboard
+    }
+
+    // Clipboard operations
+
+    fun removeClipboardItem(id: Long) {
+        clipboardManager.removeItem(id)
+    }
+
+    fun splitClipboardItem(id: Long) {
+        clipboardManager.splitItem(id)
+    }
+
+    fun clearClipboard() {
+        clipboardManager.clearAll()
+    }
+
+    fun addToQuickSend(id: Long) {
+        clipboardManager.addToQuickSend(id)
+    }
+
+    fun addQuickSendText(text: String) {
+        clipboardManager.addQuickSendItem(text)
+    }
+
+    fun removeQuickSendItem(id: Long) {
+        clipboardManager.removeFromQuickSend(id)
+    }
+
+    fun togglePinQuickSend(id: Long) {
+        clipboardManager.togglePinQuickSend(id)
     }
 }

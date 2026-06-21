@@ -669,11 +669,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     onClipboardSelect = { text -> selectClipboardItem(text) },
                                     onCommitText = { text -> commitClipboardText(text) },
                                     onDeleteText = { count -> deleteClipboardChars(count) },
-                                    onClipboardRemove = { id -> removeClipboardItem(id) },
-                                    onClipboardSplitWords = { id -> splitClipboardWords(id) },
-                                    onAddToQuickSend = { id -> addToQuickSend(id) },
-                                    onAddQuickSendText = { text -> clipboardManager.addQuickSendItem(text) },
-                                    onRemoveFromQuickSend = { id -> removeFromQuickSend(id) },
                                     onQuickSend = { Log.d(TAG, "QuickSend clicked") },
                                     onKeyboardResize = {
                                         val config = resources.configuration
@@ -2182,23 +2177,4 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         currentInputConnection?.deleteSurroundingText(count, 0)
     }
     
-    private fun removeClipboardItem(id: Long) {
-        clipboardManager.removeItem(id)
-    }
-    
-    private fun splitClipboardWords(id: Long) {
-        clipboardManager.splitItem(id)
-    }
-    
-    private fun clearClipboard() {
-        clipboardManager.clearAll()
-    }
-    
-    private fun addToQuickSend(id: Long) {
-        clipboardManager.addToQuickSend(id)
-    }
-    
-    private fun removeFromQuickSend(id: Long) {
-        clipboardManager.removeFromQuickSend(id)
-    }
 }
