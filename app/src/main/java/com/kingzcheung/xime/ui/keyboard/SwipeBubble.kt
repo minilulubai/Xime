@@ -23,6 +23,13 @@ private val BubblePointerHeight = KeyboardDimensions.BubblePointerHeight
 private val BubbleCornerRadius = KeyboardDimensions.BubbleCornerRadius
 private val BubbleScreenMargin = 4.dp
 
+private val bubblePath = Path()
+private val bubbleFillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val bubbleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val bubbleBgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val bubbleLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val SHADOW_COLOR = android.graphics.Color.argb(0x44, 0, 0, 0)
+
 data class BubbleDrawData(
     val boxLeft: Float,
     val boxTop: Float,
@@ -181,42 +188,42 @@ private fun buildBubblePath(data: BubbleDrawData): Path {
     val r = cornerRadius.coerceAtMost(bodyWidth / 2f).coerceAtMost(bodyHeight / 2f)
     val pr = cornerRadius.coerceAtMost(pointerWidth / 2f).coerceAtMost(pointerHeight / 2f)
 
-    return Path().apply {
-        moveTo(bodyLeft + r, 0f)
-        lineTo(bodyRight - r, 0f)
-        quadTo(bodyRight, 0f, bodyRight, r)
+    bubblePath.rewind()
+    bubblePath.moveTo(bodyLeft + r, 0f)
+    bubblePath.lineTo(bodyRight - r, 0f)
+    bubblePath.quadTo(bodyRight, 0f, bodyRight, r)
 
-        if (isRightFlush) {
-            lineTo(bodyRight, bodyBottom)
-            quadTo(pointerRight, bodyBottom, pointerRight, bodyBottom + pr)
-        } else {
-            lineTo(bodyRight, bodyBottom - r)
-            quadTo(bodyRight, bodyBottom, bodyRight - r, bodyBottom)
-            lineTo(pointerRight + pr, bodyBottom)
-            quadTo(pointerRight, bodyBottom, pointerRight, bodyBottom + pr)
-        }
-
-        lineTo(pointerRight, pointerBottom - pr)
-        quadTo(pointerRight, pointerBottom, pointerRight - pr, pointerBottom)
-        lineTo(pointerLeft + pr, pointerBottom)
-        quadTo(pointerLeft, pointerBottom, pointerLeft, pointerBottom - pr)
-        lineTo(pointerLeft, bodyBottom + pr)
-
-        if (isLeftFlush) {
-            lineTo(pointerLeft, bodyBottom)
-            lineTo(bodyLeft, bodyBottom)
-            lineTo(bodyLeft, r)
-            quadTo(bodyLeft, 0f, bodyLeft + r, 0f)
-        } else {
-            quadTo(pointerLeft, bodyBottom, pointerLeft - pr, bodyBottom)
-            lineTo(bodyLeft + r, bodyBottom)
-            quadTo(bodyLeft, bodyBottom, bodyLeft, bodyBottom - r)
-            lineTo(bodyLeft, r)
-            quadTo(bodyLeft, 0f, bodyLeft + r, 0f)
-        }
-
-        close()
+    if (isRightFlush) {
+        bubblePath.lineTo(bodyRight, bodyBottom)
+        bubblePath.quadTo(pointerRight, bodyBottom, pointerRight, bodyBottom + pr)
+    } else {
+        bubblePath.lineTo(bodyRight, bodyBottom - r)
+        bubblePath.quadTo(bodyRight, bodyBottom, bodyRight - r, bodyBottom)
+        bubblePath.lineTo(pointerRight + pr, bodyBottom)
+        bubblePath.quadTo(pointerRight, bodyBottom, pointerRight, bodyBottom + pr)
     }
+
+    bubblePath.lineTo(pointerRight, pointerBottom - pr)
+    bubblePath.quadTo(pointerRight, pointerBottom, pointerRight - pr, pointerBottom)
+    bubblePath.lineTo(pointerLeft + pr, pointerBottom)
+    bubblePath.quadTo(pointerLeft, pointerBottom, pointerLeft, pointerBottom - pr)
+    bubblePath.lineTo(pointerLeft, bodyBottom + pr)
+
+    if (isLeftFlush) {
+        bubblePath.lineTo(pointerLeft, bodyBottom)
+        bubblePath.lineTo(bodyLeft, bodyBottom)
+        bubblePath.lineTo(bodyLeft, r)
+        bubblePath.quadTo(bodyLeft, 0f, bodyLeft + r, 0f)
+    } else {
+        bubblePath.quadTo(pointerLeft, bodyBottom, pointerLeft - pr, bodyBottom)
+        bubblePath.lineTo(bodyLeft + r, bodyBottom)
+        bubblePath.quadTo(bodyLeft, bodyBottom, bodyLeft, bodyBottom - r)
+        bubblePath.lineTo(bodyLeft, r)
+        bubblePath.quadTo(bodyLeft, 0f, bodyLeft + r, 0f)
+    }
+
+    bubblePath.close()
+    return bubblePath
 }
 
 fun DrawScope.drawSwipeBubble(data: BubbleDrawData) {
@@ -227,12 +234,9 @@ fun DrawScope.drawSwipeBubble(data: BubbleDrawData) {
         canvas.save()
         canvas.translate(data.boxLeft, data.boxTop)
 
-        val fillPaint = Paint().apply {
-            color = data.bgColor
-            isAntiAlias = true
-            setShadowLayer(data.shadowRadiusPx, 0f, 0f, android.graphics.Color.argb(0x44, 0, 0, 0))
-        }
-        canvas.drawPath(path, fillPaint)
+        bubbleFillPaint.color = data.bgColor
+        bubbleFillPaint.setShadowLayer(data.shadowRadiusPx, 0f, 0f, SHADOW_COLOR)
+        canvas.drawPath(path, bubbleFillPaint)
 
         if (data.isLongPressMode) {
             canvas.save()
@@ -244,39 +248,30 @@ fun DrawScope.drawSwipeBubble(data: BubbleDrawData) {
             data.longPressItems.forEachIndexed { index, item ->
                 val itemLeft = index * cellWidth
                 if (index == data.selectedLongPressIndex) {
-                    val bgPaint = Paint().apply {
-                        color = selectedBgColor
-                        isAntiAlias = true
-                    }
+                    bubbleBgPaint.color = selectedBgColor
                     val r = minOf(data.selectedBgRadiusPx, cellWidth / 2f)
                     canvas.drawRoundRect(
-                        itemLeft, 0f, itemLeft + cellWidth, data.bodyHeightPx, r, r, bgPaint
+                        itemLeft, 0f, itemLeft + cellWidth, data.bodyHeightPx, r, r, bubbleBgPaint
                     )
                 }
                 val fontSize = if (index == data.selectedLongPressIndex) data.selectedFontSizePx else data.normalFontSizePx
-                val labelPaint = Paint().apply {
-                    color = if (index == data.selectedLongPressIndex) accentColor else data.textColor
-                    textSize = fontSize
-                    textAlign = Paint.Align.CENTER
-                    isAntiAlias = true
-                }
-                val textY = data.bodyHeightPx / 2f - (labelPaint.fontMetrics.ascent + labelPaint.fontMetrics.descent) / 2f
-                canvas.drawText(item, itemLeft + cellWidth / 2f, textY, labelPaint)
+                bubbleLabelPaint.color = if (index == data.selectedLongPressIndex) accentColor else data.textColor
+                bubbleLabelPaint.textSize = fontSize
+                bubbleLabelPaint.textAlign = Paint.Align.CENTER
+                val textY = data.bodyHeightPx / 2f - (bubbleLabelPaint.fontMetrics.ascent + bubbleLabelPaint.fontMetrics.descent) / 2f
+                canvas.drawText(item, itemLeft + cellWidth / 2f, textY, bubbleLabelPaint)
             }
             canvas.restore()
         } else if (data.displayText != null) {
             canvas.save()
             canvas.clipRect(0f, 0f, data.bodyWidth, data.bodyHeightPx)
-            val textPaint = Paint().apply {
-                color = data.textColor
-                textSize = data.textSizePx
-                textAlign = Paint.Align.CENTER
-                typeface = data.chaiTypeface
-                isAntiAlias = true
-            }
+            bubbleTextPaint.color = data.textColor
+            bubbleTextPaint.textSize = data.textSizePx
+            bubbleTextPaint.textAlign = Paint.Align.CENTER
+            bubbleTextPaint.typeface = data.chaiTypeface
             val textCenterX = data.pathBodyLeft + data.pathBodyWidth / 2f
-            val textY = data.bodyHeightPx / 2f - (textPaint.fontMetrics.ascent + textPaint.fontMetrics.descent) / 2f
-            canvas.drawText(data.displayText, textCenterX, textY, textPaint)
+            val textY = data.bodyHeightPx / 2f - (bubbleTextPaint.fontMetrics.ascent + bubbleTextPaint.fontMetrics.descent) / 2f
+            canvas.drawText(data.displayText, textCenterX, textY, bubbleTextPaint)
             canvas.restore()
         }
 
