@@ -162,24 +162,6 @@ fun LayoutDisplaySettingsContent(
             }
 
             item {
-                SettingsSection(title = "键盘布局", content = {
-                    var showBottomButtons by remember {
-                        mutableStateOf(SettingsPreferences.showBottomButtons(context))
-                    }
-                    SettingsToggleItem(
-                        icon = Icons.TwoTone.Straighten,
-                        title = "显示底部按钮",
-                        subtitle = "显示收回键盘和切换输入法按钮（部分系统自带）",
-                        checked = showBottomButtons,
-                        onCheckedChange = { newValue ->
-                            showBottomButtons = newValue
-                            SettingsPreferences.setShowBottomButtons(context, newValue)
-                        }
-                    )
-                })
-            }
-
-            item {
                 SettingsSection(title = "按键手势", content = {
                     var swipeUpEnabled by remember {
                         mutableStateOf(SettingsPreferences.isSwipeUpHintsEnabled(context))

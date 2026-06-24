@@ -59,12 +59,12 @@ fun KeyboardResizeOverlay(
     val minKeyboardHeightDp: Int
     val maxBottomPaddingDp: Int
     if (isLandscape) {
-        minKeyboardHeightDp = screenHeightDp / 2
-        maxKeyboardHeightDp = (screenHeightDp * 3) / 5
+        minKeyboardHeightDp = (screenHeightDp * 30) / 100
+        maxKeyboardHeightDp = (screenHeightDp * 7) / 10
         maxBottomPaddingDp = maxKeyboardHeightDp - minKeyboardHeightDp
     } else {
-        minKeyboardHeightDp = 290.coerceAtMost(screenHeightDp / 2)
-        maxKeyboardHeightDp = screenHeightDp / 2
+        minKeyboardHeightDp = (screenHeightDp * 20) / 100
+        maxKeyboardHeightDp = (screenHeightDp * 50) / 100
         maxBottomPaddingDp = maxKeyboardHeightDp - minKeyboardHeightDp
     }
 
