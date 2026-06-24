@@ -339,12 +339,12 @@ fun KeyboardView(
                             onKeyPress = currentOnKeyPress,
                             modifier = Modifier.weight(1f).then(cursorMod),
                         )
+                        if (state.keyboardBottomPaddingDp > 0) {
+                            Spacer(modifier = Modifier.height(state.keyboardBottomPaddingDp.dp))
+                        }
                     }
                 }
             }
-
-            val gapAbove = maxOf(0, state.keyboardBottomPaddingDp)
-            Spacer(modifier = Modifier.height(gapAbove.dp))
 
             val configuration = LocalConfiguration.current
             val isLandscapeBottom = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE

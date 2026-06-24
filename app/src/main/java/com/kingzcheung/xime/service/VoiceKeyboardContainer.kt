@@ -28,6 +28,7 @@ class VoiceKeyboardContainer(
         val heightPx = (heightDp * resources.displayMetrics.density).toInt()
         val params = layoutParams
         if (params != null && params.height != heightPx) {
+            android.util.Log.d("XimeInputMethodService", "updateHeight: ${params.height}px -> ${heightPx}px (${heightDp}dp)")
             params.height = heightPx
             layoutParams = params
             requestLayout()

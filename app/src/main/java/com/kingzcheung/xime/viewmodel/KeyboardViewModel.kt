@@ -35,7 +35,7 @@ data class KeyboardUiState(
     val isDarkTheme: Boolean = false,
     val darkMode: Int = 2,
     val themeId: String = "ocean_blue",
-    val keyboardHeightDp: Int = SettingsPreferences.DEFAULT_KEYBOARD_HEIGHT_DP,
+    val keyboardHeightDp: Int = 0,
     val keyboardBottomPaddingDp: Int = 0,
     val isDeploying: Boolean = false,
     val deploymentMessage: String = "",

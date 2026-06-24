@@ -578,7 +578,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     val density = LocalDensity.current
                                     val navBarPx = WindowInsets.navigationBars.getBottom(density)
                                     val navBarDp = with(density) { navBarPx.toDp() }
-                                    (keyboardHeight + state.keyboardBottomPaddingDp).dp + navBarDp
+                                    (keyboardHeight + state.keyboardBottomPaddingDp).dp + (if (navBarDp >= 48.dp) navBarDp else 0.dp)
                                 }
                             )
                     ) {
@@ -586,11 +586,16 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         val density = LocalDensity.current
                         val navBarPx = WindowInsets.navigationBars.getBottom(density)
                         val navBarDp = with(density) { navBarPx.toDp() }
+                        val hasNavBar = navBarDp >= 48.dp
+                        val actualNavBarDp = if (hasNavBar) navBarDp.value.toInt() else 0
                         val height = if (state.showKeyboardResize) state.resizePreviewHeightDp else keyboardHeight
-                        val totalDp = height + state.keyboardBottomPaddingDp + navBarDp.value.toInt()
-                        Log.d(TAG, "HeightSync: mode=${if (state.showKeyboardResize) "resize" else "normal"} height=$height kbHeight=$keyboardHeight navBarDp=${navBarDp.value} bottomPadding=${state.keyboardBottomPaddingDp} totalDp=$totalDp")
+                        val totalDp = height + state.keyboardBottomPaddingDp + actualNavBarDp
+                        Log.d(TAG, "HeightSync: mode=${if (state.showKeyboardResize) "resize" else "normal"} height=$height navBarDp=${navBarDp.value} padding=${state.keyboardBottomPaddingDp} hasNavBar=$hasNavBar totalDp=$totalDp")
                         SideEffect {
                             keyboardContainer.updateHeight(totalDp)
+                        }
+                        if (hasNavBar) {
+                            Spacer(modifier = Modifier.fillMaxWidth().height(navBarDp))
                         }
                         if (state.isCompact && cand.isComposing) {
                             FloatingCandidateBar(
@@ -615,7 +620,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.resizePreviewBottomPaddingDp).dp else (keyboardHeight + state.keyboardBottomPaddingDp).dp)
+                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (keyboardHeight + state.keyboardBottomPaddingDp).dp)
                         ) {
                         CompositionLocalProvider(LocalStretchFactor provides state.stretchFactor) {
                             val kbState = KeyboardUiState(
@@ -717,17 +722,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                         val config = resources.configuration
                                         val isLandscape = config.screenWidthDp > config.screenHeightDp
                                         val currentHeight = SettingsPreferences.getKeyboardHeightDp(this@XimeInputMethodService, isLandscape)
-                                        val currentPadding = uiState.value.keyboardBottomPaddingDp
-                                        val displayHeight = currentHeight.coerceAtMost((config.screenHeightDp * 7) / 10)
-                                        val defaultHeight = SettingsPreferences.getDefaultKeyboardHeightDp(this@XimeInputMethodService, isLandscape)
                                         uiState.value = uiState.value.copy(
                                             showKeyboardResize = true,
-                                            keyboardHeightDp = currentHeight,
-                                            resizePreviewHeightDp = displayHeight,
-                                            resizePreviewBottomPaddingDp = currentPadding,
-                                            originalKeyboardHeightDp = displayHeight,
-                                            originalKeyboardBottomPaddingDp = currentPadding,
-                                            stretchFactor = ((displayHeight - 118f) / (defaultHeight - 118f)).coerceAtLeast(0f)
+                                            resizePreviewHeightDp = currentHeight,
                                         )
                                     },
                                     onReloadConfig = { reloadConfig() },
@@ -809,66 +806,54 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             )
                           }
                           }
-                          if (!state.showKeyboardResize && navBarDp > 0.dp) {
+                          if (navBarDp >= 48.dp) {
                               Spacer(modifier = Modifier.fillMaxWidth().height(navBarDp))
                           }
                       }
                       }
                           if (state.showKeyboardResize) {
                              KeyboardResizeOverlay(
-                                initialHeightDp = state.resizePreviewHeightDp,
-                                initialBottomPaddingDp = state.resizePreviewBottomPaddingDp,
-                                defaultHeightDp = SettingsPreferences.getDefaultKeyboardHeightDp(this@XimeInputMethodService, isLandscape),
-                                 defaultBottomPaddingDp = SettingsPreferences.getDefaultKeyboardBottomPaddingDp(),
-                               maxContainerHeightDp = keyboardHeight,
-                              onHeightChange = { newHeight ->
-                                  uiState.value = uiState.value.copy(
-                                      resizePreviewHeightDp = newHeight
-                                  )
-                              },
-                              onBottomPaddingChange = { newPadding ->
-                                  uiState.value = uiState.value.copy(
-                                      resizePreviewBottomPaddingDp = newPadding,
-                                      keyboardBottomPaddingDp = newPadding
-                                  )
-                              },
-                              onStretchChange = { stretchFactor ->
-                                  uiState.value = uiState.value.copy(
-                                      stretchFactor = stretchFactor
-                                  )
-                              },
-                              onReset = { defaultHeight, defaultPadding ->
-                                  uiState.value = uiState.value.copy(
-                                      resizePreviewHeightDp = defaultHeight,
-                                      resizePreviewBottomPaddingDp = defaultPadding,
-                                      keyboardBottomPaddingDp = defaultPadding,
-                                      stretchFactor = 1f
-                                  )
-                              },
-                              onConfirm = { newHeight, newPadding ->
-                                  Log.d(TAG, "onConfirm: newHeight=$newHeight newPadding=$newPadding")
-                                  setKeyboardHeight(newHeight)
-                                  SettingsPreferences.setKeyboardBottomPaddingDp(this@XimeInputMethodService, newPadding)
-                                  uiState.value = uiState.value.copy(
-                                      showKeyboardResize = false,
-                                      keyboardHeightDp = newHeight,
-                                      keyboardBottomPaddingDp = newPadding
-                                  )
-                              },
-                              onCancel = {
-                                  val originalHeight = state.originalKeyboardHeightDp
-                                   val defaultHeight = SettingsPreferences.getDefaultKeyboardHeightDp(this@XimeInputMethodService, isLandscape)
-                                    val cancelStretchFactor = ((originalHeight - 118f) / (defaultHeight - 118f)).coerceAtLeast(0f)
-                                  uiState.value = uiState.value.copy(
-                                      showKeyboardResize = false,
-                                      keyboardHeightDp = originalHeight,
-                                      keyboardBottomPaddingDp = state.originalKeyboardBottomPaddingDp,
-                                      resizePreviewHeightDp = originalHeight,
-                                      resizePreviewBottomPaddingDp = state.originalKeyboardBottomPaddingDp,
-                                      stretchFactor = cancelStretchFactor
-                                  )
-                              },
-                               modifier = Modifier
+                                 initialHeightDp = state.resizePreviewHeightDp,
+                                 defaultHeightDp = SettingsPreferences.getDefaultKeyboardHeightDp(this@XimeInputMethodService, isLandscape),
+                                maxContainerHeightDp = keyboardHeight,
+                                currentBottomPaddingDp = state.keyboardBottomPaddingDp,
+                               onHeightChange = { newHeight ->
+                                   uiState.value = uiState.value.copy(
+                                       resizePreviewHeightDp = newHeight
+                                   )
+                               },
+                               onBottomPaddingChange = { newPadding ->
+                                   uiState.value = uiState.value.copy(
+                                       keyboardBottomPaddingDp = newPadding
+                                   )
+                               },
+                               onReset = { defaultHeight ->
+                                   uiState.value = uiState.value.copy(
+                                       resizePreviewHeightDp = defaultHeight,
+                                       keyboardBottomPaddingDp = 0,
+                                       stretchFactor = 1f
+                                   )
+                               },
+                               onConfirm = { newHeight, newPadding ->
+                                   Log.d(TAG, "onConfirm: newHeight=$newHeight newPadding=$newPadding")
+                                   setKeyboardHeight(newHeight)
+                                   SettingsPreferences.setKeyboardBottomPaddingDp(this@XimeInputMethodService, newPadding)
+                                   uiState.value = uiState.value.copy(
+                                       showKeyboardResize = false,
+                                       keyboardHeightDp = newHeight,
+                                       keyboardBottomPaddingDp = newPadding,
+                                   )
+                                },
+                                onCancel = {
+                                    val restoreHeight = SettingsPreferences.getKeyboardHeightDp(this@XimeInputMethodService, isLandscape)
+                                    val restorePadding = SettingsPreferences.getKeyboardBottomPaddingDp(this@XimeInputMethodService)
+                                    uiState.value = uiState.value.copy(
+                                        showKeyboardResize = false,
+                                        keyboardHeightDp = restoreHeight,
+                                        keyboardBottomPaddingDp = restorePadding,
+                                    )
+                                },
+                                modifier = Modifier
                                    .align(androidx.compose.ui.Alignment.BottomCenter)
                                    .fillMaxWidth()
                           )
