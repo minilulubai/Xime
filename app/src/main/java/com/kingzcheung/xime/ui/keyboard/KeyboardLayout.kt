@@ -227,7 +227,7 @@ fun KeyboardLayout(
             .drawWithContent {
                 drawContent()
                 bubbleData?.let { drawSwipeBubble(it) }
-            }
+            }.padding(bottom = 10.dp)
     ) {
         if (isLandscape) {
             LandscapeKeyboardContent(

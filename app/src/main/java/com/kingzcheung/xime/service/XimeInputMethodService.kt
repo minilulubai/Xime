@@ -578,7 +578,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     val density = LocalDensity.current
                                     val navBarPx = WindowInsets.navigationBars.getBottom(density)
                                     val navBarDp = with(density) { navBarPx.toDp() }
-                                    (keyboardHeight + state.keyboardBottomPaddingDp).dp + (if (navBarDp >= 48.dp) navBarDp else 0.dp)
+                                    (keyboardHeight + state.keyboardBottomPaddingDp).dp + (if (navBarDp > 0.dp) navBarDp else 0.dp)
                                 }
                             )
                     ) {
@@ -586,7 +586,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         val density = LocalDensity.current
                         val navBarPx = WindowInsets.navigationBars.getBottom(density)
                         val navBarDp = with(density) { navBarPx.toDp() }
-                        val hasNavBar = navBarDp >= 48.dp
+                        val hasNavBar = navBarDp > 0.dp
                         val actualNavBarDp = if (hasNavBar) navBarDp.value.toInt() else 0
                         val height = if (state.showKeyboardResize) state.resizePreviewHeightDp else keyboardHeight
                         val totalDp = height + state.keyboardBottomPaddingDp + actualNavBarDp
@@ -806,7 +806,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             )
                           }
                           }
-                          if (navBarDp >= 48.dp) {
+                          if (navBarDp > 0.dp) {
                               Spacer(modifier = Modifier.fillMaxWidth().height(navBarDp))
                           }
                       }
