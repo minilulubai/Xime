@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -43,6 +46,7 @@ fun ToolbarCustomizeView(
     toolbarButtons: List<String>,
     keyTextColor: Color,
     keyBgColor: Color,
+    backgroundColor: Color,
     accentColor: Color,
     onUpdateToolbarButtons: ((List<String>) -> Unit)?,
     onDismiss: () -> Unit,
@@ -74,7 +78,7 @@ fun ToolbarCustomizeView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(keyBgColor),
+            .background(backgroundColor),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 导航区：关闭按钮 + 实时预览
@@ -223,8 +227,8 @@ fun ToolbarCustomizeView(
             }
         }
 
-        // 底部留空（竖屏至少 40dp）
-        Spacer(modifier = Modifier.height(if (isLandscape) 15.dp else maxOf(bottomPaddingDp, 40).dp))
+        // 底部留空
+        Spacer(modifier = Modifier.height(if (isLandscape) 15.dp else maxOf(bottomPaddingDp.dp, with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() })))
     }
 }
 

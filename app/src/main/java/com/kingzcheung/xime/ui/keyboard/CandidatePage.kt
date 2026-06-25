@@ -34,9 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 
 @Composable
 fun CandidatePage(
@@ -214,9 +217,9 @@ fun CandidatePage(
         Spacer(
             modifier = Modifier.height(
                 if (isLandscape) 15.dp else maxOf(
-                    bottomPaddingDp,
-                    40
-                ).dp
+                    bottomPaddingDp.dp,
+                    with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
+                )
             )
         )
     }

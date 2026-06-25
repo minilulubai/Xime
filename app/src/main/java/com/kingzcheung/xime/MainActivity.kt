@@ -2,6 +2,7 @@ package com.kingzcheung.xime
 
 import android.content.Intent
 import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -10,26 +11,32 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
 import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.rime.RimeEngine
+import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
-import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.ui.settings.SettingsScreen
 import com.kingzcheung.xime.ui.settings.SetupWizardScreen
 import com.kingzcheung.xime.ui.theme.XimeTheme
@@ -81,6 +88,7 @@ class MainActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         
         prewarmRimeEngine()
 
@@ -97,7 +105,6 @@ class MainActivity : ComponentActivity() {
             return
         }
         
-        enableEdgeToEdge()
         val openFragment = intent?.getStringExtra("open_fragment")
 
         setContent {
@@ -109,13 +116,12 @@ class MainActivity : ComponentActivity() {
             var keyboardTheme by remember { mutableStateOf(SettingsPreferences.getKeyboardTheme(context)) }
             
             val isDarkTheme = when (darkMode) {
-                2 -> isSystemInDarkTheme() // 跟随系统
-                1 -> true                    // 强制深色
-                else -> false                // 强制浅色
+                2 -> isSystemInDarkTheme()
+                1 -> true
+                else -> false
             }
 
             XimeTheme(darkTheme = isDarkTheme, themeId = keyboardTheme) {
-                // 同步状态栏外观与应用主题，而非系统主题
                 val view = LocalView.current
                 if (!view.isInEditMode) {
                     DisposableEffect(darkMode) {
@@ -123,60 +129,62 @@ class MainActivity : ComponentActivity() {
                         if (window != null) {
                             val controller = WindowInsetsControllerCompat(window, view)
                             controller.isAppearanceLightStatusBars = !isDarkTheme
+                            controller.isAppearanceLightNavigationBars = !isDarkTheme
                         }
                         onDispose { }
                     }
                 }
 
-                if (showWizard) {
-                    // 使用 Box 叠加两层，确保 SetupWizardScreen 始终在 Compose 树中
-                    // 避免因条件渲染导致状态丢失（currentStep 等 remember 状态重置）
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        SetupWizardScreen(
-                            visible = !wizardToSettings,
-                            onNavigateToSchemaSettings = { wizardToSettings = true },
-                            onCompleted = {
-                                showWizard = false
+                val density = LocalDensity.current
+                val navBarHeight = with(density) {
+                    WindowInsets.navigationBars.getBottom(density).toDp()
+                }
+                val scrimHeight = if (navBarHeight > 0.dp) navBarHeight else 32.dp
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (showWizard) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            SetupWizardScreen(
+                                visible = !wizardToSettings,
+                                onNavigateToSchemaSettings = { wizardToSettings = true },
+                                onCompleted = { showWizard = false }
+                            )
+                            if (wizardToSettings) {
+                                SettingsScreen(
+                                    initialRoute = "schema",
+                                    onThemeChanged = {
+                                        darkMode = SettingsPreferences.getDarkMode(context)
+                                        keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
+                                    },
+                                    onWizardBack = { wizardToSettings = false }
+                                )
+                            }
+                        }
+                    } else {
+                        SettingsScreen(
+                            initialRoute = openFragment,
+                            onThemeChanged = {
+                                darkMode = SettingsPreferences.getDarkMode(context)
+                                keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
                             }
                         )
-                        if (wizardToSettings) {
-                            // 从向导跳转到设置页的方案列表
-                            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(innerPadding),
-                                    color = MaterialTheme.colorScheme.background
-                                ) {
-                                    SettingsScreen(
-                                        initialRoute = "schema",
-                                        onThemeChanged = {
-                                            darkMode = SettingsPreferences.getDarkMode(context)
-                                            keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
-                                        },
-                                        onWizardBack = { wizardToSettings = false }
-                                    )
-                                }
-                            }
-                        }
                     }
-                } else {
-                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            SettingsScreen(
-                                initialRoute = openFragment,
-                                onThemeChanged = {
-                                    darkMode = SettingsPreferences.getDarkMode(context)
-                                    keyboardTheme = SettingsPreferences.getKeyboardTheme(context)
-                                }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(scrimHeight)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = if (isDarkTheme) {
+                                        listOf(Color.Transparent, Color.White.copy(alpha = 0.10f))
+                                    } else {
+                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.10f))
+                                    }
+                                )
                             )
-                        }
-                    }
+                    )
                 }
             }
         }

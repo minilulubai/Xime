@@ -473,6 +473,7 @@ fun KeyboardView(
                     toolbarButtons = state.toolbarButtons,
                     keyTextColor = keyTextColor,
                     keyBgColor = keyBgColor,
+                    backgroundColor = keyboardBgColor,
                     accentColor = accentColor,
                     onUpdateToolbarButtons = callbacks.onUpdateToolbarButtons,
                     onDismiss = { viewModel.setRoute(KeyboardRoute.Keyboard) },
