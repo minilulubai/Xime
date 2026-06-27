@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.inputmethod.InputConnection
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.speech.RecognitionState
 import com.kingzcheung.xime.speech.SpeechRecognitionManager
 import com.kingzcheung.xime.speech.punctuation.PunctuationInference
@@ -93,6 +94,7 @@ class VoiceRecognitionHandler(
         val modelFile = punctuationManager.getModelFile()
         val vocabFile = punctuationManager.getVocabFile()
         if (PunctuationInference.initialize(context, modelFile.absolutePath, vocabFile.absolutePath)) {
+            ModelRuntime.keepWarm("punctuation")
             punctuationInitialized = true
             FileLogger.i(TAG, "Punctuation model initialized successfully")
         } else {
@@ -160,6 +162,7 @@ class VoiceRecognitionHandler(
             speechRecognitionManager.release()
         }
         if (punctuationInitialized) {
+            ModelRuntime.releaseWarm("punctuation")
             PunctuationInference.release()
             punctuationInitialized = false
         }

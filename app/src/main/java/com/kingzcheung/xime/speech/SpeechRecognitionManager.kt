@@ -10,6 +10,7 @@ import android.os.Looper
 import android.util.Log
 
 import androidx.annotation.RequiresPermission
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.speech.funasr.FunAsrAsrBackend
 import com.kingzcheung.xime.speech.sherpa.SherpaAsrBackend
@@ -95,6 +96,7 @@ class SpeechRecognitionManager(private val context: Context) {
             }
             
             FileLogger.i(TAG, "ASR backend initialized successfully")
+            ModelRuntime.keepWarm("asr")
         }
 
         val currentBackend = backend!!
@@ -127,6 +129,7 @@ class SpeechRecognitionManager(private val context: Context) {
 
                 if (!SettingsPreferences.isSttKeepModelInRam(context)) {
                     Log.d(TAG, "Release mode: freeing backend resources")
+                    ModelRuntime.releaseWarm("asr")
                     backend?.release()
                     backend = null
                 }
@@ -149,6 +152,7 @@ class SpeechRecognitionManager(private val context: Context) {
                 stateCallback?.invoke(RecognitionState.IDLE)
 
                 if (!SettingsPreferences.isSttKeepModelInRam(context)) {
+                    ModelRuntime.releaseWarm("asr")
                     backend?.release()
                     backend = null
                 }
@@ -244,6 +248,7 @@ class SpeechRecognitionManager(private val context: Context) {
             preloadLock.notifyAll()
         }
 
+        ModelRuntime.keepWarm("asr")
         newBackend.start()
         newBackend.stop()
     }

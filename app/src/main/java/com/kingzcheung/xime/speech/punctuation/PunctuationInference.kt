@@ -2,6 +2,7 @@ package com.kingzcheung.xime.speech.punctuation
 
 import android.content.Context
 import android.util.Log
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.util.FileLogger
 import org.json.JSONObject
 import java.io.File
@@ -157,6 +158,13 @@ object PunctuationInference {
     }
 
     fun initialize(context: Context, modelPath: String, vocabPath: String): Boolean {
+        ModelRuntime.register(
+            id = "punctuation",
+            loader = { initialize(context, modelPath, vocabPath) },
+            releaser = { release() },
+            label = "标点预测模型"
+        )
+
         if (!loadVocabFromFile(vocabPath)) {
             FileLogger.e(TAG, "Failed to load vocab")
             return false
@@ -165,6 +173,7 @@ object PunctuationInference {
         try {
             nativeInitialize(modelPath)
             Log.d(TAG, "Native method already available")
+            ModelRuntime.markLoaded("punctuation")
             return true
         } catch (e: UnsatisfiedLinkError) {
             Log.d(TAG, "Native method not available, loading libraries...")
@@ -176,7 +185,11 @@ object PunctuationInference {
         }
         
         return try {
-            nativeInitialize(modelPath)
+            val ok = nativeInitialize(modelPath)
+            if (ok) {
+                ModelRuntime.markLoaded("punctuation")
+            }
+            ok
         } catch (e: UnsatisfiedLinkError) {
             FileLogger.e(TAG, "Native method still unavailable: ${e.message}")
             nativeLoaded = false
@@ -245,6 +258,7 @@ object PunctuationInference {
             Log.d(TAG, "Native release not available")
         }
         nativeLoaded = false
+        ModelRuntime.markUnloaded("punctuation")
     }
     
     fun isInitialized(): Boolean {

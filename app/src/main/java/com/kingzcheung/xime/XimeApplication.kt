@@ -6,6 +6,7 @@ import com.kingzcheung.xime.plugin.ExtensionManager
 import com.kingzcheung.xime.util.FileLogger
 import com.kingzcheung.xime.plugin.core.runtime.PluginManager
 import com.kingzcheung.xime.rime.RimeConfigHelper
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.SettingsPreferences
@@ -67,6 +68,10 @@ class XimeApplication : Application() {
         // 从 xime.yaml 的 style.color_scheme 读取默认主题
         SettingsPreferences.defaultKeyboardTheme = KeysConfigHelper.loadDefaultThemeId(this)
         Log.d(TAG, "Default keyboard theme: ${SettingsPreferences.defaultKeyboardTheme}")
+
+        // 初始化模型运行时（内存管理 + 生命周期）
+        ModelRuntime.attach(this)
+        Log.d(TAG, "ModelRuntime initialized")
 
         preInitializeRimeEngine()
         

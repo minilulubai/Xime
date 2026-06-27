@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kingzcheung.xime.association.AssociationManager
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.settings.SettingsPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,7 +86,11 @@ class SmartPredictionSettingsViewModel(application: Application) : AndroidViewMo
         
         if (enabled && !_uiState.value.isInitialized && _uiState.value.hasModel) {
             loadModel()
+            if (_uiState.value.isInitialized) {
+                ModelRuntime.keepWarm("predictive_text")
+            }
         } else if (!enabled && _uiState.value.isInitialized) {
+            ModelRuntime.releaseWarm("predictive_text")
             releaseModel()
         }
     }

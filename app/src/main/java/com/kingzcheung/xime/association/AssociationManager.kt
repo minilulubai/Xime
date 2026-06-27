@@ -2,6 +2,7 @@ package com.kingzcheung.xime.association
 
 import android.content.Context
 import android.util.Log
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,20 +36,26 @@ object AssociationManager {
             try {
                 fusionEngine = NgramFusionEngine(ctx)
                 
-                FileLogger.i(TAG, "Starting OnnxAssociationEngine initialization...")
-                val modelInit = OnnxAssociationEngine.initialize(ctx)
-                FileLogger.i(TAG, "OnnxAssociationEngine init result: $modelInit")
+                ModelRuntime.register(
+                    id = "predictive_text",
+                    loader = { OnnxAssociationEngine.initialize(ctx) },
+                    releaser = { OnnxAssociationEngine.release() },
+                    label = "智能联想模型"
+                )
+                val modelLoaded = ModelRuntime.load("predictive_text")
+                FileLogger.i(TAG, "ModelRuntime.load(predictive_text) result: $modelLoaded")
 
-                if (modelInit) {
+                if (modelLoaded) {
+                    ModelRuntime.keepWarm("predictive_text")
                     OnnxAssociationEngine.startWarmup()
                 }
 
                 val cacheInit = fusionEngine.initialize()
                 FileLogger.i(TAG, "NgramFusionEngine init result: $cacheInit")
                 
-                isInitialized = modelInit
+                isInitialized = modelLoaded
                 
-                FileLogger.i(TAG, "AssociationManager initialized: model=$modelInit, cache=$cacheInit")
+                FileLogger.i(TAG, "AssociationManager initialized: model=$modelLoaded, cache=$cacheInit")
                 isInitialized
                 
             } catch (e: Exception) {
@@ -115,7 +122,7 @@ object AssociationManager {
     
     fun release() {
         if (isInitialized) {
-            OnnxAssociationEngine.release()
+            ModelRuntime.unload("predictive_text")
             isInitialized = false
             context = null
             Log.d(TAG, "AssociationManager released")

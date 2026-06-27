@@ -1,6 +1,7 @@
 package com.kingzcheung.xime.association
 
 import android.content.Context
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,13 @@ object OnnxAssociationEngine {
             FileLogger.d(TAG, "Already initialized")
             return true
         }
+
+        ModelRuntime.register(
+            id = "predictive_text",
+            loader = { initialize(context) },
+            releaser = { release() },
+            label = "智能联想模型"
+        )
 
         try {
             val modelDir = context.filesDir
@@ -67,6 +75,7 @@ object OnnxAssociationEngine {
             if (success) {
                 isInitialized = true
                 FileLogger.i(TAG, "ONNX Runtime initialized successfully")
+                ModelRuntime.markLoaded("predictive_text")
                 return true
             } else {
                 FileLogger.e(TAG, "Failed to initialize ONNX Runtime - NativeOnnxEngine.initialize returned false")
@@ -136,6 +145,7 @@ object OnnxAssociationEngine {
     fun release() {
         NativeOnnxEngine.release()
         isInitialized = false
+        ModelRuntime.markUnloaded("predictive_text")
         FileLogger.d(TAG, "ONNX Runtime released")
     }
 

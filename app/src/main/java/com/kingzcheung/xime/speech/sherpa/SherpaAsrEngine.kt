@@ -5,6 +5,7 @@ package com.kingzcheung.xime.speech.sherpa
 import android.content.Context
 import android.util.Log
 import com.k2fsa.sherpa.onnx.*
+import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.speech.RecognitionState
 import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.CoroutineScope
@@ -124,6 +125,13 @@ class SherpaAsrEngine(private val context: Context) {
             return false
         }
 
+        ModelRuntime.register(
+            id = "asr",
+            loader = { false },
+            releaser = { release() },
+            label = "语音识别模型"
+        )
+
         val modelDir = getSelectedModelDir()
         if (!modelDir.exists()) {
             FileLogger.e(TAG, "Model directory not found: ${modelDir.absolutePath}")
@@ -160,6 +168,7 @@ class SherpaAsrEngine(private val context: Context) {
             recognizer = OnlineRecognizer(config = config)
             FileLogger.i(TAG, "Local ASR model initialized successfully: ${modelInfo.name}")
             Log.d(TAG, "Recognizer initialized from ${modelDir.absolutePath}")
+            ModelRuntime.markLoaded("asr")
             return true
         } catch (e: Exception) {
             FileLogger.e(TAG, "Failed to initialize recognizer: ${e.message}", e)
@@ -331,6 +340,7 @@ class SherpaAsrEngine(private val context: Context) {
         recognizer = null
         loadedModelId = null
         coroutineScope.cancel()
+        ModelRuntime.markUnloaded("asr")
         Log.d(TAG, "SherpaAsrEngine released")
     }
     
