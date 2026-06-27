@@ -1,11 +1,12 @@
 package com.kingzcheung.xime.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,103 +18,79 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kingzcheung.xime.model.ModelCategory
+import com.kingzcheung.xime.model.ModelManager
+import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.viewmodel.SmartPredictionSettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartPredictionSettingsContent(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToModelManagement: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val viewModel: SmartPredictionSettingsViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    
+
+    val predictionModels = remember { ModelManager.getModelsByCategory(ModelCategory.PREDICTION) }
+
+    val savedModelId = remember {
+        SettingsPreferences.getPredictionSelectedModel(context)
+    }
+    var selectedModelId by remember {
+        mutableStateOf(
+            if (savedModelId.isNotEmpty() && predictionModels.any { it.id == savedModelId })
+                savedModelId
+            else ""
+        )
+    }
+
     LaunchedEffect(uiState.toastMessage) {
         uiState.toastMessage?.let { message ->
             viewModel.showToast(message)
             viewModel.clearToast()
         }
     }
-    
-    if (uiState.showRepoDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.hideRepoDialog() },
-            title = { Text("模型仓库地址") },
-            text = {
-                Column {
-                    Text(
-                        text = "设置模型下载来源",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = uiState.tempRepo,
-                        onValueChange = { viewModel.setTempRepo(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { 
-                            Text(
-                                "输入模型仓库 URL",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            ) 
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "默认: https://www.modelscope.cn/models/bikeand/predictive-text-small",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.saveRepo() }) {
-                    Text("保存")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.hideRepoDialog() }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-    
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -178,7 +155,7 @@ fun SmartPredictionSettingsContent(
                             )
                         }
                     }
-                    
+
                     if (!uiState.hasModel) {
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 16.dp),
@@ -207,7 +184,31 @@ fun SmartPredictionSettingsContent(
                     }
                 })
             }
-            
+
+            if (predictionModels.isNotEmpty()) {
+                item {
+                    SettingsSection(title = "选择模型", content = {
+                        predictionModels.forEach { model ->
+                            PredictionModelCard(
+                                modelInfo = model,
+                                isSelected = model.id == selectedModelId,
+                                onSelect = {
+                                    selectedModelId = model.id
+                                    SettingsPreferences.setPredictionSelectedModel(context, model.id)
+                                }
+                            )
+                            if (model != predictionModels.last()) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 56.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    })
+                }
+            }
+
             if (uiState.isInitialized) {
                 item {
                     SettingsSection(title = "用户学习数据", content = {
@@ -235,10 +236,10 @@ fun SmartPredictionSettingsContent(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                            
+
                             if (uiState.cacheSize > 0) {
                                 Spacer(modifier = Modifier.height(12.dp))
-                                
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -257,7 +258,7 @@ fun SmartPredictionSettingsContent(
                                         }
                                         Text(if (uiState.isSaving) "保存中..." else "保存数据")
                                     }
-                                    
+
                                     OutlinedButton(
                                         onClick = { viewModel.refreshCacheSize() },
                                         modifier = Modifier.weight(1f)
@@ -272,137 +273,111 @@ fun SmartPredictionSettingsContent(
                     })
                 }
             }
-            
+
             item {
                 SettingsSection(title = "模型管理", content = {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "模型状态",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = if (uiState.hasModel) "已安装" else "未安装",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.hasModel) MaterialTheme.colorScheme.primary 
-                                           else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (uiState.hasModel) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                        
-                        if (uiState.isDownloading) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = uiState.downloadStatus,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                LinearProgressIndicator(
-                                    progress = { uiState.downloadProgress },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                )
-                            }
-                        } else if (!uiState.hasModel) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { viewModel.showRepoDialog() },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("设置仓库")
-                                }
-                                
-                                Button(
-                                    onClick = { viewModel.downloadModelFiles() },
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                ) {
-                                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("下载模型")
-                                }
-                            }
-                        }
-                        
-                        if (uiState.hasModel) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { viewModel.showRepoDialog() },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("设置仓库")
-                                }
-                                
-                                OutlinedButton(
-                                    onClick = { viewModel.deleteModel() },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("卸载模型")
-                                }
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        Text(
-                            text = "模型文件位置：${context.filesDir.absolutePath}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                        Text(
-                            text = "必需文件：vocab.json, model_int8_dynamic.onnx",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
+                    SettingsItem(
+                        icon = Icons.Default.Build,
+                        title = "下载/删除模型",
+                        subtitle = "管理所有已下载的 AI 模型",
+                        onClick = onNavigateToModelManagement,
+                        showArrow = true
+                    )
                 })
             }
-            
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "提示: 点击【下载模型】自动从仓库下载文件。如需更换来源，点击【设置仓库】修改地址",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
+        }
+    }
+}
+
+@Composable
+private fun PredictionModelCard(
+    modelInfo: com.kingzcheung.xime.model.ModelInfo,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
+    val context = LocalContext.current
+    val isDownloaded = remember { ModelManager.isModelDownloaded(context, modelInfo.id) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    if (isDownloaded) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = if (isDownloaded) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = modelInfo.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (modelInfo.size.isNotEmpty()) {
+                    Text(
+                        text = modelInfo.size,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (isDownloaded)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        text = if (isDownloaded) "已下载" else "未下载",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isDownloaded) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+
+        if (isDownloaded) {
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedButton(
+                onClick = onSelect,
+                enabled = !isSelected,
+                shape = RoundedCornerShape(50)
+            ) {
+                if (isSelected) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(if (isSelected) "使用中" else "使用")
             }
         }
     }

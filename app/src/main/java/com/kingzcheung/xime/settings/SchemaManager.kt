@@ -286,7 +286,7 @@ object SchemaManager {
 
     internal fun parseSchemaYaml(file: File): SchemaMeta? {
         return try {
-            val text = file.readText()
+            val text = file.readText().trimStart('\uFEFF')
             val entry = yaml.decodeFromString(SchemaYaml.serializer(), text).schema
             if (entry.schemaId.isEmpty()) return null
 
@@ -301,7 +301,7 @@ object SchemaManager {
                 description = entry.description ?: ""
             )
         } catch (e: Exception) {
-            try { Log.e(TAG, "Failed to parse schema file: ${file.name}", e) } catch (_: Exception) {}
+            try { Log.w(TAG, "Failed to parse schema file: ${file.name}, skip") } catch (_: Exception) {}
             null
         }
     }
@@ -334,7 +334,7 @@ object SchemaManager {
         val file = File(getRimeDir(context), "$schemaId.schema.yaml")
         if (!file.exists()) return null
         return try {
-            val entry = yaml.decodeFromString(SchemaYaml.serializer(), file.readText()).schema
+            val entry = yaml.decodeFromString(SchemaYaml.serializer(), file.readText().trimStart('\uFEFF')).schema
             entry.name.ifEmpty { null }
         } catch (e: Exception) {
             try { Log.e(TAG, "Failed to parse schema name for $schemaId", e) } catch (_: Exception) {}

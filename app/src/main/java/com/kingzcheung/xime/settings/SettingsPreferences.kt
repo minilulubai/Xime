@@ -21,6 +21,7 @@ object SettingsPreferences {
     
     private const val KEY_SMART_PREDICTION_ENABLED = "smart_prediction_enabled"
     private const val KEY_PREDICTION_MODEL_REPO = "prediction_model_repo"
+    private const val KEY_PREDICTION_SELECTED_MODEL = "prediction_selected_model"
     
     private const val KEY_STT_ENABLED = "stt_enabled"
     private const val KEY_STT_PROVIDER = "stt_provider"
@@ -222,6 +223,15 @@ object SettingsPreferences {
     
     fun setPredictionModelRepo(context: Context, repo: String) {
         getPrefs(context).edit().putString(KEY_PREDICTION_MODEL_REPO, repo).apply()
+    }
+    
+    fun getPredictionSelectedModel(context: Context): String {
+        return getPrefs(context).getString(KEY_PREDICTION_SELECTED_MODEL, "predictive-text-small")
+            ?: "predictive-text-small"
+    }
+    
+    fun setPredictionSelectedModel(context: Context, modelId: String) {
+        getPrefs(context).edit().putString(KEY_PREDICTION_SELECTED_MODEL, modelId).apply()
     }
     
     fun isSttEnabled(context: Context): Boolean {

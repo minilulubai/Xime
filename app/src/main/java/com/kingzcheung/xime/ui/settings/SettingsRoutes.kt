@@ -17,6 +17,7 @@ object SettingsRoutes {
     const val About = "about"
     const val Privacy = "privacy"
     const val Licenses = "licenses"
+    const val ModelManagement = "model_management"
     const val LogViewer = "log_viewer"
     const val WebDav = "webdav"
 }

@@ -33,6 +33,7 @@ fun SettingsScreen(
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
                 onNavigateToSpeechToText = { navController.navigate(SettingsRoutes.SpeechToText) },
+                onNavigateToModelManagement = { navController.navigate(SettingsRoutes.ModelManagement) },
                 onNavigateToAbout = { navController.navigate(SettingsRoutes.About) },
                 onNavigateToWebDav = { navController.navigate(SettingsRoutes.WebDav) }
             )
@@ -106,13 +107,15 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.SmartPrediction) {
             SmartPredictionSettingsContent(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToModelManagement = { navController.navigate(SettingsRoutes.ModelManagement) }
             )
         }
         composable(SettingsRoutes.SpeechToText) {
             SpeechToTextSettingsContent(
                 onBack = { navController.popBackStack() },
-                onNavigateToFunAsrSettings = { navController.navigate(SettingsRoutes.FunAsrSettings) }
+                onNavigateToFunAsrSettings = { navController.navigate(SettingsRoutes.FunAsrSettings) },
+                onNavigateToModelManagement = { navController.navigate(SettingsRoutes.ModelManagement) }
             )
         }
         composable(SettingsRoutes.FunAsrSettings) {
@@ -136,6 +139,11 @@ fun SettingsScreen(
                 onNavigateToPrivacy = { navController.navigate(SettingsRoutes.Privacy) },
                 onNavigateToLicenses = { navController.navigate(SettingsRoutes.Licenses) },
                 onNavigateToLogViewer = { navController.navigate(SettingsRoutes.LogViewer) }
+            )
+        }
+        composable(SettingsRoutes.ModelManagement) {
+            ModelManagementContent(
+                onBack = { navController.popBackStack() }
             )
         }
         composable(SettingsRoutes.LogViewer) {

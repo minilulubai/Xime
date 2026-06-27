@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.twotone.LibraryBooks
 import androidx.compose.material.icons.twotone.AutoAwesome
+import androidx.compose.material.icons.twotone.Build
 import androidx.compose.material.icons.twotone.CloudSync
 import androidx.compose.material.icons.twotone.Description
 import androidx.compose.material.icons.twotone.Extension
@@ -72,6 +73,7 @@ fun SettingsMainContent(
     onNavigateToPlugins: () -> Unit,
     onNavigateToSmartPrediction: () -> Unit,
     onNavigateToSpeechToText: () -> Unit,
+    onNavigateToModelManagement: () -> Unit = {},
     onNavigateToAbout: () -> Unit,
     onNavigateToWebDav: () -> Unit = {}
 ) {
@@ -318,6 +320,18 @@ fun SettingsMainContent(
                         title = "插件管理",
                         subtitle = "管理已安装的插件",
                         onClick = onNavigateToPlugins,
+                        showArrow = true
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 56.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    SettingsItem(
+                        icon = Icons.TwoTone.Build,
+                        title = "模型管理",
+                        subtitle = "管理已下载的 AI 模型",
+                        onClick = onNavigateToModelManagement,
                         showArrow = true
                     )
                 })

@@ -532,7 +532,7 @@ object KeysConfigHelper {
         Log.d(TAG, "readUserDataText: path=${file.absolutePath}, exists=${file.exists()}")
         if (!file.exists()) return null
         return try {
-            val text = file.readText()
+            val text = file.readText().trimStart('\uFEFF')
             Log.d(TAG, "readUserDataText: read ${text.length} chars, first 80=${text.take(80)}")
             text
         } catch (e: Exception) {
