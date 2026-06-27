@@ -15,14 +15,19 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -31,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 private const val MAX_VISIBLE_CANDIDATES = 10
+private const val ESTIMATED_CARD_HEIGHT_DP = 180
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -59,28 +65,41 @@ fun HardwareKeyboardCandidateBar(
         LocalConfiguration.current.screenHeightDp.dp.toPx()
     }.roundToInt()
 
-    val cardHeightEstPx = with(density) { 80.dp.toPx() }.roundToInt()
+    val view = LocalView.current
+    val viewLoc = remember { IntArray(2) }
+    view.getLocationOnScreen(viewLoc)
+
+    val marginPx = with(density) { 8.dp.toPx() }.roundToInt()
+    val cardTopMarginPx = with(density) { 16.dp.toPx() }.roundToInt()
+    val estCardHeightPx = with(density) { ESTIMATED_CARD_HEIGHT_DP.dp.toPx() }.roundToInt()
     val maxCardWidthDp = (screenWidthDp * 0.85f).roundToInt().coerceIn(260, 420)
     val halfEstPx = with(density) { (maxCardWidthDp / 2).dp.toPx() }.roundToInt()
 
-    val cardXPx = remember(cursorX, cursorVisible) {
-        val maxX = (screenWidthPx - halfEstPx * 2 - 8).coerceAtLeast(8)
-        if (cursorVisible && cursorX > 0) {
-            (cursorX - halfEstPx).coerceIn(8, maxX)
+    var actualCardHeight by remember { mutableIntStateOf(estCardHeightPx) }
+
+    val cardXPx = with(density) {
+        val relX = cursorX - viewLoc[0]
+        val maxX = (screenWidthPx - halfEstPx * 2 - marginPx).coerceAtLeast(marginPx)
+        if (cursorVisible && relX > 0) {
+            (relX - halfEstPx).coerceIn(marginPx, maxX)
         } else {
             (screenWidthPx - halfEstPx * 2).coerceAtLeast(0) / 2
         }
     }
 
-    val cardYPx = remember(cursorY, cursorVisible) {
+    val cardYPx = with(density) {
+        val maxY = (screenHeightPx - actualCardHeight - marginPx).coerceAtLeast(marginPx)
         if (cursorVisible && cursorY > 0) {
-            if (cursorY + cardHeightEstPx + 24 > screenHeightPx) {
-                (cursorY - cardHeightEstPx - 16).coerceIn(8, screenHeightPx - 16)
+            val relY = cursorY - viewLoc[1]
+            if (relY + actualCardHeight + cardTopMarginPx <= screenHeightPx) {
+                (relY + cardTopMarginPx).coerceIn(marginPx, maxY)
+            } else if (relY - actualCardHeight - cardTopMarginPx >= marginPx) {
+                (relY - actualCardHeight - cardTopMarginPx).coerceIn(marginPx, maxY)
             } else {
-                (cursorY + 16).coerceAtMost(screenHeightPx - 8)
+                maxY
             }
         } else {
-            with(density) { 60.dp.toPx() }.roundToInt()
+            with(density) { 60.dp.toPx() }.roundToInt().coerceIn(marginPx, maxY)
         }
     }
 
@@ -95,6 +114,7 @@ fun HardwareKeyboardCandidateBar(
                 .shadow(12.dp, RoundedCornerShape(8.dp))
                 .clip(RoundedCornerShape(8.dp))
                 .background(cardBackgroundColor)
+                .onSizeChanged { actualCardHeight = it.height }
         ) {
             Column(
                 modifier = Modifier

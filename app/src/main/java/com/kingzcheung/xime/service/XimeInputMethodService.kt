@@ -1237,24 +1237,16 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             }
             if (anchorCoords.any(Float::isNaN)) return
             info.matrix.mapPoints(anchorCoords)
-            val contentView = window.window?.decorView?.findViewById<View>(android.R.id.content) ?: return
-            val contentLoc = IntArray(2)
-            contentView.getLocationOnScreen(contentLoc)
-            val contentX = (anchorCoords[0] - contentLoc[0]).toInt()
-            val contentY = (anchorCoords[1] - contentLoc[1]).toInt()
+            val screenY = anchorCoords[1].toInt().coerceIn(0, resources.displayMetrics.heightPixels)
+            val screenX = anchorCoords[0].toInt().coerceIn(0, resources.displayMetrics.widthPixels)
             uiState.value = uiState.value.copy(
-                cursorX = contentX,
-                cursorY = contentY,
+                cursorX = screenX,
+                cursorY = screenY,
                 cursorVisible = true,
             )
         } catch (e: Exception) {
             Log.e(TAG, "onUpdateCursorAnchorInfo failed", e)
         }
-    }
-
-    override fun onConfigureWindow(win: android.view.Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
-        super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
-        win.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     override fun onEvaluateFullscreenMode(): Boolean {
@@ -1283,23 +1275,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }
 
     private fun applyFloatingWindowBackground() {
-        val state = uiState.value
+        if (!uiState.value.isFloatingMode) return
         try {
             window.window?.let { win ->
-                when {
-                    state.isFloatingMode -> {
-                        win.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-                        win.setDimAmount(0f)
-                    }
-                    state.isCompact -> {
-                        win.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-                        win.setDimAmount(0f)
-                    }
-                    else -> {
-                        win.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.WHITE))
-                        win.setDimAmount(0.2f)
-                    }
-                }
+                win.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                win.setDimAmount(0f)
             }
         } catch (e: Exception) {
             Log.e(TAG, "applyFloatingWindowBackground failed", e)
@@ -1311,7 +1291,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         val isCompact = hasHardwareKeyboard
         if (current.isCompact != isCompact) {
             uiState.value = current.copy(isCompact = isCompact)
-            applyFloatingWindowBackground()
+            if (isCompact) {
+                window.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            }
         }
     }
 
