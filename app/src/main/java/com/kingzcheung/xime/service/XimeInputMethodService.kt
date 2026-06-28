@@ -84,7 +84,7 @@ import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.keyboard.KeyboardView
-import com.kingzcheung.xime.ui.InputMode
+import com.kingzcheung.xime.ui.keyboard.isT9Schema
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import kotlin.math.roundToInt
 import com.kingzcheung.xime.settings.KeysConfigHelper
@@ -1451,7 +1451,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 对于非 T9 方案，preedit 和 input 通常相同
         val displayText = if (preeditText.isNotEmpty()) preeditText else inputText
         // T9 模式：通过最长后缀重叠检测，将 partial commit 累积文本与 RIME pre-edit 智能拼接
-        val isT9Schema = InputMode.isT9Schema(uiState.value.currentSchemaId)
+        val isT9Schema = isT9Schema(uiState.value.currentSchemaId)
         val t9DisplayText = if (isT9Schema) {
             PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, displayText)
         } else {
@@ -1507,7 +1507,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 使用 preedit 文本（经过 preedit_format 和 lua_filter 处理）作为显示文本
         // 对于 T9 九键方案，t9_preedit.lua 会将数字序列转为拼音
         val displayText = if (result.preeditText.isNotEmpty()) result.preeditText else result.inputText
-        val isT9Schema = InputMode.isT9Schema(uiState.value.currentSchemaId)
+        val isT9Schema = isT9Schema(uiState.value.currentSchemaId)
         val t9DisplayText = if (isT9Schema) {
             PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, displayText)
         } else {
@@ -1774,7 +1774,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         )
                         // T9 模式：同步重置 T9 控制器状态并清空 partial commit 累积文本，
                         // 否则左侧候选区残留、下一轮输入会拼接旧 partial commit。
-                        if (InputMode.isT9Schema(state.currentSchemaId)) {
+                        if (isT9Schema(state.currentSchemaId)) {
                             keyboardCallbacks?.onT9ReplaceFullPinyin?.invoke(T9InputController.CLEAR_ALL)
                             uiState.value = uiState.value.copy(
                                 t9ResetSignal = uiState.value.t9ResetSignal + 1,
@@ -2013,7 +2013,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             candidateState.value.candidates[index]
         } else null
 
-        val isT9 = InputMode.isT9Schema(uiState.value.currentSchemaId)
+        val isT9 = isT9Schema(uiState.value.currentSchemaId)
         val candidatePinyin = if (isT9 && index < candidateState.value.candidateComments.size) {
             candidateState.value.candidateComments[index]
         } else null
