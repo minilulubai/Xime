@@ -413,8 +413,7 @@ private fun SchemeCard(
 
                     installed -> {
                         Row(
-                            modifier = Modifier.weight(1f),
-                            horizontalArrangement = Arrangement.Start,
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             OutlinedButton(onClick = onDownload) { Text("重新下载") }
@@ -430,14 +429,15 @@ private fun SchemeCard(
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        if (deploying) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))
-                            Text("部署中…", style = MaterialTheme.typography.labelMedium)
-                        } else {
-                            OutlinedButton(onClick = onDeploy) { Text("部署") }
+                            if (deploying) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("部署中…", style = MaterialTheme.typography.labelMedium)
+                            } else {
+                                OutlinedButton(onClick = onDeploy) { Text("部署") }
+                            }
                         }
                     }
 
