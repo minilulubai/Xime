@@ -33,7 +33,6 @@ data class KeyboardCallbacks(
     val onFloatingModeChange: ((Boolean) -> Unit)? = null,
     val onFloatingKeyboardDrag: ((dx: Float, dy: Float) -> Unit)? = null,
     val onFloatingKeyboardDragEnd: (() -> Unit)? = null,
-    val onFloatingCardPositioned: ((left: Int, top: Int, right: Int, bottom: Int) -> Unit)? = null,
     val onT9ReplaceFullPinyin: ((String) -> Unit)? = null,
     val onT9RightCommitUndone: ((Int) -> Unit)? = null,
     /**

@@ -59,6 +59,7 @@ fun KeyboardView(
     state: KeyboardUiState,
     callbacks: KeyboardCallbacks,
     modifier: Modifier = Modifier,
+    onCardPositioned: (left: Int, top: Int, right: Int, bottom: Int) -> Unit = { _: Int, _: Int, _: Int, _: Int -> },
 ) {
     val isShifted by viewModel.isShifted.collectAsStateWithLifecycle()
     val keyboardState by viewModel.keyboardState.collectAsStateWithLifecycle()
@@ -165,9 +166,7 @@ fun KeyboardView(
         backgroundColor = keyboardBgColor,
         onDrag = { dx, dy -> callbacks.onFloatingKeyboardDrag?.invoke(dx, dy) },
         onDragEnd = { callbacks.onFloatingKeyboardDragEnd?.invoke() },
-        onCardPositioned = { left, top, right, bottom ->
-            callbacks.onFloatingCardPositioned?.invoke(left, top, right, bottom)
-        },
+        onCardPositioned = onCardPositioned,
     ) {
     Box(modifier = contentModifier) {
         Column(
