@@ -1512,24 +1512,22 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             candidatesWithComments.map { it.text } to candidatesWithComments.map { it.comment }
         }
 
-        // 使用 preedit 文本（经过 preedit_format 和 lua_filter 处理）作为显示文本
-        // 对于 T9 九键方案，t9_preedit.lua 会将数字序列转为拼音
-        // 对于非 T9 方案，preedit 和 input 通常相同
-        val displayText = if (preeditText.isNotEmpty()) preeditText else inputText
-        // T9 模式：通过最长后缀重叠检测，将 partial commit 累积文本与 RIME pre-edit 智能拼接
+        // 非 T9 方案（如双拼）使用原始输入文本显示，
+        // 避免显示 rime speller 展开后的编码（如双拼 i → ch）
         val isT9Schema = isT9Schema(uiState.value.currentSchemaId)
-        val t9DisplayText = if (isT9Schema) {
-            PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, displayText)
+        val displayText = if (isT9Schema) {
+            val preeditDisplay = if (preeditText.isNotEmpty()) preeditText else inputText
+            PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, preeditDisplay)
         } else {
-            displayText
+            inputText
         }
         // T9 模式下，只要还有 partial commit 未最终上屏，就应保持 composing 状态，
         // 以便预编辑区域继续显示已提交的候选文本（如场景 6 BS5 的"策"）
         val isComposing = inputText.isNotEmpty() || (isT9Schema && t9PartialCommitTexts.isNotEmpty())
 
         candidateState.value = candidateState.value.copy(
-            inputText = t9DisplayText,
-            preeditText = if (isT9Schema) t9DisplayText else preeditText,
+            inputText = displayText,
+            preeditText = displayText,
             candidates = filteredTexts,
             candidateComments = filteredComments,
             isComposing = isComposing,
@@ -1570,20 +1568,20 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             candidatesWithComments.map { it.text } to candidatesWithComments.map { it.comment }
         }
 
-        // 使用 preedit 文本（经过 preedit_format 和 lua_filter 处理）作为显示文本
-        // 对于 T9 九键方案，t9_preedit.lua 会将数字序列转为拼音
-        val displayText = if (result.preeditText.isNotEmpty()) result.preeditText else result.inputText
+        // 非 T9 方案（如双拼）使用原始输入文本显示，
+        // 避免显示 rime speller 展开后的编码（如双拼 i → ch）
         val isT9Schema = isT9Schema(uiState.value.currentSchemaId)
-        val t9DisplayText = if (isT9Schema) {
-            PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, displayText)
+        val displayText = if (isT9Schema) {
+            val preeditDisplay = if (result.preeditText.isNotEmpty()) result.preeditText else result.inputText
+            PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, preeditDisplay)
         } else {
-            displayText
+            result.inputText
         }
         val isComposing = result.inputText.isNotEmpty() || (isT9Schema && t9PartialCommitTexts.isNotEmpty())
 
         candidateState.value = candidateState.value.copy(
-            inputText = t9DisplayText,
-            preeditText = if (isT9Schema) t9DisplayText else result.preeditText,
+            inputText = displayText,
+            preeditText = displayText,
             candidates = filteredTexts,
             candidateComments = filteredComments,
             isComposing = isComposing,
