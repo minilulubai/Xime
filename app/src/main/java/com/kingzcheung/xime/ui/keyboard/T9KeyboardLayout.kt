@@ -670,7 +670,10 @@ private fun T9KeyboardContent(
                 onPress = { onKeyPressDown?.invoke("delete") },
                 swipeUpLabel = if (compactMode) null else "上滑清空",
                 swipeDownLabel = if (compactMode) null else "下滑撤回",
-                onSwipeUp = { onKeyPress("clear_all") },
+                onSwipeUp = {
+                    controller.clearAll()
+                    onKeyPress("clear_all")
+                },
                 onSwipeDown = { onKeyPress("undo_clear") },
                 onSwipeLeft = { onKeyPress("clear_composition") },
                 onSwipeStateChange = { state, bounds ->
