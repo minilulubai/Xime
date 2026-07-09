@@ -558,11 +558,12 @@ private fun StrokeKeyButton(
     val density = LocalDensity.current
     val swipeUpThreshold = with(density) { (-40).dp.toPx() }
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
 
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(
@@ -575,34 +576,8 @@ private fun StrokeKeyButton(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
             .fillMaxHeight()
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = {
-                        isPressed = true
-                        dragOffsetY = 0f
-                        hasTriggeredSwipeUp = false
-                    },
-                    onDragEnd = {
-                        isPressed = false
-                        dragOffsetY = 0f
-                        hasTriggeredSwipeUp = false
-                    },
-                    onDragCancel = {
-                        isPressed = false
-                        dragOffsetY = 0f
-                        hasTriggeredSwipeUp = false
-                    },
-                    onDrag = { change, dragAmount ->
-                        dragOffsetY += dragAmount.y
-                        if (dragOffsetY < swipeUpThreshold && !hasTriggeredSwipeUp && onSwipeUp != null) {
-                            hasTriggeredSwipeUp = true
-                            onSwipeUp()
-                        }
-                    }
-                )
-            }
+            .fillMaxWidth()
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -611,12 +586,9 @@ private fun StrokeKeyButton(
                         tryAwaitRelease()
                         isPressed = false
                     },
-                    onTap = {
-                        if (!hasTriggeredSwipeUp) onClick()
-                    }
+                    onTap = { onClick() }
                 )
             }
-            .padding(horizontal = 2.dp, vertical = 2.dp)
             .then(shadowModifier)
             .clip(keyClipShape)
             .background(

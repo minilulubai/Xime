@@ -268,7 +268,7 @@ private fun T9LandscapeCandidatePanel(
             .fillMaxSize()
             .then(
                 if (shadowEnabled) {
-                    Modifier.shadow(shadowElevation, RoundedCornerShape(LocalKeyCornerRadius.current))
+                    Modifier.shadow(shadowElevation, RoundedCornerShape(shadowShapeRadius))
                 } else Modifier
             )
             .clip(RoundedCornerShape(LocalKeyCornerRadius.current))

@@ -125,11 +125,12 @@ fun KeyButton(
     val bubbleShowThresholdUp = swipeUpThreshold
     val bubbleShowThresholdDown = swipeDownThreshold
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
     
     // 辅助函数：生成更深的颜色（混合黑色）
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
@@ -373,11 +374,12 @@ fun SwipeableKeyButton(
     val bubbleShowThresholdUp = swipeUpThreshold
     val bubbleShowThresholdDown = swipeDownThreshold
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
     val context = LocalContext.current
     val chaiPuaFontFamily = remember { FontFamily(Font("ChaiPUA-0.2.7-snow.ttf", context.assets)) }
 
@@ -920,11 +922,12 @@ fun SwipeableIconKeyButton(
         }
     }
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
     
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(

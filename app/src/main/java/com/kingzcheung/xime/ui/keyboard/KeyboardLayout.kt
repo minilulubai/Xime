@@ -1,5 +1,6 @@
 package com.kingzcheung.xime.ui.keyboard
 
+import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -916,7 +917,7 @@ fun KeyboardRowWithConfig(
     config: KeyboardRowConfig,
     isShifted: Boolean,
     isAsciiMode: Boolean = false,
-    modifier: Modifier = Modifier,
+    @SuppressLint("ModifierParameter") modifier: Modifier = Modifier,
     onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
     onKeyPressDown: ((String) -> Unit)? = null,
     onKeyRelease: ((String) -> Unit)? = null,
@@ -1039,19 +1040,19 @@ private fun ShiftCapsKeyButton(
 ) {
     var isPressed by remember { mutableStateOf(false) }
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
 
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(
             red = (color.red * (1 - factor)).coerceIn(0f, 1f),
             green = (color.green * (1 - factor)).coerceIn(0f, 1f),
             blue = (color.blue * (1 - factor)).coerceIn(0f, 1f),
-            alpha = color.alpha
-        )
+            alpha = color.alpha)
     }
 
     Box(
@@ -1080,7 +1081,7 @@ private fun ShiftCapsKeyButton(
                 }
             }
             .then(shadowModifier)
-            .clip(RoundedCornerShape(LocalKeyCornerRadius.current))
+            .clip(keyClipShape)
             .background(
                 if (isPressed) darkenColor(backgroundColor, 0.1f)
                 else if (shiftMode == ShiftMode.CAPS) darkenColor(backgroundColor, 0.2f)
@@ -1639,11 +1640,12 @@ fun SwipeableKeyButtonLandscape(
     val bubbleShowThresholdUp = swipeUpThreshold * 0.3f
     val bubbleShowThresholdDown = swipeDownThreshold * 0.3f
 
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
 
     fun darkenColor(color: Color, factor: Float = 0.15f): Color {
         return Color(
@@ -1854,11 +1856,10 @@ fun SwipeableKeyButtonLandscape(
             }
             .padding(LocalKeyVisualPadding.current)
             .then(shadowModifier)
-            .clip(RoundedCornerShape(LocalKeyCornerRadius.current))
+            .clip(keyClipShape)
             .background(if (isPressed) darkenColor(backgroundColor) else backgroundColor),
         contentAlignment = Alignment.TopStart
     ) {
-
 
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -2033,18 +2034,19 @@ private fun SplitSpaceKey(
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
 ) {
+    val shadowShape = remember(shadowShapeRadius) { RoundedCornerShape(shadowShapeRadius) }
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, shadowShape) else Modifier
+    }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyClipShape) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, keyClipShape) else Modifier
-    }
 
     Box(
         modifier = modifier
             .fillMaxHeight()
             .padding(LocalKeyVisualPadding.current)
             .then(shadowModifier)
-            .clip(RoundedCornerShape(LocalKeyCornerRadius.current))
+            .clip(keyClipShape)
             .background(backgroundColor)
             .clickable(
                 interactionSource = null,
@@ -2101,9 +2103,8 @@ private fun SpaceKey(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val keyCornerRadius = LocalKeyCornerRadius.current
-    val shadowModifier = remember(shadowEnabled, shadowElevation, keyCornerRadius) {
-        if (shadowEnabled) Modifier.shadow(shadowElevation, RoundedCornerShape(keyCornerRadius), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius) {
+        if (shadowEnabled) Modifier.shadow(shadowElevation, RoundedCornerShape(shadowShapeRadius), ambientColor = Color(0x80000000), spotColor = Color(0x80000000))
         else Modifier
     }
 
