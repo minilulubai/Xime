@@ -1,21 +1,32 @@
 package com.kingzcheung.xime.ui.keyboard
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.filled.EmojiEmotions
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -33,27 +44,32 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.util.SubcharHelper
 
 /**
- * 笔画 T9 键盘布局 — 结构与 [NumberKeyboardLayout] 一致。
+ * 笔画键盘布局 — 参照 [T9KeyboardLayout] 结构。
  *
- * 第1行：。 | 一(h) | 丨(s) | 丿(p) | 退格
- * 第2行：？ | 丶(n) | 乛(z) | *    | 换行
- * 第3行：* | 分词  | ，    | 英   | 确定
- * 第4行：符号 | 123  | 空格  | .   | 确定
- * 空格上滑输入 0
+ * 布局说明：
+ * - 左侧候选区：。？ ！ ~ 4 个常用标点，纵向排列。
+ * - 中间主键区：
+ *   第1行：一(h) | 丨(s) | 丿(p)
+ *   第2行：丶(n) | 乛(z) | *
+ *   第3行：分词 | ， | 英
+ *   第4行：符号 | 123 | 空格 | .
+ * - 右侧功能键区：退格 | 重输 | 确定
  */
 @Composable
 fun StrokeKeyboardLayout(
@@ -71,14 +87,43 @@ fun StrokeKeyboardLayout(
     isFloatingMode: Boolean = false,
     specialKeyTextColor: Color = Color.White,
 ) {
-    val configuration = LocalConfiguration.current
-    val isLandscape =
-        configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val commonSymbols = listOf(
-        "~", "!", "#", "$", "%", "^", "&", "*",
-        "(", ")", "_", "=", "[", "]", "{", "}",
-        "\\", "|", ";", ":", "'", "\"", "<", ">"
+    StrokeKeyboardSwipeOverlay(
+        modifier = modifier,
+        keyboardBackgroundColor = keyboardBackgroundColor,
+        keyCornerRadius = keyCornerRadius,
+        keyTextColor = keyTextColor,
+        isFloatingMode = isFloatingMode,
+        onKeyPress = onKeyPress,
+        keyBackgroundColor = keyBackgroundColor,
+        specialKeyBackgroundColor = specialKeyBackgroundColor,
+        shadowEnabled = shadowEnabled,
+        shadowElevation = shadowElevation,
+        shadowShapeRadius = shadowShapeRadius,
+        onKeyPressDown = onKeyPressDown,
+        specialKeyTextColor = specialKeyTextColor,
     )
+}
+
+// ─── 滑动气泡覆盖层 ────────────────────────────────────────────────
+
+@Composable
+private fun StrokeKeyboardSwipeOverlay(
+    modifier: Modifier,
+    keyboardBackgroundColor: Color,
+    keyCornerRadius: Dp,
+    keyTextColor: Color,
+    isFloatingMode: Boolean,
+    onKeyPress: (String) -> Unit,
+    keyBackgroundColor: Color,
+    specialKeyBackgroundColor: Color,
+    shadowEnabled: Boolean,
+    shadowElevation: Dp,
+    shadowShapeRadius: Dp,
+    onKeyPressDown: ((String) -> Unit)?,
+    specialKeyTextColor: Color,
+) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = !isFloatingMode && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     var swipeState by remember { mutableStateOf(SwipeState()) }
     var keyboardBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
@@ -94,6 +139,21 @@ fun StrokeKeyboardLayout(
         keyboardWidth = keyboardBounds.width
     )
 
+    fun processSwipeState(state: SwipeState, bounds: Rect) {
+        val newState = if (state.isSwipeDown && state.swipeText != null) {
+            state.copy(charInfos = SubcharHelper.parseSwipeDownText(state.swipeText))
+        } else {
+            state
+        }
+        swipeState = newState
+        lastKeyBounds = Rect(
+            left = bounds.left - keyboardBounds.left,
+            top = bounds.top - keyboardBounds.top,
+            right = bounds.right - keyboardBounds.left,
+            bottom = bounds.bottom - keyboardBounds.top
+        )
+    }
+
     CompositionLocalProvider(LocalKeyCornerRadius provides keyCornerRadius) {
     Box(
         modifier = modifier
@@ -105,51 +165,59 @@ fun StrokeKeyboardLayout(
                 drawContent()
                 bubbleData?.let { drawSwipeBubble(it) }
             }
-            .padding(bottom = if (isFloatingMode) 0.dp else 10.dp)) {
+            .padding(bottom = if (isFloatingMode || isLandscape) 0.dp else 10.dp),
+    ) {
         if (isLandscape) {
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(vertical = 8.dp, horizontal = 50.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize().padding(vertical = 2.dp, horizontal = 50.dp),
             ) {
                 Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
+                    modifier = Modifier.weight(0.42f).fillMaxHeight(),
                 ) {
-                    commonSymbols.chunked(6).forEach { rowSymbols ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                        ) {
-                            rowSymbols.forEach { sym ->
-                                KeyButton(
-                                    text = sym,
-                                    onClick = { onKeyPress(sym) },
-                                    backgroundColor = keyBackgroundColor,
-                                    textColor = keyTextColor,
-                                    modifier = Modifier.weight(1f),
-                                    onPress = { onKeyPressDown?.invoke(sym) },
-                                    shadowEnabled = shadowEnabled,
-                                    shadowElevation = shadowElevation,
-                                    shadowShapeRadius = shadowShapeRadius,
-                                )
-                            }
-                            repeat(6 - rowSymbols.size) {
-                                Box(modifier = Modifier.weight(1f))
-                            }
-                        }
+                    StrokeLandscapeSymbolPanel(
+                        onKeyPress = onKeyPress,
+                        keyBackgroundColor = keyBackgroundColor,
+                        keyTextColor = keyTextColor,
+                        shadowEnabled = shadowEnabled,
+                        shadowElevation = shadowElevation,
+                        shadowShapeRadius = shadowShapeRadius,
+                        onKeyPressDown = onKeyPressDown,
+                    )
+                }
+                Spacer(modifier = Modifier.weight(0.16f))
+                Box(
+                    modifier = Modifier.weight(0.42f).fillMaxHeight(),
+                ) {
+                    CompositionLocalProvider(
+                        LocalKeyVisualPadding provides PaddingValues(horizontal = 1.dp, vertical = 2.dp)
+                    ) {
+                        StrokeKeyboardContent(
+                            onKeyPress = onKeyPress,
+                            keyBackgroundColor = keyBackgroundColor,
+                            keyTextColor = keyTextColor,
+                            specialKeyBackgroundColor = specialKeyBackgroundColor,
+                            shadowEnabled = shadowEnabled,
+                            shadowElevation = shadowElevation,
+                            shadowShapeRadius = shadowShapeRadius,
+                            onKeyPressDown = onKeyPressDown,
+                            onSwipeStateChange = ::processSwipeState,
+                            specialKeyTextColor = specialKeyTextColor,
+                            compactMode = true,
+                        )
                     }
                 }
-
-                Box(
+            }
+        } else {
+            CompositionLocalProvider(
+                LocalKeyVisualPadding provides PaddingValues(horizontal = 2.dp, vertical = 2.dp)
+            ) {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
+                        .fillMaxSize()
+                        .padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    StrokeRows(
+                    StrokeKeyboardContent(
                         onKeyPress = onKeyPress,
                         keyBackgroundColor = keyBackgroundColor,
                         keyTextColor = keyTextColor,
@@ -158,56 +226,89 @@ fun StrokeKeyboardLayout(
                         shadowElevation = shadowElevation,
                         shadowShapeRadius = shadowShapeRadius,
                         onKeyPressDown = onKeyPressDown,
+                        onSwipeStateChange = ::processSwipeState,
                         specialKeyTextColor = specialKeyTextColor,
-                        onSwipeStateChange = { state, bounds ->
-                            val newState = if (state.isSwipeDown && state.swipeText != null) {
-                                state.copy(charInfos = SubcharHelper.parseSwipeDownText(state.swipeText))
-                            } else state
-                            swipeState = newState
-                            lastKeyBounds = Rect(
-                                left = bounds.left - keyboardBounds.left,
-                                top = bounds.top - keyboardBounds.top,
-                                right = bounds.right - keyboardBounds.left,
-                                bottom = bounds.bottom - keyboardBounds.top
-                            )
-                        }
+                        compactMode = false,
                     )
                 }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .background(keyboardBackgroundColor)
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
-            ) {
-                StrokeRows(
-                    onKeyPress = onKeyPress,
-                    keyBackgroundColor = keyBackgroundColor,
-                    keyTextColor = keyTextColor,
-                    specialKeyBackgroundColor = specialKeyBackgroundColor,
-                    shadowEnabled = shadowEnabled,
-                    shadowElevation = shadowElevation,
-                    shadowShapeRadius = shadowShapeRadius,
-                    onKeyPressDown = onKeyPressDown,
-                    onSwipeStateChange = { state, bounds ->
-                        val newState = if (state.isSwipeDown && state.swipeText != null) {
-                            state.copy(charInfos = SubcharHelper.parseSwipeDownText(state.swipeText))
-                        } else state
-                        swipeState = newState
-                        lastKeyBounds = Rect(
-                            left = bounds.left - keyboardBounds.left,
-                            top = bounds.top - keyboardBounds.top,
-                            right = bounds.right - keyboardBounds.left,
-                            bottom = bounds.bottom - keyboardBounds.top
-                        )
-                    })
             }
         }
     }
     }
 }
+
+// ─── 横屏符号面板 ──────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StrokeLandscapeSymbolPanel(
+    onKeyPress: (String) -> Unit,
+    keyBackgroundColor: Color,
+    keyTextColor: Color,
+    shadowEnabled: Boolean,
+    shadowElevation: Dp,
+    shadowShapeRadius: Dp,
+    onKeyPressDown: ((String) -> Unit)?,
+) {
+    val density = LocalDensity.current
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius, density, keyBackgroundColor) {
+        if (shadowEnabled) {
+            val offsetPx = with(density) { shadowElevation.toPx() }
+            val cornerPx = with(density) { shadowShapeRadius.toPx() }
+            val color = crispShadowColor(keyBackgroundColor)
+            Modifier.drawBehind {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(0f, offsetPx),
+                    size = size,
+                    cornerRadius = CornerRadius(cornerPx)
+                )
+            }
+        } else Modifier
+    }
+
+    val commonSymbols = listOf(
+        "~", "!", "#", "$", "%", "^", "&", "*",
+        "(", ")", "_", "=", "[", "]", "{", "}",
+        "\\", "|", ";", ":", "'", "\"", "<", ">"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(shadowModifier)
+            .clip(RoundedCornerShape(LocalKeyCornerRadius.current))
+            .background(keyBackgroundColor)
+    ) {
+        val scrollState = rememberScrollState()
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(scrollState),
+        ) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                commonSymbols.forEach { sym ->
+                    Box(
+                        modifier = Modifier
+                            .clickable { onKeyPress(sym) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = sym,
+                            color = keyTextColor,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── 笔画键盘三列主体 ──────────────────────────────────────────────
 
 private data class StrokeKeyDef(
     val mainLabel: String,
@@ -224,229 +325,180 @@ private val strokeKeys = listOf(
 )
 
 @Composable
-private fun StrokeRows(
+private fun StrokeKeyboardContent(
     onKeyPress: (String) -> Unit,
     keyBackgroundColor: Color,
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
-    shadowEnabled: Boolean = true,
-    shadowElevation: Dp = 1.dp,
-    shadowShapeRadius: Dp = 8.dp,
-    onKeyPressDown: ((String) -> Unit)? = null,
-    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
-    specialKeyTextColor: Color = Color.White,
+    shadowEnabled: Boolean,
+    shadowElevation: Dp,
+    shadowShapeRadius: Dp,
+    onKeyPressDown: ((String) -> Unit)?,
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)?,
+    specialKeyTextColor: Color,
+    compactMode: Boolean = false,
 ) {
-    val suppressCursorMove = LocalSuppressCursorMove.current
+    val ctrlFontSize = if (compactMode) 11.sp else androidx.compose.ui.unit.TextUnit.Unspecified
+    val strokeFontSize = if (compactMode) 13.sp else 16.sp
+    val specialCtxTextColor = if (compactMode) specialKeyTextColor
+        else (if (keyTextColor == Color(0xFFE8EAED)) Color.White
+              else Color(0xFF1A73E8))
+
     val symbols = listOf("。", "？", "！", "~")
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .padding(horizontal = 2.dp),
+    val suppressCursorMove = LocalSuppressCursorMove.current
+
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
     ) {
+        // ── 第1列：左侧符号区（3 行符号 + 1 行符号按钮） ──
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = Modifier.fillMaxHeight().weight(0.9f),
+            verticalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(3f),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                symbols.forEachIndexed { index, symbol ->
+                    StrokeSymbolItem(
+                        text = symbol,
+                        isFirst = index == 0,
+                        isLast = index == symbols.lastIndex,
+                        onClick = { onKeyPress(symbol) },
+                        onPress = { onKeyPressDown?.invoke(symbol) },
+                        backgroundColor = keyBackgroundColor,
+                        textColor = keyTextColor,
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    )
+                }
+            }
+            StrokeSymbolButton(
+                text = "符号",
+                onClick = { onKeyPress("symbol") },
+                backgroundColor = specialKeyBackgroundColor,
+                textColor = specialKeyTextColor,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                onPress = { onKeyPressDown?.invoke("symbol") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
+                fontSize = ctrlFontSize,
+            )
+        }
+
+        // ── 第2列：笔画键区 ──
+        Column(
+            modifier = Modifier.fillMaxHeight().weight(3.2f),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(3f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxWidth().weight(1f),
             ) {
-                Column(
-                    modifier = Modifier
-                        .padding(vertical = 2.dp)
-                        .fillMaxHeight()
-                        .weight(1f),
-                ) {
-                    symbols.forEachIndexed { index, symbol ->
-                        StrokeSymbolKey(
-                            text = symbol,
-                            onClick = { onKeyPress(symbol) },
-                            backgroundColor = keyBackgroundColor,
-                            textColor = keyTextColor,
-                            modifier = Modifier.weight(1f),
-                            onPress = { onKeyPressDown?.invoke(symbol) },
-                            isFirst = index == 0,
-                            isLast = index == symbols.lastIndex,
-                        )
-                    }
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(4f),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    ) {
-                        strokeKeys.take(3).forEach { key ->
-                            StrokeKeyButton(
-                                mainLabel = key.mainLabel,
-                                swipeDigit = key.swipeDigit,
-                                onClick = { onKeyPress(key.commit) },
-                                backgroundColor = keyBackgroundColor,
-                                textColor = keyTextColor,
-                                modifier = Modifier.weight(1f),
-                                onPress = { onKeyPressDown?.invoke(key.commit) },
-                                onSwipeUp = { onKeyPress(key.swipeDigit) },
-                                shadowEnabled = shadowEnabled,
-                                shadowElevation = shadowElevation,
-                                shadowShapeRadius = shadowShapeRadius,
-                            )
-                        }
-                        SwipeableIconKeyButton(
-                            icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace),
-                            onClick = { onKeyPress("delete") },
-                            backgroundColor = specialKeyBackgroundColor,
-                            iconColor = specialKeyTextColor,
-                            modifier = Modifier.weight(1f),
-                            swipeText = "清空",
-                            onSwipe = { onKeyPress("clear_composition") },
-                            onLongClick = { onKeyPress("delete") },
-                            onPress = { onKeyPressDown?.invoke("delete") },
-                            swipeUpLabel = "上滑清空",
-                            swipeDownLabel = "下滑撤回",
-                            onSwipeUp = { onKeyPress("clear_all") },
-                            onSwipeDown = { onKeyPress("undo_clear") },
-                            onSwipeLeft = {
-                                suppressCursorMove.value = true
-                                onKeyPress("clear_composition")
-                            },
-                            onSwipeStateChange = onSwipeStateChange,
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    ) {
-                        strokeKeys.drop(3).forEach { key ->
-                            StrokeKeyButton(
-                                mainLabel = key.mainLabel,
-                                swipeDigit = key.swipeDigit,
-                                onClick = { onKeyPress(key.commit) },
-                                backgroundColor = keyBackgroundColor,
-                                textColor = keyTextColor,
-                                modifier = Modifier.weight(1f),
-                                onPress = { onKeyPressDown?.invoke(key.commit) },
-                                onSwipeUp = { onKeyPress(key.swipeDigit) },
-                                shadowEnabled = shadowEnabled,
-                                shadowElevation = shadowElevation,
-                                shadowShapeRadius = shadowShapeRadius,
-                            )
-                        }
-                        SwipeableKeyButton(
-                            text = "*",
-                            onClick = { onKeyPress("*") },
-                            backgroundColor = keyBackgroundColor,
-                            textColor = keyTextColor,
-                            modifier = Modifier.weight(1f),
-                            swipeText = "6",
-                            swipeUpKeyLabel = "6",
-                            onSwipe = { onKeyPress("6") },
-                            onPress = { onKeyPressDown?.invoke("*") },
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                        KeyButton(
-                            text = "换行",
-                            onClick = { onKeyPress("enter") },
-                            backgroundColor = specialKeyBackgroundColor,
-                            textColor = specialKeyTextColor,
-                            modifier = Modifier.weight(1f),
-                            onPress = { onKeyPressDown?.invoke("enter") },
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    ) {
-                        SwipeableKeyButton(
-                            text = "分词",
-                            onClick = { onKeyPress("word_separator") },
-                            backgroundColor = keyBackgroundColor,
-                            textColor = keyTextColor,
-                            modifier = Modifier.weight(1f),
-                            swipeText = "7",
-                            swipeUpKeyLabel = "7",
-                            onSwipe = { onKeyPress("7") },
-                            onPress = { onKeyPressDown?.invoke("word_separator") },
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                        SwipeableKeyButton(
-                            text = "，",
-                            onClick = { onKeyPress("，") },
-                            backgroundColor = keyBackgroundColor,
-                            textColor = keyTextColor,
-                            modifier = Modifier.weight(1f),
-                            swipeText = "8",
-                            swipeUpKeyLabel = "8",
-                            onSwipe = { onKeyPress("8") },
-                            onPress = { onKeyPressDown?.invoke("，") },
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                        SwipeableKeyButton(
-                            text = "英",
-                            onClick = { onKeyPress("ime_switch") },
-                            backgroundColor = keyBackgroundColor,
-                            textColor = keyTextColor,
-                            modifier = Modifier.weight(1f),
-                            swipeText = "9",
-                            swipeUpKeyLabel = "9",
-                            onSwipe = { onKeyPress("9") },
-                            onPress = { onKeyPressDown?.invoke("ime_switch") },
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                        IconKeyButton(
-                            icon = rememberVectorPainter(Icons.Default.EmojiEmotions),
-                            onClick = { onKeyPress("emoji") },
-                            backgroundColor = specialKeyBackgroundColor,
-                            iconColor = specialKeyTextColor,
-                            modifier = Modifier.weight(1f),
-                            onPress = { onKeyPressDown?.invoke("emoji") },
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                        )
-                    }
+                strokeKeys.take(3).forEach { key ->
+                    StrokeKeyItem(
+                        mainLabel = key.mainLabel,
+                        swipeDigit = key.swipeDigit,
+                        onClick = { onKeyPress(key.commit) },
+                        onSwipeUp = { onKeyPress(key.swipeDigit) },
+                        onPress = { onKeyPressDown?.invoke(key.commit) },
+                        backgroundColor = keyBackgroundColor,
+                        textColor = keyTextColor,
+                        modifier = Modifier.weight(1f),
+                        shadowEnabled = shadowEnabled,
+                        shadowElevation = shadowElevation,
+                        shadowShapeRadius = shadowShapeRadius,
+                        strokeFontSize = strokeFontSize,
+                        compactMode = compactMode,
+                        onSwipeStateChange = onSwipeStateChange,
+                    )
                 }
             }
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth().weight(1f),
             ) {
-                KeyButton(
-                    text = "符号",
-                    onClick = { onKeyPress("symbol") },
-                    backgroundColor = specialKeyBackgroundColor,
-                    textColor = specialKeyTextColor,
+                strokeKeys.drop(3).forEach { key ->
+                    StrokeKeyItem(
+                        mainLabel = key.mainLabel,
+                        swipeDigit = key.swipeDigit,
+                        onClick = { onKeyPress(key.commit) },
+                        onSwipeUp = { onKeyPress(key.swipeDigit) },
+                        onPress = { onKeyPressDown?.invoke(key.commit) },
+                        backgroundColor = keyBackgroundColor,
+                        textColor = keyTextColor,
+                        modifier = Modifier.weight(1f),
+                        shadowEnabled = shadowEnabled,
+                        shadowElevation = shadowElevation,
+                        shadowShapeRadius = shadowShapeRadius,
+                        strokeFontSize = strokeFontSize,
+                        compactMode = compactMode,
+                        onSwipeStateChange = onSwipeStateChange,
+                    )
+                }
+                StrokeDigitKey(
+                    digit = "*", swipeDigit = "6",
+                    onClick = { onKeyPress("*") },
+                    onSwipeUp = { onKeyPress("6") },
+                    onPress = { onKeyPressDown?.invoke("*") },
+                    backgroundColor = keyBackgroundColor,
+                    textColor = keyTextColor,
                     modifier = Modifier.weight(1f),
-                    onPress = { onKeyPressDown?.invoke("symbol") },
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     shadowShapeRadius = shadowShapeRadius,
+                    fontSize = strokeFontSize,
+                    onSwipeStateChange = onSwipeStateChange,
                 )
-                KeyButton(
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) {
+                StrokeDigitKey(
+                    digit = "分词", swipeDigit = "7",
+                    onClick = { onKeyPress("word_separator") },
+                    onSwipeUp = { onKeyPress("7") },
+                    onPress = { onKeyPressDown?.invoke("word_separator") },
+                    backgroundColor = keyBackgroundColor,
+                    textColor = keyTextColor,
+                    modifier = Modifier.weight(1f),
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
+                    fontSize = strokeFontSize,
+                    onSwipeStateChange = onSwipeStateChange,
+                )
+                StrokeDigitKey(
+                    digit = "，", swipeDigit = "8",
+                    onClick = { onKeyPress("，") },
+                    onSwipeUp = { onKeyPress("8") },
+                    onPress = { onKeyPressDown?.invoke("，") },
+                    backgroundColor = keyBackgroundColor,
+                    textColor = keyTextColor,
+                    modifier = Modifier.weight(1f),
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
+                    fontSize = strokeFontSize,
+                    onSwipeStateChange = onSwipeStateChange,
+                )
+                StrokeDigitKey(
+                    digit = "英", swipeDigit = "9",
+                    onClick = { onKeyPress("ime_switch") },
+                    onSwipeUp = { onKeyPress("9") },
+                    onPress = { onKeyPressDown?.invoke("ime_switch") },
+                    backgroundColor = keyBackgroundColor,
+                    textColor = keyTextColor,
+                    modifier = Modifier.weight(1f),
+                    shadowEnabled = shadowEnabled,
+                    shadowElevation = shadowElevation,
+                    shadowShapeRadius = shadowShapeRadius,
+                    fontSize = strokeFontSize,
+                    onSwipeStateChange = onSwipeStateChange,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) {
+                StrokeSymbolButton(
                     text = "123",
                     onClick = { onKeyPress("number") },
                     backgroundColor = keyBackgroundColor,
@@ -456,21 +508,19 @@ private fun StrokeRows(
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     shadowShapeRadius = shadowShapeRadius,
+                    fontSize = ctrlFontSize,
                 )
-                SwipeableKeyButton(
-                    text = "空格",
-                    onClick = { onKeyPress("space") },
+                StrokeSpaceButton(
+                    onKeyPress = onKeyPress,
+                    onKeyPressDown = onKeyPressDown,
                     backgroundColor = keyBackgroundColor,
                     textColor = keyTextColor,
-                    modifier = Modifier.weight(1.5f),
-                    swipeText = "0",
-                    onSwipe = { onKeyPress("0") },
-                    onPress = { onKeyPressDown?.invoke("space") },
+                    modifier = Modifier.weight(1.8f),
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     shadowShapeRadius = shadowShapeRadius,
                 )
-                KeyButton(
+                StrokeSymbolButton(
                     text = ".",
                     onClick = { onKeyPress(".") },
                     backgroundColor = keyBackgroundColor,
@@ -480,33 +530,77 @@ private fun StrokeRows(
                     shadowEnabled = shadowEnabled,
                     shadowElevation = shadowElevation,
                     shadowShapeRadius = shadowShapeRadius,
-                )
-                KeyButton(
-                    text = "确定",
-                    onClick = { onKeyPress("enter") },
-                    backgroundColor = specialKeyBackgroundColor,
-                    textColor = specialKeyTextColor,
-                    modifier = Modifier.weight(1.2f),
-                    onPress = { onKeyPressDown?.invoke("enter") },
-                    shadowEnabled = shadowEnabled,
-                    shadowElevation = shadowElevation,
-                    shadowShapeRadius = shadowShapeRadius,
+                    fontSize = ctrlFontSize,
                 )
             }
+        }
+
+        // ── 第3列：功能键区 ──
+        Column(
+            modifier = Modifier.fillMaxHeight().weight(0.9f),
+        ) {
+            SwipeableIconKeyButton(
+                icon = rememberVectorPainter(Icons.AutoMirrored.Filled.Backspace),
+                onClick = { onKeyPress("delete") },
+                onLongClick = { onKeyPress("delete") },
+                backgroundColor = specialKeyBackgroundColor,
+                iconColor = specialKeyTextColor,
+                modifier = Modifier.weight(1f),
+                swipeText = if (compactMode) null else "清空",
+                onSwipe = { onKeyPress("clear_composition") },
+                onPress = { onKeyPressDown?.invoke("delete") },
+                swipeUpLabel = if (compactMode) null else "上滑清空",
+                swipeDownLabel = if (compactMode) null else "下滑撤回",
+                onSwipeUp = { onKeyPress("clear_all") },
+                onSwipeDown = { onKeyPress("undo_clear") },
+                onSwipeLeft = {
+                    suppressCursorMove.value = true
+                    onKeyPress("clear_composition")
+                },
+                onSwipeStateChange = onSwipeStateChange,
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
+            )
+            ResetKey(
+                onClick = { onKeyPress("clear_composition") },
+                onPress = { onKeyPressDown?.invoke("clear") },
+                backgroundColor = specialKeyBackgroundColor,
+                textColor = specialKeyTextColor,
+                modifier = Modifier.weight(1f),
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
+                compactMode = compactMode,
+            )
+            StrokeSymbolButton(
+                text = "确定",
+                onClick = { onKeyPress("enter") },
+                backgroundColor = specialKeyBackgroundColor,
+                textColor = specialKeyTextColor,
+                modifier = Modifier.weight(2f),
+                onPress = { onKeyPressDown?.invoke("enter") },
+                shadowEnabled = shadowEnabled,
+                shadowElevation = shadowElevation,
+                shadowShapeRadius = shadowShapeRadius,
+                fontSize = androidx.compose.ui.unit.TextUnit.Unspecified,
+            )
         }
     }
 }
 
+// ─── 子组件 ───────────────────────────────────────────────────────
+
 @Composable
-private fun StrokeSymbolKey(
+private fun StrokeSymbolItem(
     text: String,
+    isFirst: Boolean,
+    isLast: Boolean,
     onClick: () -> Unit,
+    onPress: (() -> Unit)?,
     backgroundColor: Color,
     textColor: Color,
     modifier: Modifier = Modifier,
-    onPress: (() -> Unit)? = null,
-    isFirst: Boolean = false,
-    isLast: Boolean = false,
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val currentOnClick by rememberUpdatedState(onClick)
@@ -530,39 +624,129 @@ private fun StrokeSymbolKey(
                     tryAwaitRelease()
                     isPressed = false
                 }, onTap = { currentOnClick() })
-            }, contentAlignment = Alignment.Center
+            },
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = textColor,
             fontSize = 18.sp,
             fontWeight = FontWeight.Normal,
-            modifier = Modifier.padding(vertical = 2.dp)
         )
     }
 }
 
 @Composable
-private fun StrokeKeyButton(
+private fun StrokeKeyItem(
     mainLabel: String,
     swipeDigit: String,
+    onClick: () -> Unit,
+    onSwipeUp: (() -> Unit)?,
+    onPress: (() -> Unit)?,
+    backgroundColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
+    strokeFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
+    compactMode: Boolean = false,
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
+) {
+    SwipeableKeyButton(
+        text = mainLabel,
+        onClick = onClick,
+        backgroundColor = backgroundColor,
+        textColor = textColor,
+        fontSize = strokeFontSize,
+        modifier = modifier,
+        onPress = onPress,
+        onSwipe = { onSwipeUp?.invoke() },
+        onSwipeStateChange = onSwipeStateChange,
+        badgeText = swipeDigit,
+        shadowEnabled = shadowEnabled,
+        shadowElevation = shadowElevation,
+        shadowShapeRadius = shadowShapeRadius,
+        longPressItems = null,
+    )
+}
+
+@Composable
+private fun StrokeDigitKey(
+    digit: String,
+    swipeDigit: String,
+    onClick: () -> Unit,
+    onSwipeUp: (() -> Unit)?,
+    onPress: (() -> Unit)?,
+    backgroundColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    onSwipeStateChange: ((SwipeState, Rect) -> Unit)? = null,
+) {
+    SwipeableKeyButton(
+        text = digit,
+        onClick = onClick,
+        backgroundColor = backgroundColor,
+        textColor = textColor,
+        modifier = modifier,
+        onPress = onPress,
+        onSwipe = { onSwipeUp?.invoke() },
+        onSwipeStateChange = onSwipeStateChange,
+        badgeText = swipeDigit,
+        shadowEnabled = shadowEnabled,
+        shadowElevation = shadowElevation,
+        shadowShapeRadius = shadowShapeRadius,
+    )
+}
+
+@Composable
+private fun StrokeSymbolButton(
+    text: String,
     onClick: () -> Unit,
     backgroundColor: Color,
     textColor: Color,
     modifier: Modifier = Modifier,
     onPress: (() -> Unit)? = null,
-    onSwipeUp: (() -> Unit)? = null,
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
     shadowShapeRadius: Dp = 8.dp,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+) {
+    KeyButton(
+        text = text,
+        onClick = onClick,
+        backgroundColor = backgroundColor,
+        textColor = textColor,
+        modifier = modifier,
+        onPress = onPress,
+        shadowEnabled = shadowEnabled,
+        shadowElevation = shadowElevation,
+        shadowShapeRadius = shadowShapeRadius,
+        fontSize = fontSize,
+    )
+}
+
+@Composable
+private fun ResetKey(
+    onClick: () -> Unit,
+    onPress: (() -> Unit)?,
+    backgroundColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
+    compactMode: Boolean = false,
 ) {
     var isPressed by remember { mutableStateOf(false) }
-    var dragOffsetY by remember { mutableStateOf(0f) }
-    var hasTriggeredSwipeUp by remember { mutableStateOf(false) }
-
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnPress by rememberUpdatedState(onPress)
     val density = LocalDensity.current
-    val swipeUpThreshold = with(density) { (-40).dp.toPx() }
-
+    val shape = RoundedCornerShape(shadowShapeRadius)
     val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius, density, backgroundColor) {
         if (shadowEnabled) {
             val offsetPx = with(density) { shadowElevation.toPx() }
@@ -578,59 +762,101 @@ private fun StrokeKeyButton(
             }
         } else Modifier
     }
-    val keyCornerRadius = LocalKeyCornerRadius.current
-    val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
 
-    fun darkenColor(color: Color, factor: Float = 0.15f): Color {
-        return Color(
-            red = (color.red * (1 - factor)).coerceIn(0f, 1f),
-            green = (color.green * (1 - factor)).coerceIn(0f, 1f),
-            blue = (color.blue * (1 - factor)).coerceIn(0f, 1f),
-            alpha = color.alpha
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 2.dp, vertical = 4.dp)
+            .then(shadowModifier)
+            .clip(shape)
+            .background(if (isPressed) backgroundColor.copy(alpha = 0.7f) else backgroundColor)
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    isPressed = true
+                    currentOnPress?.invoke()
+                    tryAwaitRelease()
+                    isPressed = false
+                }, onTap = { currentOnClick() })
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = "重输",
+            tint = textColor,
+            modifier = Modifier.size(if (compactMode) 16.dp else 20.dp)
         )
+        if (!compactMode) {
+            Text(
+                text = "重输",
+                color = textColor.copy(alpha = 0.5f),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                modifier = Modifier.offset(y = (-14).dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StrokeSpaceButton(
+    onKeyPress: (String) -> Unit,
+    onKeyPressDown: ((String) -> Unit)?,
+    backgroundColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    shadowEnabled: Boolean = true,
+    shadowElevation: Dp = 1.dp,
+    shadowShapeRadius: Dp = 8.dp,
+) {
+    val density = LocalDensity.current
+    val shadowModifier = remember(shadowEnabled, shadowElevation, shadowShapeRadius, density, backgroundColor) {
+        if (shadowEnabled) {
+            val offsetPx = with(density) { shadowElevation.toPx() }
+            val cornerPx = with(density) { shadowShapeRadius.toPx() }
+            val color = crispShadowColor(backgroundColor)
+            Modifier.drawBehind {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(0f, offsetPx),
+                    size = size,
+                    cornerRadius = CornerRadius(cornerPx)
+                )
+            }
+        } else Modifier
     }
 
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 2.dp)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
-                        isPressed = true
-                        onPress?.invoke()
+                        onKeyPressDown?.invoke("space")
                         tryAwaitRelease()
-                        isPressed = false
                     },
-                    onTap = { onClick() }
+                    onTap = { onKeyPress("space") },
                 )
-            }
-            .then(shadowModifier)
-            .clip(keyClipShape)
-            .background(
-                if (isPressed) darkenColor(backgroundColor, 0.2f)
-                else backgroundColor
-            ),
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = mainLabel,
-            color = textColor,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.Center)
-        )
-
-        Text(
-            text = swipeDigit,
-            color = textColor.copy(alpha = 0.5f),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            lineHeight = 1.sp,
+        Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 4.dp, end = 4.dp),
+                .fillMaxSize()
+                .then(shadowModifier)
+                .clip(RoundedCornerShape(LocalKeyCornerRadius.current))
+                .background(backgroundColor)
+        )
+        Text(
+            text = "空格",
+            color = textColor.copy(alpha = 0.3f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
         )
     }
 }

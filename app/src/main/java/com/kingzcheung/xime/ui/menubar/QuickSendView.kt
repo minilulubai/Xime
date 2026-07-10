@@ -1,4 +1,4 @@
-package com.kingzcheung.xime.ui.keyboard
+package com.kingzcheung.xime.ui.menubar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
