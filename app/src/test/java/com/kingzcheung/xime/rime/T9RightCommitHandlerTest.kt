@@ -1,0 +1,1122 @@
+package com.kingzcheung.xime.rime
+
+import org.junit.Assert.*
+import org.junit.Test
+
+/**
+ * 右侧候选选词消费计算 单元测试 + 集成测试（bug4 场景）。
+ *
+ * 覆盖：
+ * - computeConsumedDigitsFromPinyin / computeRightCommitConsumption 纯函数
+ * - onRightCandidateSelected 在 SELECTION 态下的 full/partial commit 判定
+ */
+class T9RightCommitHandlerTest {
+
+    // ── 消费计算 纯函数测试 ──
+
+    @Test
+    fun `computeConsumedDigitsFromPinyin returns letter count when candidatePinyin has letters`() {
+        assertEquals(2, computeConsumedDigitsFromPinyin("54482", "ji"))
+        assertEquals(5, computeConsumedDigitsFromPinyin("54482", "ji hua"))
+        assertEquals(1, computeConsumedDigitsFromPinyin("54482", "j"))
+    }
+
+    @Test
+    fun `computeConsumedDigitsFromPinyin falls back to first syllable when candidatePinyin is empty`() {
+        val result = computeConsumedDigitsFromPinyin("54482", "")
+        assertTrue("Should return first syllable digitLength", result == 1 || result == 2)
+    }
+
+    @Test
+    fun `computeConsumedDigitsFromPinyin falls back to first syllable when candidatePinyin is null`() {
+        val result = computeConsumedDigitsFromPinyin("54482", null)
+        assertTrue("Should return first syllable digitLength", result == 1 || result == 2)
+    }
+
+    @Test
+    fun `computeConsumedDigitsFromPinyin returns 0 for empty segment`() {
+        assertEquals(0, computeConsumedDigitsFromPinyin("", null))
+    }
+
+    // ── bug4 集成测试：SELECTION 态下纯字母 buffer 右选 ──
+
+    @Test
+    fun `bug4 - pure letter buffer in selection state should not full commit when comment covers whole buffer`() {
+        val ctrl = createController()
+        // 步骤1-4: 输入 23744 → 右选"策" → 左选"pi" → 左选"h"
+        for (d in listOf("2", "3", "7", "4", "4")) ctrl.onDigitPressed(d)
+        ctrl.onRightCandidateSelected("ce")
+        assertEquals("744", ctrl.bufferString)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("pi", 2))
+        assertEquals("pi'4", ctrl.bufferString)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("h", 1))
+        assertEquals("pih", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("h", 1), ctrl.selectedOption)
+        assertEquals("4", ctrl.selectionCandidateDigits)
+
+        // 步骤5: 右选"皮"（RIME comment="pi h"，字母数=3=buffer长度）
+        // 修复前：effectiveLetterCount(3) >= inputBuffer.length(3) → full commit → 策皮上屏
+        // 修复后：candidateTextLength=1（"皮"1字）< commentSyllableCount=2 → partial commit
+        val result = ctrl.onRightCandidateSelected("pi h", 1)
+        assertFalse("Should be partial commit — selected 'h' must be preserved", result)
+        assertEquals("h", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("h", 1), ctrl.selectedOption)
+        assertEquals("4", ctrl.selectionCandidateDigits)
+        assertPinyins(ctrl, "g", "h", "i")
+    }
+
+    @Test
+    fun `bug4 - pure letter buffer with no-space comment also partial commit`() {
+        // RIME comment 可能是 "pih"（无空格），字母数同样=3
+        val ctrl = createController()
+        for (d in listOf("2", "3", "7", "4", "4")) ctrl.onDigitPressed(d)
+        ctrl.onRightCandidateSelected("ce")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("pi", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("h", 1))
+        assertEquals("pih", ctrl.bufferString)
+
+        val result = ctrl.onRightCandidateSelected("pih", 1)
+        assertFalse("Should be partial commit", result)
+        assertEquals("h", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+    }
+
+    @Test
+    fun `bug4 - pure letter buffer with short comment still partial commit`() {
+        // RIME comment 是精确的 "pi"（雾凇九键风格），字母数=2<3，走已有分支
+        val ctrl = createController()
+        for (d in listOf("2", "3", "7", "4", "4")) ctrl.onDigitPressed(d)
+        ctrl.onRightCandidateSelected("ce")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("pi", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("h", 1))
+        assertEquals("pih", ctrl.bufferString)
+
+        val result = ctrl.onRightCandidateSelected("pi")
+        assertFalse("Should be partial commit", result)
+        assertEquals("h", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+    }
+
+    @Test
+    fun `bug4 - multi-syllable pure letter buffer in selection state partial commit`() {
+        val ctrl = createController()
+        for (d in listOf("5", "4", "4", "8", "2")) ctrl.onDigitPressed(d)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("li", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("gu", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("b", 1))
+        assertEquals("ligub", ctrl.bufferString)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+
+        val result = ctrl.onRightCandidateSelected("li gu b", 2)
+        assertFalse("Should be partial commit — selected 'b' must be preserved", result)
+        assertEquals("b", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+    }
+
+    @Test
+    fun `bug4 - full commit still works when candidate covers entire buffer without selection`() {
+        val ctrl = createController()
+        for (d in listOf("5", "4", "4", "8", "2")) ctrl.onDigitPressed(d)
+        val result = ctrl.onRightCandidateSelected("ji hua")
+        assertTrue("Full commit when candidate covers entire input", result)
+        assertEquals("", ctrl.bufferString)
+    }
+
+    @Test
+    fun `bug4 - partial commit without selection when candidate covers part of buffer`() {
+        val ctrl = createController()
+        for (d in listOf("5", "4", "4", "8", "2")) ctrl.onDigitPressed(d)
+        val result = ctrl.onRightCandidateSelected("ji")
+        assertFalse("Partial commit when candidate covers part of input", result)
+        assertEquals("482", ctrl.bufferString)
+    }
+
+    @Test
+    fun `bug4 - null candidatePinyin in selection state should partial commit by consuming first syllable of non-selected part`() {
+        // 用户报告的场景6：输入 23744 → 右选"策" → 左选 pi → 左选 h → 右选"皮"
+        // 但在 Xime 的 T9 方案中"皮"的 comment 可能为空（无拼音注释），
+        // candidatePinyin=null 时应防御性地仅消费非选中部分的首音节。
+        val ctrl = createController()
+        for (d in listOf("2", "3", "7", "4", "4")) ctrl.onDigitPressed(d)
+        ctrl.onRightCandidateSelected("ce")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("pi", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("h", 1))
+        assertEquals("pih", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("h", 1), ctrl.selectedOption)
+
+        // candidatePinyin=null 模拟 RIME 未产生 comment
+        val result = ctrl.onRightCandidateSelected(null)
+        assertFalse("Should be partial commit when candidatePinyin=null in SELECTION", result)
+        assertEquals("h", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("h", 1), ctrl.selectedOption)
+        assertEquals("4", ctrl.selectionCandidateDigits)
+        assertPinyins(ctrl, "g", "h", "i")
+    }
+
+    // ── 场景14：简拼混合输入，SELECTION 态下右选候选词不应全量提交 ──
+    //
+    // 操作流程（来自 .trae/docs/异常输入流程.md 场景14）：
+    // 1. 输入 5143 → buffer="j'43", leftColumnLocked
+    // 2. 左选 k → buffer="k'43", unlocked
+    // 3. 左选 g → buffer="kg'3", SELECTION(g, "4")
+    // 4. 左选 d → buffer="kgd", SELECTION(d, "3")
+    // 5. 右选"控股 kong gu"(candidatePinyin="kong gu", textLength=2) →
+    //    预期：partial commit, buffer="3", SELECTION(d, "3") 保留, 左侧候选区显示 [d,e,f]
+    //    修复前：isFullCommit=true → buffer="", IDLE态, 丢失d筛选机会
+
+    @Test
+    fun `scenario 14 - right candidate in selection state preserves non-selected part digits`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143 → buffer="j'43"
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k → buffer="k'43"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 g → buffer="kg'3", SELECTION(g, "4")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("kg'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("g", 1), ctrl.selectedOption)
+
+        // 步骤4: 左选 d → buffer="kgd", SELECTION(d, "3")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("d", 1))
+        assertEquals("kgd", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("d", 1), ctrl.selectedOption)
+        assertEquals("3", ctrl.selectionCandidateDigits)
+
+        // 步骤5: 右选"控股 kong gu"(comment="kong gu", textLength=2)
+        // 修复前：candidateTextLength(2) >= commentSyllables.size(2) → isFullCommit=true → buffer=""
+        // 修复后：SELECTION 态下非选中部分非空 → isFullCommit=false → partial commit
+        val result = ctrl.onRightCandidateSelected("kong gu", 2)
+        assertFalse("Should be partial commit — selected 'd'(digit 3) must be preserved", result)
+        assertEquals("d", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("d", 1), ctrl.selectedOption)
+        assertEquals("3", ctrl.selectionCandidateDigits)
+        // 左侧候选区应显示 digit 3 对应的拼音 [e, d, f]（"e" 是精确拼音匹配，"d"/"f" 是字母回退）
+        assertPinyins(ctrl, "e", "d", "f")
+        // 问题二修复：右选后左侧候选区中已选项 d 的选中态 UI 标记必须保留
+        assertTrue(
+            "scenario 14: selected 'd' should remain highlighted after right candidate commit",
+            ctrl.isSelectedOptionInCurrentCandidates()
+        )
+    }
+
+    @Test
+    fun `scenario 14 - right candidate pinyin shorter than non-selected part still partial commit`() {
+        // 变体：候选词拼音仅覆盖部分非选中部分
+        val ctrl = createController()
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("d", 1))
+        assertEquals("kgd", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // 右选"看"(comment="k", textLength=1) → 消费 "k"(5)
+        // 与 scenario 16 设计一致：partial commit 后保留未消费部分为字母形式
+        val result = ctrl.onRightCandidateSelected("k", 1)
+        assertFalse("Should be partial commit", result)
+        // "k"被消费移除，剩余 "g"(非选中) + "d"(选中项) = "gd"
+        assertEquals("gd", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("d", 1), ctrl.selectedOption)
+        assertEquals("3", ctrl.selectionCandidateDigits)
+    }
+
+    @Test
+    fun `scenario 14 - right candidate full commit when buffer equals selected option only`() {
+        // 验证：当 buffer 完全由选中部分构成时，isFullCommit 仍应正常工作
+        val ctrl = createController()
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("4")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("8"); ctrl.onDigitPressed("2")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("li", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("gu", 2))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("b", 1))
+        ctrl.onRightCandidateSelected("li")
+        ctrl.onRightCandidateSelected("gu")
+        // 与 scenario 16 step 8 设计一致：partial commit 后保留选中项字母形式
+        assertEquals("b", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+
+        // 右选"并"(comment="bing", textLength=1) → buffer="b"=选中部分 → full commit
+        val result = ctrl.onRightCandidateSelected("bing", 1)
+        assertTrue("Should be full commit when buffer equals selected option only", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ── 场景15：全拼输入，混合左侧候选区选择简拼与右侧候选词混合筛选定词 ──
+    //
+    // 操作流程（来自 .trae/docs/异常输入流程.md 场景15）：
+    // 1. 输入 54482 → buffer="j'4482", INPUT
+    // 2. 左选 j → buffer="j'4482", SELECTION(j, "5")
+    // 3. 左选 g → buffer="jg'482", SELECTION(g, "4")
+    // 4. 左选 hu → buffer="jghu'2", SELECTION(hu, "48")
+    // 5. 右选"价格 jia ge"(candidatePinyin="jia ge", textLength=2) →
+    //    预期：partial commit, buffer="hu'2", SELECTION(hu, "48") 保留
+    //    修复前：apostrophe 分支消费了整个 confirmedPinyin("jghu")+"2" → buffer="", IDLE态
+    //    修复后：SELECTION 态下仅消费非选中部分"jg"→ 保留"hu'2"
+
+    @Test
+    fun `scenario 15 - right candidate in selection state with apostrophe buffer preserves selected option`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 54482
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("4")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("8"); ctrl.onDigitPressed("2")
+
+        // 步骤2: 左选 j → buffer="j'4482", SELECTION(j, "5")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("j", 1))
+        assertEquals("j'4482", ctrl.bufferString)
+
+        // 步骤3: 左选 g → buffer="jg'482", SELECTION(g, "4")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("jg'482", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("g", 1), ctrl.selectedOption)
+
+        // 步骤4: 左选 hu → buffer="jghu'2", SELECTION(hu, "48")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("hu", 2))
+        assertEquals("jghu'2", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("hu", 2), ctrl.selectedOption)
+        assertEquals("48", ctrl.selectionCandidateDigits)
+
+        // 步骤5: 右选"价格 jia ge"(candidatePinyin="jia ge", textLength=2)
+        // 修复前：apostrophe 分支消费了整个 confirmedPinyin"jghu"(4)+"2"(1) → buffer="", IDLE
+        // 修复后：SELECTION 态下仅消费非选中部分"jg"(2), 保留"hu'2"
+        val result = ctrl.onRightCandidateSelected("jia ge", 2)
+        assertFalse("Should be partial commit — selected 'hu'(digits 48) must be preserved", result)
+        assertEquals("hu'2", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("hu", 2), ctrl.selectedOption)
+        assertEquals("48", ctrl.selectionCandidateDigits)
+        // 左侧候选区应显示 digit 2 对应的拼音 [a, b, c]
+        assertPinyins(ctrl, "a", "b", "c")
+    }
+
+    @Test
+    fun `scenario 15 - after selecting c then right candidate preserves c highlight`() {
+        val ctrl = createController()
+
+        // 输入 54482
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("4")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("8"); ctrl.onDigitPressed("2")
+
+        // 左选 j → g → hu → c（对应场景15操作步骤6）
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("j", 1))  // j'4482
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))  // jg'482
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("hu", 2)) // jghu'2
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("c", 1))  // jghuc, SELECTION(c,"2")
+        assertEquals("jghuc", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("c", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+
+        // 右选"价格 jia ge"
+        val result = ctrl.onRightCandidateSelected("jia ge", 2)
+        assertFalse("Should be partial commit — selected 'c'(digit 2) must be preserved", result)
+        // 右选后应保留 hu + c：hu 是已确认拼音，c 是选中项
+        // 纯字母 buffer 不带分隔符，由 sendToRime 为 RIME 重建 "hu'c"
+        assertEquals("huc", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("c", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+        // 左侧候选区应显示 digit 2 对应的拼音 [a, b, c]
+        assertPinyins(ctrl, "a", "b", "c")
+        // 问题二修复：右选后左侧候选区中已选项 c 的选中态 UI 标记必须保留
+        assertTrue(
+            "scenario 15: selected 'c' should remain highlighted after right candidate commit",
+            ctrl.isSelectedOptionInCurrentCandidates()
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4右选修复：验证右选覆盖全部选择+剩余时触发full commit
+    //
+    // 操作流程：
+    //   1. 输入 5 → 按分词键(1) → 4 → 3 → buffer="j'43"
+    //   2. 左选 k → buffer="k'43", SELECTION(k, "5")
+    //   3. 左选 g → buffer="kg'3", SELECTION(g, "4")
+    //   4. 右选"空格的"(comment="kong ge de", textLength=3)
+    //      预期：full commit → buffer清空, IDLE态
+    //      旧行为：SELECTION保护只消费"k"，buffer变"g'3"，需再次点击
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario4 rc - right candidate full commit covers selected option and remaining digits`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 g → buffer="kg'3", SELECTION(g, "4")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("kg'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("g", 1), ctrl.selectedOption)
+        assertEquals("4", ctrl.selectionCandidateDigits)
+
+        // 步骤4: 右选"空格的"(comment="kong ge de", textLength=3)
+        // 候选覆盖了 nonSelected("k") + selected("g") + remaining("3")
+        val result = ctrl.onRightCandidateSelected("kong ge de", 3)
+        assertTrue("Should be full commit — 'kong ge de' covers k+g+3", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ── 场景16：全拼输入，左侧候选区选择变为纯简拼，右侧候选词混合筛选定词 ──
+    //
+    // 操作流程（来自 .trae/docs/异常输入流程.md 场景16）：
+    // 1. 输入 54482 → buffer="j'4482", INPUT
+    // 2. 左选 j → buffer="j'4482", SELECTION(j, "5")
+    // 3. 左选 g → buffer="jg'482", SELECTION(g, "4")
+    // 4. 左选 g → buffer="jgg'82", SELECTION(g, "4")
+    // 5. 左选 t → buffer="jggt'2", SELECTION(t, "8")
+    // 6. 左选 b → buffer="jggtb", SELECTION(b, "2")
+    // 7. 右选"价格 jia ge"(candidatePinyin="jia ge", textLength=2) →
+    //    预期：partial commit, buffer="482"(g=4,t=8,b=2), SELECTION(b,"2")保留
+    //    修复前：consumedCount=4(过估)→"all consumed"→buffer="2"(仅选中部分), 丢失"gt"(48)
+    //    修复后：consumedCount=2(正确)→partial consumption→buffer="48"+"2"="482"
+
+    @Test
+    fun `scenario 16 - pure letter buffer with single-char selections and right candidate preserves remaining letters`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 54482
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("4")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("8"); ctrl.onDigitPressed("2")
+
+        // 步骤2-6: 逐步左选 j, g, g, t, b
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("j", 1))  // j'4482
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))  // jg'482
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))  // jgg'82
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("t", 1))  // jggt'2
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("b", 1))  // jggtb
+
+        // 验证步骤6后的状态
+        assertEquals("jggtb", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+
+        // 步骤7: 右选"价格 jia ge"(candidatePinyin="jia ge", textLength=2)
+        // 预期：partial commit — "jia ge"消费j+g(2个确认字母), 剩余g+t+b作为独立简拼字母保留
+        val result = ctrl.onRightCandidateSelected("jia ge", 2)
+        assertFalse("Should be partial commit — 'jia ge' consumes j+g, leaving g+t+b", result)
+        assertEquals("gtb", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+        // 左侧候选区应显示 digit 2 对应的拼音 [a, b, c]
+        assertPinyins(ctrl, "a", "b", "c")
+        // 问题二修复：右选后左侧候选区中已选项 b 的选中态 UI 标记必须保留
+        assertTrue(
+            "scenario 16: selected 'b' should remain highlighted after right candidate commit",
+            ctrl.isSelectedOptionInCurrentCandidates()
+        )
+    }
+
+    @Test
+    fun `scenario 16 step 8 - second right candidate after gt b preserves b`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 54482
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("4")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("8"); ctrl.onDigitPressed("2")
+
+        // 步骤2-6: 逐步左选 j, g, g, t, b
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("j", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("t", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("b", 1))
+        assertEquals("jggtb", ctrl.bufferString)
+
+        // 步骤7: 右选"价格 jia ge"
+        val step7Result = ctrl.onRightCandidateSelected("jia ge", 2)
+        assertFalse("Step 7 should be partial commit", step7Result)
+        assertEquals("gtb", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+
+        // 步骤8: 右选"共同 gong tong"(candidatePinyin="gong tong", textLength=2)
+        // 预期：partial commit — "gong tong"消费"gt"(g=4,t=8→"48"), 保留"b"(2)
+        val step8Result = ctrl.onRightCandidateSelected("gong tong", 2)
+        assertFalse("Step 8 should be partial commit — 'gong tong' consumes 'gt', leaving 'b'", step8Result)
+        assertEquals("b", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("b", 1), ctrl.selectedOption)
+        assertEquals("2", ctrl.selectionCandidateDigits)
+        assertPinyins(ctrl, "a", "b", "c")
+        assertTrue(
+            "scenario 16 step 8: selected 'b' should remain highlighted",
+            ctrl.isSelectedOptionInCurrentCandidates()
+        )
+    }
+
+    // ── 场景4.1：简拼和全拼混合输入后，通过候选词列表完成完整上屏 ──
+    //
+    // 操作流程（来自 .trae/docs/回退测试.md 场景4.1）：
+    // 1. 输入序列：5143，预编辑文本：j'ge，左侧候选区：【j，k，l】(简拼5对应的拼音字母映射)
+    // 2. 点击左侧候选区：k，预编辑文本更新为：k' he，左侧候选区更新为：【ge，he，g，h，i】（输入序列：43的有效拼音和字母组合）
+    // 3. 继续点击左侧候选区中："ge"，预编辑文本更新为：k' ge，左侧候选区进入选择态，候选词列表显示为【看个，开个，空格，凯歌，，，，】；
+    // 4. 此时：点击："空格"，预编辑文本："空格ge"，候选词列表更新：【隔，个，哥，，，】
+    //    预期结果：系统判定输入序列5143已被完整消费，"空格"一词直接上屏，预编辑文本、候选词列表/内页、左侧候选区全部清空并进入空闲态
+    //    实际结果（修复前）：预编辑文本"空格ge"，"ge"残留
+    //
+    // 根因：buffer="kge"（T9编码"543"）与候选项"kong ge"（T9编码"566443"）的数字编码不匹配，
+    // 因为"k"是"kong"的声母，声母扩展导致T9编码变化。letter SELECTION分支的全量检查仅用数字编码
+    // 比较，无法处理声母扩展，退化为partial commit。修复后在数字编码比较之外增加音节级匹配检查。
+
+    @Test
+    fun `scenario 4-1 - mixed shorthand and full pinyin input full commit via right candidate`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+
+        // 步骤2: 左选 k → buffer="k'43", SELECTION(k, "5")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 ge → buffer="kge", SELECTION(ge, "43")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("ge", 2))
+        assertEquals("kge", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("ge", 2), ctrl.selectedOption)
+        assertEquals("43", ctrl.selectionCandidateDigits)
+
+        // 步骤4: 右选"空格 kong ge"(candidatePinyin="kong ge", textLength=2)
+        // 修复前：数字编码"543"!="566443"→退化为partial commit→buffer="43"
+        // 修复后：音节级匹配("ge"=="ge")→full commit→buffer=""
+        val result = ctrl.onRightCandidateSelected("kong ge", 2)
+        assertTrue("Should be full commit — 'kong ge' covers entire input 5143", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+        assertNull("No option should be selected after full commit", ctrl.selectedOption)
+        assertNull("No candidate digits after full commit", ctrl.selectionCandidateDigits)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4.2：验证候选词声母回退匹配（Tier 2）
+    //
+    // 操作流程：
+    //   1. 输入 5 → 按分词键(1) → 4 → 3 → buffer="j'43"
+    //   2. 左选 k → buffer="k'43", SELECTION(k, "5")
+    //   3. 左选 he → buffer="khe", SELECTION(he, "43")
+    //   4. 右选"可恨"(comment="ke hen", textLength=2)
+    //      预期：声母回退 → partial commit
+    //      "ke"消费nonSelected"k"(digit5), "hen"声母"h"消费选中项"4"(digit from "43")
+    //      buffer="h'3", SELECTION(h, "4")
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario42 - right commit ke hen triggers shengmu fallback to h with remaining 3`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 he → buffer="khe", SELECTION(he, "43")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("he", 2))
+        assertEquals("khe", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("he", 2), ctrl.selectedOption)
+        assertEquals("43", ctrl.selectionCandidateDigits)
+
+        // 步骤4: 右选"可恨"(comment="ke hen", textLength=2)
+        // "hen"不精确匹配"he"，但声母"h"匹配 → 声母回退
+        val result = ctrl.onRightCandidateSelected("ke hen", 2)
+        assertFalse("Should be partial commit — hen only matches initial h of he", result)
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull("声母回退后选中项应为null（进入INPUT态）", ctrl.selectedOption)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4变体：声母回退后左选→右选完整流程
+    //
+    // 操作流程：
+    //   1. 输入 5 → 按分词键(1) → 4 → 3 → buffer="j'43"
+    //   2. 左选 k → buffer="k'43", SELECTION(k, "5")
+    //   3. 左选 ge → buffer="kge", SELECTION(ge, "43")
+    //   4. 右选"课改"(comment="ke gai", textLength=2) → 声母回退 → buffer="3", INPUT
+    //   5. 左选 f → buffer="f", SELECTION(f, "3")
+    //   6. 右选"非"(comment="fei", textLength=1) → full commit → buffer="", IDLE
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario4 variant - shengmu fallback then left select f then right commit fei full commit`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 ge → buffer="kge", SELECTION(ge, "43")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("ge", 2))
+        assertEquals("kge", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // 步骤4: 右选"课改"(ke gai) → 声母回退 → buffer="3", INPUT
+        val step4Result = ctrl.onRightCandidateSelected("ke gai", 2)
+        assertFalse("ke gai should be shengmu fallback (partial)", step4Result)
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 步骤5: 左选 f (digit 3)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("f", 1))
+        assertEquals("f", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("f", 1), ctrl.selectedOption)
+        assertEquals("3", ctrl.selectionCandidateDigits)
+
+        // 步骤6: 右选"非"(fei) → full commit
+        val step6Result = ctrl.onRightCandidateSelected("fei", 1)
+        assertTrue("fei should be full commit on buffer f", step6Result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4全简拼无候选：验证空格/右选直接上屏预编辑文本
+    //
+    // 操作流程：
+    //   1. 输入 5 → 按分词键(1) → 4 → 3 → buffer="j'43"
+    //   2. 左选 k → buffer="k'43", SELECTION(k, "5")
+    //   3. 左选 i（简拼）→ buffer="ki'3", SELECTION(i, "4")
+    //   4. 调用 onRightCandidateSelected(null) → 模拟RIME 0候选时的空格/右选
+    //      预期：全简拼连通 → 直接上屏预编辑文本（等同换行键）, buffer清空, IDLE
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario4 all abbrev - right commit with null candidate triggers enter like commit`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k（简拼）
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 i（简拼）→ buffer="ki'3", SELECTION(i, "4")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("i", 1))
+        assertEquals("ki'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("i", 1), ctrl.selectedOption)
+
+        // 步骤4: 模拟空格/右选（candidatePinyin=null），应触发 enter-like 提交
+        val result = ctrl.onRightCandidateSelected(null)
+        assertTrue("全简拼无候选时应直接上屏预编辑文本", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4.4：简拼+全拼混合输入后右选"客观"→应partial commit保留剩余数字
+    //
+    // 操作流程：
+    //   1. 输入 5 → 按分词键(1) → 4 → 3 → buffer="j'43"
+    //   2. 左选 k → buffer="k'43", SELECTION(k, "5")
+    //   3. 左选 g（简拼）→ buffer="kg'3", SELECTION(g, "4")
+    //   4. 右选"客观"(comment="ke guan", textLength=2)
+    //      预期：partial commit（非full commit），
+    //      "ke"消费nonSelected"k"(digit 5)，"guan"声母"g"匹配选中项"g"(digit 4)
+    //      剩余数字"3"应保留 → buffer="3", INPUT（不保持SELECTION）
+    //
+    // 注意与场景4.2的区别：
+    //   场景4.2第三步左选"he"（全拼），"hen"声母"h"匹配"he"首字母
+    //   场景4.4第三步左选"g"（简拼），"guan"声母"g"匹配"g"首字母
+    //   两者都应触发声母级消费，但场景4.4走apostrophe路径（有unassigned"3"），
+    //   场景4.2走letterBuffer路径（unassigned为空）
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario 44 - right commit ke guan on shorthand g should partial commit with remaining 3`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k（简拼）
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 g（简拼）→ buffer="kg'3", SELECTION(g, "4")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("kg'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("g", 1), ctrl.selectedOption)
+        assertEquals("4", ctrl.selectionCandidateDigits)
+
+        // 步骤4: 右选"客观"(comment="ke guan", textLength=2)
+        // "ke"匹配nonSelected"k"，"guan"的声母"g"匹配选中项"g"(digit 4)
+        // 应完全消费两个选择，剩余数字"3"
+        val result = ctrl.onRightCandidateSelected("ke guan", 2)
+        assertFalse("Should be partial commit — remaining '3' unchanged", result)
+        assertEquals("剩余数字3应保留", "3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull("声母匹配消费后选中项应为null（进入INPUT态）", ctrl.selectedOption)
+        assertNull("声母匹配消费后selectionCandidateDigits应为null", ctrl.selectionCandidateDigits)
+        assertTrue("声母匹配消费后选择历史应清空", ctrl.selectionHistory.isEmpty())
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4.5：简拼+右选"客观"后左选d/f，再右选/空格应full commit
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario45 - after ke guan partial commit selecting d then duo full commits`() {
+        val ctrl = createController()
+
+        // 步骤1-3: 5143 → k → g
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("kg'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // 步骤4: 右选"客观"(ke guan) → partial commit, buffer="3", INPUT
+        val step4Result = ctrl.onRightCandidateSelected("ke guan", 2)
+        assertFalse("ke guan should be partial commit", step4Result)
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
+
+        // 步骤5: 左选 d
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("d", 1))
+        assertEquals("d", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("d", 1), ctrl.selectedOption)
+
+        // 步骤6: 右选"多"(duo) → full commit
+        val step6Result = ctrl.onRightCandidateSelected("duo", 1)
+        assertTrue("duo should full commit on selected d", step6Result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
+    }
+
+    @Test
+    fun `scenario45 - after ke guan partial commit selecting f then fei full commits`() {
+        val ctrl = createController()
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        ctrl.onRightCandidateSelected("ke guan", 2)
+
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("f", 1))
+        assertEquals("f", ctrl.bufferString)
+
+        val result = ctrl.onRightCandidateSelected("fei", 1)
+        assertTrue("fei should full commit on selected f", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4.5 backspace回退：左选k+g，右选"客观"(ke guan)后左选d，8步回退
+    //
+    // 回退顺序：undo d → undo 客观RC → delete 3 → undo g →
+    //           delete 4 → undo k → undo separator → delete 5
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario45 - backspace after ke guan partial commit with d selection restores correctly`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 g → buffer="kg'3"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("kg'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // 步骤4: 右选"客观"(comment="ke guan", textLength=2) → 声母回退
+        val result = ctrl.onRightCandidateSelected("ke guan", 2)
+        assertFalse("ke guan should be partial commit", result)
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
+
+        // 步骤5: 左选 d
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("d", 1))
+        assertEquals("d", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // ── backspace 回退（8步）──
+
+        // bs1: undo d → buffer="3", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs2: undo "客观" RightCommit → 恢复为 kg'3（remainingDigitCount=3，可安全撤销）
+        assertEquals(T9InputController.DeleteResult.UNDO_COMMIT, ctrl.onDeleted())
+        assertEquals("kg'3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("g", 1), ctrl.selectedOption)
+
+        // bs3: delete digit 3 → buffer="kg'"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("kg'", ctrl.bufferString)
+
+        // bs4: undo g → buffer="k'4", SELECTION
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("k'4", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("k", 1), ctrl.selectedOption)
+
+        // bs5: delete digit 4 → buffer="k'"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("k'", ctrl.bufferString)
+
+        // bs6: undo k → buffer="5", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("5", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs7: undo separator → buffer="5"
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("5", ctrl.bufferString)
+
+        // bs8: delete digit 5 → buffer=""
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+
+        // 无更多操作
+        assertEquals(T9InputController.DeleteResult.NOT_CONSUMED, ctrl.onDeleted())
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景4变体：左选k+he，右选"跨行"(kua hang)后左选d，backspace回退
+    //
+    // 回退顺序（8步）：undo d → undo 跨行RC → undo he → delete 3 →
+    //           delete 4 → undo k → undo separator → delete 5
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario4variant - backspace after kua hang partial commit with d selection restores correctly`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 he → buffer="khe"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("he", 2))
+        assertEquals("khe", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // 步骤4: 右选"跨行"(comment="kua hang", textLength=2) → 声母回退
+        val result = ctrl.onRightCandidateSelected("kua hang", 2)
+        assertFalse("kua hang should be partial commit", result)
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
+
+        // 步骤5: 左选 d
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("d", 1))
+        assertEquals("d", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // ── backspace 回退（8步）──
+
+        // bs1: undo d → buffer="3", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs2: undo "跨行" RightCommit → 恢复为 khe（remainingDigitCount=1，可安全撤销）
+        assertEquals(T9InputController.DeleteResult.UNDO_COMMIT, ctrl.onDeleted())
+        assertEquals("khe", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("he", 2), ctrl.selectedOption)
+        assertEquals("43", ctrl.selectionCandidateDigits)
+
+        // bs3: undo he → buffer="k'43"
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("k'43", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("k", 1), ctrl.selectedOption)
+
+        // bs4: delete digit 3 → buffer="k'4"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("k'4", ctrl.bufferString)
+
+        // bs5: delete digit 4 → buffer="k'"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("k'", ctrl.bufferString)
+
+        // bs6: undo k → buffer="5", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("5", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs7: undo separator → buffer="5"
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("5", ctrl.bufferString)
+
+        // bs8: delete digit 5 → buffer=""
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+
+        // 无更多操作
+        assertEquals(T9InputController.DeleteResult.NOT_CONSUMED, ctrl.onDeleted())
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景6 backspace回退：输入23744 → 右选"策" → 左选pi → 左选h → 8步回退
+    //
+    // digitSegment模式RC后，回退需先删除所有unassigned数字才能撤销RC。
+    // 修复前bug：(1)9步而非8步 (2)bs4提前触发RC撤销导致跳到ceshi
+    //
+    // 回退顺序：undo h → delete 4 → undo pi → delete 4 → delete 7 →
+    //           undo 策RC → delete 3 → delete 2
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario6 - backspace after ce partial commit with pi and h selection restores correctly`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 23744
+        for (d in listOf("2", "3", "7", "4", "4")) ctrl.onDigitPressed(d)
+        assertEquals("23744", ctrl.bufferString)
+
+        // 步骤2: 右选"策"(comment="ce") → digitSegment模式partial commit
+        val result = ctrl.onRightCandidateSelected("ce")
+        assertFalse("ce should be partial commit", result)
+        assertEquals("744", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 步骤3: 左选 pi(2) → 从unassigned "744"中选择
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("pi", 2))
+        assertEquals("pi'4", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("pi", 2), ctrl.selectedOption)
+
+        // 步骤4: 左选 h(1) → 从unassigned "4"中选择
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("h", 1))
+        assertEquals("pih", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("h", 1), ctrl.selectedOption)
+
+        // ── backspace 回退（8步）──
+
+        // bs1: undo h → buffer="pi'4", SELECTION(pi)
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("pi'4", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("pi", 2), ctrl.selectedOption)
+
+        // bs2: delete 4 → buffer="pi", SELECTION(pi)
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("pi", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("pi", 2), ctrl.selectedOption)
+
+        // bs3: undo pi → buffer="74", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("74", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs4: delete 4（倒数第二个4）→ buffer="7", INPUT
+        // 修复前：提前触发RC撤销，buffer跳到"ceshi"或"23744"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("7", ctrl.bufferString)
+
+        // bs5: delete 7 → zombie状态：digitSequence="23", consumedCount=2
+        // 僵尸RC处理：进入SELECTION态，高亮已提交拼音ce，左侧候选区显示[ce,a,b,c...]
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("ce", 2), ctrl.selectedOption)
+        assertTrue("bs5 left candidates should contain ce", ctrl.firstOptions.any { it.pinyin == "ce" })
+
+        // bs6: undo 策RC → buffer="23", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_COMMIT, ctrl.onDeleted())
+        assertEquals("23", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs7: delete 3 → buffer="2"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("2", ctrl.bufferString)
+
+        // bs8: delete 2 → buffer=""
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+
+        // 无更多操作
+        assertEquals(T9InputController.DeleteResult.NOT_CONSUMED, ctrl.onDeleted())
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 场景8 backspace回退：多RC叠加的僵尸状态
+    //
+    // 输入546946423744 → 右选"进行"(7位) → 右选"策"(2位) → 左选pi → 左选h
+    // 回退时bs5删除最后一个未分配数字后，应进入SELECTION态显示栈顶RC("策")的候选[ce,...]
+    // 而非全部consumed数字的候选[jin,lin,...]
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario8 - zombie state with stacked RCs shows top RC candidates`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 546946423744
+        for (d in listOf("5", "4", "6", "9", "4", "6", "4", "2", "3", "7", "4", "4"))
+            ctrl.onDigitPressed(d)
+        assertEquals("546946423744", ctrl.bufferString)
+
+        // 步骤2: 右选"进行"(comment="jin xing") → digitSegment模式partial commit, 消费7位
+        val result1 = ctrl.onRightCandidateSelected("jin xing", 2)
+        assertFalse("进行 should be partial commit", result1)
+        assertEquals("23744", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 步骤3: 右选"策"(comment="ce") → digitSegment模式partial commit, 消费2位
+        val result2 = ctrl.onRightCandidateSelected("ce", 1)
+        assertFalse("策 should be partial commit", result2)
+        assertEquals("744", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 步骤4: 左选 pi(2) → 从unassigned "744"中选择
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("pi", 2))
+        assertEquals("pi'4", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // 步骤5: 左选 h(1) → 从unassigned "4"中选择
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("h", 1))
+        assertEquals("pih", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("h", 1), ctrl.selectedOption)
+
+        // ── backspace 回退 ──
+
+        // bs1: undo h
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("pi'4", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+
+        // bs2: delete 4
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("pi", ctrl.bufferString)
+
+        // bs3: undo pi
+        assertEquals(T9InputController.DeleteResult.UNDO_CHOICE, ctrl.onDeleted())
+        assertEquals("74", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs4: delete 4
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("7", ctrl.bufferString)
+
+        // bs5: delete 7 → 僵尸RC状态（多RC叠加）
+        // 应进入SELECTION态显示栈顶RC("策")消费的"23"的候选[ce,a,b,c]
+        // 而非全部consumed数字段"546946423"的候选[jin,lin,...]
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("ce", 2), ctrl.selectedOption)
+        assertTrue("bs5 should show ce from top RC", ctrl.firstOptions.any { it.pinyin == "ce" })
+        assertFalse("bs5 should NOT show jin from earlier RC", ctrl.firstOptions.any { it.pinyin == "jin" })
+
+        // bs6: undo 策RC → buffer="23", INPUT
+        assertEquals(T9InputController.DeleteResult.UNDO_COMMIT, ctrl.onDeleted())
+        assertEquals("23", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // bs7: delete 3 → buffer="2"
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("2", ctrl.bufferString)
+
+        // bs8: delete 2 → 僵尸RC状态（"进行"RC，7位consumed）
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted())
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        // 栈顶RC现在是"进行"，其消费的数字段前缀应以"546"开头
+        assertTrue("bs8 should show jin from 进行 RC", ctrl.firstOptions.any { it.pinyin == "jin" })
+
+        // bs9: undo 进行RC → buffer恢复
+        assertEquals(T9InputController.DeleteResult.UNDO_COMMIT, ctrl.onDeleted())
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 继续删除剩余数字
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 4
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 6
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 4
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 9
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 6
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 4
+        assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 5
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ── 辅助方法 ──
+
+    private fun createController(): T9InputController {
+        return T9InputController(onReplaceFullPinyin = { /* no-op */ })
+    }
+
+    private fun assertPinyins(controller: T9InputController, vararg expected: String) {
+        assertEquals(expected.toList(), controller.firstOptions.map { it.pinyin })
+    }
+}
