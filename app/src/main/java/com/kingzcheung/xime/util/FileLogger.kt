@@ -226,6 +226,10 @@ object FileLogger {
         }
     }
 
+    fun reopenLogFile() {
+        openLogFile()
+    }
+
     fun flush() {
         writer?.flush()
     }

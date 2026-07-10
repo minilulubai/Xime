@@ -242,16 +242,17 @@ private fun NumberRows(
     val ctrlFontSize = if (compactMode) 12.sp else androidx.compose.ui.unit.TextUnit.Unspecified
     val suppressCursorMove = LocalSuppressCursorMove.current
     val symbols = listOf("+", "-", "*", "/")
-    Column(
+    Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .padding(horizontal = 2.dp),
+            .fillMaxSize()
+            .padding(start = if (compactMode) 0.dp else 4.dp, end = if (compactMode) 0.dp else 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.9f),
+            verticalArrangement = Arrangement.spacedBy(if (compactMode) 2.dp else 4.dp)
         ) {
             Row(
                 modifier = Modifier

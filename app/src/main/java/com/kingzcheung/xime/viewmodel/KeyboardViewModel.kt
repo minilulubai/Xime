@@ -363,6 +363,22 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         _syncViewState()
     }
 
+    private var savedKbStateBeforeVoice: KeyboardLayoutState? = null
+
+    fun enterVoice() {
+        savedKbStateBeforeVoice = _keyboardState.value
+        _page.value = KeyboardPage.Main(MainType.VOICE)
+        _syncViewState()
+    }
+
+    fun exitVoice() {
+        val saved = savedKbStateBeforeVoice ?: return
+        _page.value = KeyboardPage.Main(MainType.FULL)
+        _keyboardState.value = saved
+        savedKbStateBeforeVoice = null
+        _syncViewState()
+    }
+
     /** Level 2: 进入面板（编号/符号等），可从任意页面进入 */
     fun enterPanel(type: PanelType) {
         val current = _page.value

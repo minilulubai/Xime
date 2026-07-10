@@ -222,7 +222,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 voiceAmplitude = 0f
             )
             isTrackingVoiceButtons = false
-            keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.FULL)
+            keyboardViewModel.exitVoice()
         }
     )
     
@@ -649,7 +649,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     voiceButtonState = VoiceButtonState(),
                     voiceRecognizedText = ""
                 )
-                keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.FULL)
+                keyboardViewModel.exitVoice()
                 isTrackingVoiceButtons = false
             }
         )
@@ -914,7 +914,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                             voiceRecognizedText = ""
                                         )
                                         if (enabled) {
-                                            keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.VOICE)
+                                            keyboardViewModel.enterVoice()
                                             feedbackManager.performVibration()
                                             isTrackingVoiceButtons = true
                                             keyboardContainer.enableVoiceButtonTracking()
@@ -922,7 +922,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                             voiceRecognitionHandler.startRecognition()
                                             Log.d("VoiceButtons", "Speech recognition starting...")
                                         } else {
-            keyboardViewModel.switchMain(com.kingzcheung.xime.keyboard.MainType.FULL)
+                                            keyboardViewModel.exitVoice()
                                             isTrackingVoiceButtons = false
                                         }
                                     },

@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.kingzcheung.xime.util.FileLogger
 import java.io.File
 
 data class LogViewerUiState(
@@ -119,6 +120,9 @@ class LogViewerViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 file.delete()
+                if (FileLogger.getCurrentLogFile()?.absolutePath == file.absolutePath) {
+                    FileLogger.reopenLogFile()
+                }
             }
             
             val wasSelected = _uiState.value.selectedLogFile == file
@@ -142,17 +146,10 @@ class LogViewerViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update { it.copy(isLoading = true) }
             
             withContext(Dispatchers.IO) {
-                _uiState.value.logFiles.forEach { file ->
-                    file.delete()
-                }
+                FileLogger.clearAllLogs()
             }
             
-            _uiState.update { it.copy(
-                logFiles = emptyList(),
-                selectedLogFile = null,
-                logContent = "",
-                isLoading = false
-            )}
+            loadLogFiles()
         }
     }
     

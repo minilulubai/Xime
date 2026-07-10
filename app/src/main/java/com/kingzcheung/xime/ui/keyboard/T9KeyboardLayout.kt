@@ -1,5 +1,6 @@
 package com.kingzcheung.xime.ui.keyboard
 
+import android.annotation.SuppressLint
 import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -418,6 +419,7 @@ private fun LandscapeCandidateItem(
 
 // ─── 九键键盘三列主体（竖屏整宽 / 横屏右栏复用） ──────────────────────
 
+@SuppressLint("SuspiciousIndentation")
 @Composable
 private fun T9KeyboardContent(
     onKeyPress: (String) -> Unit,
