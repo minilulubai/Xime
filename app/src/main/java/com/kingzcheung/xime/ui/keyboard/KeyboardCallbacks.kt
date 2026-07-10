@@ -39,11 +39,26 @@ data class KeyboardCallbacks(
     /**
      * 右侧候选词即将被 RIME select 前同步通知 T9 控制器。
      * 返回 true 表示控制器判断输入序列已被该候选词完整消费。
+     * @param pinyin RIME 候选词注释
+     * @param textLength 候选词文字长度（汉字数），0 表示未知
      */
-    var onT9RightCandidateWillBeSelected: ((String?) -> Boolean)? = null,
+    var onT9RightCandidateWillBeSelected: ((String?, Int) -> Boolean)? = null,
     /**
      * T9 键盘切换离开（至数字/英文键盘）时调用。
      * 服务层负责提交首位候选词并清理 T9 状态。
      */
     val onT9SwitchAway: (() -> Unit)? = null,
+    /**
+     * 强制 T9 控制器重新发送当前 inputBuffer 到 RIME。
+     * 用于右侧候选 partial commit 后，RIME composition 被清除需要重新构建。
+     */
+    var onT9ForceSendToRime: (() -> Unit)? = null,
+    /**
+     * T9 候选词过滤器。服务层在获取 RIME 候选词后调用，由键盘层根据
+     * [com.kingzcheung.xime.rime.T9InputController.selectionHistory] 过滤不匹配的候选词。
+     * @param candidates 候选词文本列表
+     * @param comments 候选词拼音注释列表
+     * @return 过滤后的 (候选词列表, 注释列表)
+     */
+    var onFilterT9Candidates: ((List<String>, List<String>) -> Pair<List<String>, List<String>>)? = null,
 )

@@ -95,6 +95,7 @@ fun T9KeyboardLayout(
     keyBackgroundColor: Color,
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
+    accentColor: Color = Color(0xFF1A73E8),
     keyboardBackgroundColor: Color = Color.Transparent,
     shadowEnabled: Boolean = true,
     shadowElevation: Dp = 1.dp,
@@ -137,6 +138,7 @@ fun T9KeyboardLayout(
         controller = controller,
         keyBackgroundColor = keyBackgroundColor,
         specialKeyBackgroundColor = specialKeyBackgroundColor,
+        accentColor = accentColor,
         shadowEnabled = shadowEnabled,
         shadowElevation = shadowElevation,
         shadowShapeRadius = shadowShapeRadius,
@@ -163,6 +165,7 @@ private fun T9KeyboardSwipeOverlay(
     controller: T9InputController,
     keyBackgroundColor: Color,
     specialKeyBackgroundColor: Color,
+    accentColor: Color,
     shadowEnabled: Boolean,
     shadowElevation: Dp,
     shadowShapeRadius: Dp,
@@ -246,21 +249,22 @@ private fun T9KeyboardSwipeOverlay(
                         LocalKeyVisualPadding provides PaddingValues(horizontal = 1.dp, vertical = 2.dp)
                     ) {
                         T9KeyboardContent(
-                            onKeyPress = onKeyPress,
-                            callbacks = callbacks,
-                            uiState = uiState,
-                            controller = controller,
-                            keyBackgroundColor = keyBackgroundColor,
-                            keyTextColor = keyTextColor,
-                            specialKeyBackgroundColor = specialKeyBackgroundColor,
-                            shadowEnabled = shadowEnabled,
-                            shadowElevation = shadowElevation,
-                            shadowShapeRadius = shadowShapeRadius,
-                            onKeyPressDown = onKeyPressDown,
-                            onSwipeStateChange = ::processSwipeState,
-                            onDelete = onDelete,
-                            compactMode = true,
-                        )
+                        onKeyPress = onKeyPress,
+                        callbacks = callbacks,
+                        uiState = uiState,
+                        controller = controller,
+                        keyBackgroundColor = keyBackgroundColor,
+                        keyTextColor = keyTextColor,
+                        specialKeyBackgroundColor = specialKeyBackgroundColor,
+                        accentColor = accentColor,
+                        shadowEnabled = shadowEnabled,
+                        shadowElevation = shadowElevation,
+                        shadowShapeRadius = shadowShapeRadius,
+                        onKeyPressDown = onKeyPressDown,
+                        onSwipeStateChange = ::processSwipeState,
+                        onDelete = onDelete,
+                        compactMode = true,
+                    )
                     }
                 }
             }
@@ -282,6 +286,7 @@ private fun T9KeyboardSwipeOverlay(
                         keyBackgroundColor = keyBackgroundColor,
                         keyTextColor = keyTextColor,
                         specialKeyBackgroundColor = specialKeyBackgroundColor,
+                        accentColor = accentColor,
                         shadowEnabled = shadowEnabled,
                         shadowElevation = shadowElevation,
                         shadowShapeRadius = shadowShapeRadius,
@@ -434,6 +439,7 @@ private fun T9KeyboardContent(
     keyBackgroundColor: Color,
     keyTextColor: Color,
     specialKeyBackgroundColor: Color,
+    accentColor: Color,
     shadowEnabled: Boolean,
     shadowElevation: Dp,
     shadowShapeRadius: Dp,
@@ -486,9 +492,10 @@ private fun T9KeyboardContent(
                     .clip(RoundedCornerShape(LocalKeyCornerRadius.current))
                     .background(keyBackgroundColor)
             ) {
-                val showCandidates = controller.firstOptions.isNotEmpty()
+                val showCandidates = controller.leftPanelState != T9InputController.LeftPanelState.IDLE
+                val currentFirstOptions = controller.firstOptions
                 val displayItems: List<String> = if (showCandidates) {
-                    controller.firstOptions.map { it.pinyin }
+                    currentFirstOptions.map { it.pinyin }
                 } else {
                     listOf("，", "。", "？", "！")
                 }
@@ -499,14 +506,19 @@ private fun T9KeyboardContent(
                     ) {
                         displayItems.forEachIndexed { index, item ->
                             if (showCandidates) {
-                            val option = controller.firstOptions[index]
+                            val option = currentFirstOptions[index]
+                            val isSelected = controller.leftPanelState == T9InputController.LeftPanelState.SELECTION &&
+                                    controller.selectedOption == option &&
+                                    controller.isSelectedOptionInCurrentCandidates()
                                     CandidateItem(
                                         text = option.pinyin,
                                         onClick = { controller.onChoiceSelected(option) },
                                         onPress = { onKeyPressDown?.invoke(option.pinyin) },
                                         textColor = keyTextColor,
                                         backgroundColor = keyBackgroundColor,
+                                        accentColor = accentColor,
                                         fontSize = candidateFontSize,
+                                        isSelected = isSelected,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .weight(1f)
@@ -518,7 +530,9 @@ private fun T9KeyboardContent(
                                     onPress = { onKeyPressDown?.invoke(item) },
                                     textColor = keyTextColor,
                                     backgroundColor = keyBackgroundColor,
+                                    accentColor = accentColor,
                                     fontSize = candidateFontSize,
+                                    isSelected = false,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
@@ -532,14 +546,19 @@ private fun T9KeyboardContent(
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
                         itemsIndexed(displayItems) { index, _ ->
-                            val option = controller.firstOptions[index]
+                            val option = currentFirstOptions[index]
+                            val isSelected = controller.leftPanelState == T9InputController.LeftPanelState.SELECTION &&
+                                    controller.selectedOption == option &&
+                                    controller.isSelectedOptionInCurrentCandidates()
                             CandidateItem(
                                 text = option.pinyin,
                                 onClick = { controller.onChoiceSelected(option) },
                                 onPress = { onKeyPressDown?.invoke(option.pinyin) },
                                 textColor = keyTextColor,
                                 backgroundColor = keyBackgroundColor,
+                                accentColor = accentColor,
                                 fontSize = candidateFontSize,
+                                isSelected = isSelected,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(if (compactMode) 26.dp else 32.dp)
@@ -841,8 +860,10 @@ private fun CandidateItem(
     onPress: (() -> Unit)?,
     textColor: Color,
     backgroundColor: Color = Color.Transparent,
+    accentColor: Color = Color(0xFF1A73E8),
     modifier: Modifier = Modifier,
     fontSize: androidx.compose.ui.unit.TextUnit = 13.sp,
+    isSelected: Boolean = false,
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val currentOnClick by rememberUpdatedState(onClick)
@@ -850,10 +871,7 @@ private fun CandidateItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                if (isPressed) backgroundColor.copy(alpha = 0.7f)
-                else Color.Transparent
-            )
+            .background(if (isPressed) backgroundColor.copy(alpha = 0.7f) else Color.Transparent)
             .pointerInput(Unit) {
                 detectTapGestures(onPress = {
                     isPressed = true
@@ -861,16 +879,35 @@ private fun CandidateItem(
                     tryAwaitRelease()
                     isPressed = false
                 }, onTap = { currentOnClick() })
-            }, contentAlignment = Alignment.Center
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = fontSize,
-            fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center,
-            maxLines = 1
-        )
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(accentColor.copy(alpha = 0.2f))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = text,
+                    color = accentColor,
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        } else {
+            Text(
+                text = text,
+                color = textColor,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
     }
 }
 
