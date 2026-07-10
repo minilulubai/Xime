@@ -257,7 +257,7 @@ fun KeyButton(
                         }
                     )
                 }
-                .pointerInput(currentOnLongClick) {
+                .pointerInput(currentOnLongClick != null) {
                     if (currentOnLongClick == null) {
                         detectTapGestures(
                             onPress = {
@@ -512,7 +512,7 @@ fun SwipeableKeyButton(
                     }
                 )
             }
-            .pointerInput(currentLongPressItems) {
+            .pointerInput(text, currentLongPressItems.isNullOrEmpty()) {
                 if (currentLongPressItems.isNullOrEmpty()) {
                     detectTapGestures(
                         onPress = {

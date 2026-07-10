@@ -1687,7 +1687,7 @@ fun SwipeableKeyButtonLandscape(
         modifier = modifier
             .fillMaxHeight()
             .fillMaxWidth()
-            .pointerInput(currentLongPressItems, currentOnLongPressSelect) {
+            .pointerInput(currentText, currentLongPressItems.isNullOrEmpty(), currentOnLongPressSelect != null) {
                 if (currentLongPressItems.isNullOrEmpty() || currentOnLongPressSelect == null) {
                     detectTapGestures(
                         onPress = {
