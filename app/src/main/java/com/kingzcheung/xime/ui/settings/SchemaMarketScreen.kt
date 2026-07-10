@@ -215,9 +215,15 @@ fun SchemaMarketContent(
                     }
                     item {
                         Spacer(Modifier.height(8.dp))
+                        val updatedAt = uiState.updatedAt.takeIf { it.isNotBlank() }
+                        val sourceLabel = if (uiState.source.isNotBlank()) "来源：${uiState.source}" else "来自 Xime 官方源"
+                        val footerText = buildString {
+                            append("共 ${uiState.filteredSchemes.size} 个方案（$sourceLabel")
+                            if (updatedAt != null) append(" · 更新于 $updatedAt")
+                            append("）")
+                        }
                         Text(
-                            "共 ${uiState.filteredSchemes.size} 个方案" +
-                                if (uiState.source.isNotBlank()) "（来源：${uiState.source}）" else "（来自 Xime 官方源）",
+                            footerText,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline,
                             modifier = Modifier.padding(bottom = 16.dp),

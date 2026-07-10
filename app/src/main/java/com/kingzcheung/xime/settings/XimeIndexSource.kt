@@ -26,6 +26,7 @@ data class InstallResult(
 data class SchemesFetch(
     val schemes: List<MarketSchemeItem>,
     val source: String,
+    val updatedAt: String = "",
 )
 
 /**
@@ -108,7 +109,7 @@ object XimeIndexSource {
                 Log.w(TAG, "tryFetchFromBase $host: 0 个方案，尝试下一个镜像")
                 return null
             }
-            return SchemesFetch(schemes, host)
+            return SchemesFetch(schemes, host, direct.updatedAt)
         } catch (e: Exception) {
             Log.w(TAG, "tryFetchFromBase $host failed: ${e.message}")
             return null
