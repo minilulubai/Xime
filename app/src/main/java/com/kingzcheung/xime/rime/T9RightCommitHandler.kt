@@ -317,30 +317,36 @@ class T9RightCommitHandler {
             ctx.inputBuffer = removeConsumedSelections(ctx, buf, consumedNonSelectedPinyin)
             ctx.leftColumnLocked = false
 
-            // 声母级消费选中项：当 nonSelected 已完全消费、候选词最后一个音节的声母
-            // 与当前选中项（简拼）首字母数字码匹配时，表示该选中项也被候选项消费。
+            // 候选词消费选中项：当 nonSelected 已完全消费、候选词最后一个音节
+            // 与当前选中项匹配时，表示该选中项也被候选项消费。
+            // 两种匹配模式：
+            //   声母匹配：选中项为简拼(digitLength==1)，候选词最后音节声母数字码
+            //            与选中项数字码一致（如 g 匹配 guan 的声母 g）
+            //   全拼匹配：选中项为全拼(digitLength>1)，候选词最后音节数字码
+            //            与选中项数字码完全一致（如 shan 匹配 shan）
             // 例如 kg'3 右选 "客观(ke guan)"：ke 消费 k，guan 的声母 g 消费选中项 g，
             // 仅保留未分配数字 3 并进入 INPUT 态。
-            if (unconsumedPinyin.isEmpty() &&
-                prevSelectedOption.digitLength == 1 &&
-                commentSyllables.isNotEmpty()
-            ) {
+            // 例如 yunshan'98726 右选 "云山(yun shan)"：yun 消费 yun，shan 消费选中项 shan，
+            // 仅保留未分配数字 98726 并进入 INPUT 态。
+            if (unconsumedPinyin.isEmpty() && commentSyllables.isNotEmpty()) {
                 val lastSyl = commentSyllables.last()
-                val lastInitial = lastSyl.first().toString()
-                val selInitial = prevSelectedOption.pinyin.first().toString()
-                val lastInitialCode = T9PinyinMap.pinyinToDigitCode(lastInitial)
-                val selInitialCode = T9PinyinMap.pinyinToDigitCode(selInitial)
+                val lastSylCode = T9PinyinMap.pinyinToDigitCode(lastSyl)
+                val selCode = T9PinyinMap.pinyinToDigitCode(prevSelectedOption.pinyin)
                 val selDigits = prevSelectionCandidateDigits ?: ""
-                if (lastInitialCode != null && selInitialCode != null &&
-                    lastInitialCode == selInitialCode &&
-                    selDigits.startsWith(lastInitialCode)
-                ) {
-                    // 移除最后一个选择，仅保留未分配数字
+
+                val isShengmuMatch = prevSelectedOption.digitLength == 1 &&
+                    lastSylCode != null && selCode != null &&
+                    lastSylCode.startsWith(selCode) &&
+                    selDigits.startsWith(selCode)
+
+                val isFullPinyinMatch = prevSelectedOption.digitLength > 1 &&
+                    lastSylCode != null && selCode != null &&
+                    lastSylCode == selCode
+
+                if (isShengmuMatch || isFullPinyinMatch) {
                     ctx.inputBuffer = ctx.inputBuffer.copy(
                         selections = ctx.inputBuffer.selections.dropLast(1),
                     )
-                    // 所有已确认选择均已被消费，进入纯数字 INPUT 态时清空历史，
-                    // 避免后续左选→右选时历史残留导致 full commit 判定失败（场景4.5）。
                     ctx.stateMachine.clearSelectionHistory()
                     ctx.stateMachine.enterInput()
                     ctx.syncState()

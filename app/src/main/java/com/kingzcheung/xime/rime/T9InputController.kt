@@ -167,7 +167,7 @@ class T9InputController(
         }
         val elapsed = (System.nanoTime() - t0) / 1_000_000L
         if (elapsed > 2) {
-            try { android.util.Log.d("T9InputCtrl", "updateCandidates took ${elapsed}ms buffer='${inputBuffer.toBufferString().take(20)}'") } catch (_: Throwable) { }
+            try { android.util.Log.d("T9InputCtrl", "updateCandidates took ${elapsed}ms buffer='${bufStr.take(20)}'") } catch (_: Throwable) { }
         }
     }
 

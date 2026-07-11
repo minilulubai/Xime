@@ -38,6 +38,57 @@ class T9RightCommitHandlerTest {
         assertEquals(0, computeConsumedDigitsFromPinyin("", null))
     }
 
+    @Test
+    fun `computeConsumedDigitsFromPinyin handles partial syllable when letter count exceeds segment length`() {
+        // "zhe li" has 5 letters but segment "9435" only has 4 digits.
+        // "zhe"(943) fully matches, "li"(54) partially matches remaining "5"(initial l only).
+        assertEquals(4, computeConsumedDigitsFromPinyin("9435", "zhe li"))
+    }
+
+    @Test
+    fun `computeConsumedDigitsFromPinyin partial syllable with remaining digits after match`() {
+        // "zhe li"(94354) partially matches "94356": zhe=943, li=54 prefix "5" matches → 4 consumed
+        assertEquals(4, computeConsumedDigitsFromPinyin("94356", "zhe li"))
+    }
+
+    @Test
+    fun `computeConsumedDigitsFromPinyin full syllable match still works`() {
+        // Normal case: "ji hua" letters=5, segment "54482" has 5 digits, all fully match
+        assertEquals(5, computeConsumedDigitsFromPinyin("54482", "ji hua"))
+    }
+
+    // ── 简拼声母匹配集成测试：digitSegment 模式右选候选词应 full commit ──
+
+    @Test
+    fun `digitSegment mode - right candidate with partial syllable should full commit when all digits consumed`() {
+        val ctrl = createController()
+        // Input 9435 without any left selection
+        for (d in listOf("9", "4", "3", "5")) ctrl.onDigitPressed(d)
+        assertEquals("9435", ctrl.bufferString)
+        // Right-select "这里" (comment "zhe li")
+        // "zhe" consumes 943, "li" partially matches digit 5 (initial "l" only)
+        // All 4 digits consumed → full commit
+        val result = ctrl.onRightCandidateSelected("zhe li", 2)
+        assertTrue("Should be full commit — all 4 digits consumed by zhe li", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    @Test
+    fun `digitSegment mode - right candidate with partial syllable partial commit when digits remain`() {
+        val ctrl = createController()
+        // Input 94356 without any left selection
+        for (d in listOf("9", "4", "3", "5", "6")) ctrl.onDigitPressed(d)
+        assertEquals("94356", ctrl.bufferString)
+        // Right-select "这里" (comment "zhe li")
+        // "zhe" consumes 943, "li" partially matches digit 5 (initial "l" only)
+        // 4 digits consumed, remaining "6" → partial commit
+        val result = ctrl.onRightCandidateSelected("zhe li", 2)
+        assertFalse("Should be partial commit — digit 6 remains after zhe li", result)
+        assertEquals("6", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+    }
+
     // ── bug4 集成测试：SELECTION 态下纯字母 buffer 右选 ──
 
     @Test
@@ -1108,6 +1159,83 @@ class T9RightCommitHandlerTest {
         assertEquals(T9InputController.DeleteResult.DELETED, ctrl.onDeleted()) // 5
         assertEquals("", ctrl.bufferString)
         assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 全拼左选后右选候选词：apostrophe 路径全拼匹配消费选中项
+    //
+    // 操作流程：
+    //   1. 输入 986742698726 → 左选 yun(3) → 左选 shan(4)
+    //      buffer="yunshan'98726", SELECTION(shan, "7426")
+    //   2. 右选"云山"(comment="yun shan", textLength=2)
+    //      预期：partial commit — yun+shan 全部消费，保留未分配数字 98726
+    //      修复前：只消费 yun(986)，shan 保留 → buffer="shan'98726"
+    //      修复后：yun+shan 全部消费 → buffer="98726", INPUT 态
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `full pinyin left select then right select - apostrophe mode consumes selected option`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 986742698726
+        for (d in listOf("9", "8", "6", "7", "4", "2", "6", "9", "8", "7", "2", "6"))
+            ctrl.onDigitPressed(d)
+
+        // 步骤2: 左选 yun(3)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("yun", 3))
+        assertEquals("yun'742698726", ctrl.bufferString)
+
+        // 步骤3: 左选 shan(4)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("shan", 4))
+        assertEquals("yunshan'98726", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("shan", 4), ctrl.selectedOption)
+        assertEquals("7426", ctrl.selectionCandidateDigits)
+
+        // 步骤4: 右选"云山"(comment="yun shan", textLength=2)
+        // 修复前：只消费 yun → buffer="shan'98726"，SELECTION 态
+        // 修复后：yun+shan 全部消费 → buffer="98726"，INPUT 态
+        val result = ctrl.onRightCandidateSelected("yun shan", 2)
+        assertFalse("Should be partial commit — unassigned digits 98726 remain", result)
+        assertEquals("98726", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull("Selected option should be null after consuming all selections", ctrl.selectedOption)
+        assertTrue("Selection history should be cleared", ctrl.selectionHistory.isEmpty())
+    }
+
+    @Test
+    fun `full pinyin left select then right select - with single selection also works`() {
+        // 变体：仅左选一个全拼，右选候选词覆盖该选中项
+        val ctrl = createController()
+        for (d in listOf("9", "8", "6", "7", "4", "2", "6"))
+            ctrl.onDigitPressed(d)
+
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("yun", 3))
+        assertEquals("yun'7426", ctrl.bufferString)
+
+        // 右选"云"(comment="yun", textLength=1) — digitSegment 模式，无 apostrophe
+        // 这是 digitSegment 模式，不走 apostrophe 路径，已有逻辑处理
+        val result = ctrl.onRightCandidateSelected("yun", 1)
+        assertFalse("Should be partial commit — unassigned digits 7426 remain", result)
+        assertEquals("7426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+    }
+
+    @Test
+    fun `full pinyin left select then right select - shengmu match still works after refactor`() {
+        // 回归验证：声母匹配（digitLength==1）仍然工作
+        val ctrl = createController()
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("g", 1))
+        assertEquals("kg'3", ctrl.bufferString)
+
+        val result = ctrl.onRightCandidateSelected("ke guan", 2)
+        assertFalse("ke guan should be partial commit (shengmu match)", result)
+        assertEquals("3", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
     }
 
     // ── 辅助方法 ──

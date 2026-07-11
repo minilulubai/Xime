@@ -7,11 +7,44 @@ package com.kingzcheung.xime.rime
 /**
  * 根据候选拼音注释计算数字段中被消费的位数。
  *
- * 优先使用 candidatePinyin 中的字母数（每个字母对应一位数字），
- * 若 candidatePinyin 为空或无字母，则回退到贪婪最长匹配。
+ * 逐音节匹配数字码：将 candidatePinyin 按空格拆分为音节，每个音节通过
+ * [T9PinyinMap.pinyinToDigitCode] 转为数字码，与剩余数字段前缀匹配。
+ * - 完全匹配：音节数字码与剩余段前缀完全一致，消费全部数字码位数
+ * - 前缀匹配（声母匹配）：用户仅输入了声母对应的数字，RIME 翻译器补全了韵母，
+ *   此时音节数字码的前缀与剩余段匹配，仅消费前缀长度的数字
+ *   例：用户输入 9435，候选 "这里(zhe li)"，"li" 数字码 "54"，
+ *   剩余 "5" 是 "54" 的前缀（声母 l 对应 digit 5），消费 1 位
+ *
+ * 若音节匹配失败（pinyinToDigitCode 返回 null 或无前缀匹配），
+ * 回退到字母数（每个字母对应一位数字），最终回退到贪婪最长匹配。
  */
 fun computeConsumedDigitsFromPinyin(segment: String, candidatePinyin: String?): Int {
     if (!candidatePinyin.isNullOrEmpty()) {
+        val syllables = candidatePinyin.trim().split("\\s+".toRegex())
+            .filter { it.any { c -> c.isLetter() } }
+        if (syllables.isNotEmpty()) {
+            var consumed = 0
+            var remaining = segment
+            for (syl in syllables) {
+                val sylCode = T9PinyinMap.pinyinToDigitCode(syl)
+                if (sylCode == null) break
+                if (remaining.startsWith(sylCode)) {
+                    consumed += sylCode.length
+                    remaining = remaining.drop(sylCode.length)
+                } else {
+                    // 前缀匹配：声母场景，用户只输入了音节首字母对应的数字
+                    var matchLen = 0
+                    for (len in 1..minOf(sylCode.length, remaining.length)) {
+                        if (remaining.startsWith(sylCode.take(len))) matchLen = len
+                    }
+                    if (matchLen > 0) {
+                        consumed += matchLen
+                        remaining = remaining.drop(matchLen)
+                    } else break
+                }
+            }
+            if (consumed > 0) return consumed
+        }
         val letterCount = candidatePinyin.count { it in 'a'..'z' || it in 'A'..'Z' }
         if (letterCount > 0 && letterCount <= segment.length) return letterCount
     }
