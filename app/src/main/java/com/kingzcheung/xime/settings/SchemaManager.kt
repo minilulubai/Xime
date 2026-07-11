@@ -82,6 +82,48 @@ object SchemaManager {
         return dir.deleteRecursively()
     }
 
+    /**
+     * 列出 market/{schemeId}/ 下归档文件解压后将会放置到 rime/ 的所有文件名。
+     * 用于安装前的文件冲突提示。
+     */
+    suspend fun listInstallTargetFiles(context: Context, schemeId: String): List<String> {
+        val dir = getMarketDir(context, schemeId)
+        if (!dir.exists()) return emptyList()
+        val files = dir.listFiles()?.filter { it.isFile } ?: return emptyList()
+        return files.flatMap { listArchiveTargetFiles(it) }
+    }
+
+    /** 解析单个归档（或普通文件）将被释放到 rime/ 的目标文件名列表。 */
+    private fun listArchiveTargetFiles(archiveFile: File): List<String> {
+        val entryNames = when {
+            archiveFile.name.endsWith(".zip", ignoreCase = true) -> {
+                val names = mutableListOf<String>()
+                ZipFile(archiveFile).use { zip ->
+                    zip.entries().asSequence().forEach { entry ->
+                        if (!entry.isDirectory && !isAppleDouble(entry.name)) names.add(entry.name)
+                    }
+                }
+                names
+            }
+            archiveFile.name.endsWith(".tar.gz", ignoreCase = true) || archiveFile.name.endsWith(".tgz", ignoreCase = true) -> {
+                val names = mutableListOf<String>()
+                TarArchiveInputStream(GzipCompressorInputStream(archiveFile.inputStream().buffered())).use { tar ->
+                    var entry = tar.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory && !isAppleDouble(entry.name)) names.add(entry.name)
+                        entry = tar.nextEntry
+                    }
+                }
+                names
+            }
+            else -> return listOf(archiveFile.name)
+        }
+        if (entryNames.isEmpty()) return emptyList()
+        val baseDir = findSchemaBaseDir(entryNames)
+        return entryNames.map { it.removePrefix(baseDir) }
+            .filterNot { isProtectedImportName(it) }
+    }
+
     /** 在 market/{schemeId}/ 中查找已下载的文件。 */
     fun findMarketFile(context: Context, schemeId: String): File? {
         val dir = getMarketDir(context, schemeId)
