@@ -159,7 +159,7 @@ fun HandwritingKeyboardLayout(
 
         key(dragVersion) {
             Canvas(Modifier.fillMaxSize()) {
-                renderStrokes(strokes, currentStrokePoints, Color(0xFF333333))
+                renderStrokes(strokes, currentStrokePoints, keyTextColor)
             }
         }
 

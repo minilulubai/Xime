@@ -1,4 +1,4 @@
-package com.kingzcheung.xime.ui.keyboard
+package com.kingzcheung.xime.ui.menubar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,7 +65,6 @@ fun ToolbarCustomizeView(
 
     fun toggleButton(button: ToolbarButton) {
         enabledIds = if (button.id in enabledIds) enabledIds - button.id else enabledIds + button.id
-        // 保持 toolbarButtons 的原始顺序，只增删对应项
         val newList = toolbarButtons.toMutableList()
         if (button.id in toolbarButtons) newList.remove(button.id) else newList.add(button.id)
         onUpdateToolbarButtons?.invoke(newList)
@@ -87,7 +86,6 @@ fun ToolbarCustomizeView(
             .background(backgroundColor),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 导航区：关闭按钮 + 实时预览
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -113,7 +111,6 @@ fun ToolbarCustomizeView(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // 工具栏预览
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -233,9 +230,6 @@ fun ToolbarCustomizeView(
             }
         }
 
-        // 底部留空
         Spacer(modifier = Modifier.height(if (isLandscape) 15.dp else maxOf(bottomPaddingDp.dp, with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() })))
     }
 }
-
-

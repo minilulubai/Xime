@@ -1,4 +1,4 @@
-package com.kingzcheung.xime.ui.keyboard
+package com.kingzcheung.xime.ui.menubar
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
