@@ -35,8 +35,16 @@ class SchemaManagerImportTest {
         assertFalse(SchemaManager.isProtectedImportName("cangjie5.schema.yaml"))
         assertFalse(SchemaManager.isProtectedImportName("cangjie5.dict.yaml"))
         assertFalse(SchemaManager.isProtectedImportName("essay.txt"))
-        assertFalse(SchemaManager.isProtectedImportName("default.custom.yaml"))
         assertFalse(SchemaManager.isProtectedImportName("wubi86.custom.yaml"))
+    }
+
+    @Test
+    fun `protects xime yaml and metadata from import`() {
+        assertTrue(SchemaManager.isProtectedImportName("xime.yaml"))
+        assertFalse(SchemaManager.isProtectedImportName("default.custom.yaml"))
+        assertFalse(SchemaManager.isProtectedImportName("xime.custom.yaml"))
+        assertTrue(SchemaManager.isProtectedImportName(".registry.json"))
+        assertTrue(SchemaManager.isProtectedImportName(".manifests/my_scheme.json"))
     }
 
     // ── findSchemaBaseDir：剥 GitHub 归档壳目录(修 essay.txt 落进 rime-essay-master/ 子目录) ──

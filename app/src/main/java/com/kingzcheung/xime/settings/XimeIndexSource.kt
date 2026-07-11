@@ -181,7 +181,7 @@ object XimeIndexSource {
 
     /**
      * 从 market 目录安装已下载的方案到 rime 目录（解压/复制 + 依赖补齐）。
-     * 安装前扫描冲突文件并记录日志，安装仍然正常进行。
+     * 安装前检测文件冲突（同名且内容不同），发现真正冲突则阻止安装。
      */
     suspend fun installFromMarket(
         context: Context,
@@ -192,12 +192,15 @@ object XimeIndexSource {
             return@withContext InstallResult(false, failureReason = "压缩包不存在，请先下载")
         }
 
-        // 安装前检测冲突（仅警告，不阻止安装）
+        // 安装前检测真正的文件冲突（同名且内容不同），阻止安装
         val targetFiles = SchemaManager.listInstallTargetFiles(context, scheme.id)
-        val rimeDir = SchemaManager.getRimeDir(context)
-        val conflicts = targetFiles.filter { File(rimeDir, it).exists() }
-        if (conflicts.isNotEmpty()) {
-            Log.w(TAG, "installFromMarket ${scheme.id}: 以下文件将被覆盖：${conflicts.joinToString("、")}")
+        val realConflicts = SchemaManifestManager.detectConflicts(context, scheme.id, targetFiles)
+        if (realConflicts.isNotEmpty()) {
+            val details = realConflicts.joinToString("、") {
+                "${it.fileName}（已被 ${it.claimedBy.joinToString("、")} 使用）"
+            }
+            Log.w(TAG, "installFromMarket ${scheme.id}: 文件冲突：$details")
+            return@withContext InstallResult(false, failureReason = "文件冲突，无法安装：$details")
         }
 
         val before = SchemaManager.discoverSchemas(context).map { it.schemaId }.toSet()
@@ -227,6 +230,20 @@ object XimeIndexSource {
         )
         val unresolved = (completion.unresolved + completion.stillMissingFiles).distinct()
         if (unresolved.isNotEmpty()) Log.w(TAG, "installFromMarket ${scheme.id}: unresolved=$unresolved")
+
+        // 创建文件清单并注册到全局注册表
+        SchemaManifestManager.createManifest(
+            context = context,
+            schemeId = scheme.id,
+            displayName = scheme.name,
+            version = scheme.currentVersion,
+            fromMarket = true,
+            extractedFiles = targetFiles,
+            dependencyIds = completion.downloaded,
+        )
+
+        // 记录到已安装列表
+        SettingsPreferences.addInstalledMarketId(context, scheme.id)
 
         InstallResult(success = true, unresolvedDeps = unresolved)
     }

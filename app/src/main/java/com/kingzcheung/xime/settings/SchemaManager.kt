@@ -61,15 +61,15 @@ object SchemaManager {
     fun getRimeDir(context: Context): File =
         File(context.filesDir, "rime")
 
-    /** market 根目录。 */
+    /** market 根目录（与 rime/ 同级，不属于 Rime 数据）。 */
     fun getMarketDir(context: Context): File =
-        File(getRimeDir(context), "market")
+        File(context.filesDir, "market")
 
-    /** 每个方案在 market 下的独立子目录：rime/market/{schemeId}/ */
+    /** 每个方案在 market 下的独立子目录：market/{schemeId}/ */
     fun getMarketDir(context: Context, schemeId: String): File =
         File(getMarketDir(context), schemeId)
 
-    /** 检查方案的压缩包是否已下载。 */
+    /** 检查方案的压缩包是否已下载（market/{schemeId}/ 存在且包含文件）。 */
     fun isSchemeDownloaded(context: Context, schemeId: String): Boolean {
         val dir = getMarketDir(context, schemeId)
         return dir.exists() && (dir.listFiles()?.any { it.isFile } == true)
@@ -266,10 +266,13 @@ object SchemaManager {
         MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
-    /** 导入归档时禁止覆盖 default.yaml（保护用户配置）。 */
+    /** 导入归档时禁止覆盖系统文件（保护应用核心配置与系统元数据）。 */
     fun isProtectedImportName(name: String): Boolean {
         val base = name.substringAfterLast('/')
-        return base == "default.yaml"
+        return base == "default.yaml" ||
+               base == "xime.yaml" ||
+               name.startsWith(".registry") ||
+               name.startsWith(".manifests")
     }
 
     /** macOS Apple Double 资源分支文件（__MACOSX/ 或 ._ 前缀），应当在解压时跳过。 */
@@ -461,19 +464,32 @@ object SchemaManager {
         return schemaId in getEnabledSchemas(context)
     }
 
-    fun deleteSchemaFiles(context: Context, schemaId: String) {
-        val rimeDir = getRimeDir(context)
-        val schemaFile = File(rimeDir, "$schemaId.schema.yaml")
-        if (schemaFile.exists()) schemaFile.delete()
+    suspend fun deleteSchemaFiles(context: Context, schemaId: String): Boolean {
+        // 优先使用清单系统精准卸载
+        val result = SchemaManifestManager.uninstallWithManifest(context, schemaId)
+        if (result.manifestExisted) {
+            if (result.success) {
+                Log.i(TAG, "Manifest-based uninstall for $schemaId: ${result.message}")
+            } else {
+                Log.w(TAG, "Manifest-based uninstall for $schemaId failed: ${result.message}")
+            }
+        } else {
+            // 降级到传统逻辑（无清单的旧方案）
+            val rimeDir = getRimeDir(context)
+            val schemaFile = File(rimeDir, "$schemaId.schema.yaml")
+            if (schemaFile.exists()) schemaFile.delete()
+            val dictName = getReferencedDictName(context, schemaId) ?: schemaId
+            val dictFile = File(rimeDir, "$dictName.dict.yaml")
+            if (dictFile.exists()) dictFile.delete()
+            Log.i(TAG, "Legacy uninstall for $schemaId (dict=$dictName)")
+        }
 
-        val dictName = getReferencedDictName(context, schemaId) ?: schemaId
-        val dictFile = File(rimeDir, "$dictName.dict.yaml")
-        if (dictFile.exists()) dictFile.delete()
-
+        // 从已安装市场列表和启用列表中移除
+        SettingsPreferences.removeInstalledMarketId(context, schemaId)
         val enabled = getEnabledSchemas(context).toMutableList()
         enabled.remove(schemaId)
         setEnabledSchemas(context, enabled)
-        Log.i(TAG, "Deleted schema files for: $schemaId (dict=$dictName)")
+        return true
     }
 
     suspend fun importSchemaFile(context: Context, uri: Uri): Boolean {
@@ -483,25 +499,53 @@ object SchemaManager {
                 if (!rimeDir.exists()) rimeDir.mkdirs()
 
                 val displayName = getFileName(context, uri) ?: return@withContext false
+                val importId = "import_" + sha256Hex(displayName.toByteArray()).take(12)
 
+                val targetFiles: List<String>
                 if (displayName.endsWith(".zip", ignoreCase = true)) {
-                    return@withContext importZip(context, uri, rimeDir)
+                    targetFiles = importZipWithFileList(context, uri, rimeDir)
+                } else {
+                    val targetFile = File(rimeDir, displayName)
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    } ?: return@withContext false
+                    targetFiles = listOf(displayName)
                 }
 
-                val targetFile = File(rimeDir, displayName)
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        input.copyTo(output)
-                    }
-                } ?: return@withContext false
+                SchemaManifestManager.createManifest(
+                    context = context,
+                    schemeId = importId,
+                    displayName = displayName.removeSuffix(".zip").removeSuffix(".tar.gz").removeSuffix(".tgz"),
+                    version = "",
+                    fromMarket = false,
+                    extractedFiles = targetFiles,
+                )
 
-                Log.i(TAG, "Imported: $displayName")
-
+                Log.i(TAG, "Imported: $displayName ($importId)")
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import schema file", e)
                 false
             }
+        }
+    }
+
+    /**
+     * 从 URI 导入 zip，返回解压后的文件列表。
+     */
+    private fun importZipWithFileList(context: Context, uri: Uri, targetDir: File): List<String> {
+        val tempFile = File.createTempFile("import_", ".zip", targetDir)
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output -> input.copyTo(output) }
+            } ?: return emptyList()
+            val files = listArchiveTargetFiles(tempFile)
+            importZipFromFile(tempFile, targetDir)
+            return files
+        } finally {
+            tempFile.delete()
         }
     }
 
@@ -782,8 +826,21 @@ object SchemaManager {
                         return@withContext false
                     }
                 }
+                // 解压前列出目标文件
+                val targetFiles = listArchiveTargetFiles(archiveFile)
                 // 解压到 rime 目录
                 if (isZip) importZipFromFile(archiveFile, rimeDir) else importTarGzFromFile(archiveFile, rimeDir)
+
+                // 为导入创建清单（自动分配 ID）
+                val importId = "import_" + sha256Hex(url.toByteArray()).take(12)
+                SchemaManifestManager.createManifest(
+                    context = context,
+                    schemeId = importId,
+                    displayName = archiveFile.nameWithoutExtension,
+                    version = "",
+                    fromMarket = false,
+                    extractedFiles = targetFiles,
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to import from URL: $url", e)

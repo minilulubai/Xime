@@ -4,11 +4,11 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import android.util.Log
 import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.settings.PersonalDictManager
+import com.kingzcheung.xime.settings.SchemaManifestManager
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import com.kingzcheung.xime.settings.SchemaMeta
@@ -27,12 +27,13 @@ data class SchemaUiState(
     val currentSchema: String = "wubi86",
     val isDeploying: Boolean = false,
     val isDownloading: Boolean = false,
-    val toastMessage: String? = null
+    val toastMessage: String? = null,
+    val marketPackages: List<SchemaManifestManager.MarketPackageInfo> = emptyList(),
+    val showUninstallDialog: Boolean = false,
 )
 
 class SchemaSettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
-    private val TAG = "SchemaSettingsViewModel"
 
     private val _uiState = MutableStateFlow(SchemaUiState())
     val uiState: StateFlow<SchemaUiState> = _uiState.asStateFlow()
@@ -104,6 +105,37 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    fun loadMarketPackages() {
+        viewModelScope.launch {
+            val packages = withContext(Dispatchers.IO) {
+                SchemaManifestManager.getInstalledPackages(context)
+            }
+            _uiState.update { it.copy(marketPackages = packages) }
+        }
+    }
+
+    fun showUninstallDialog() {
+        loadMarketPackages()
+        _uiState.update { it.copy(showUninstallDialog = true) }
+    }
+
+    fun dismissUninstallDialog() {
+        _uiState.update { it.copy(showUninstallDialog = false) }
+    }
+
+    fun uninstallPackage(packageId: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                SchemaManager.deleteSchemaFiles(context, packageId)
+                SchemaManager.deleteSchemeArchive(context, packageId)
+            }
+            _uiState.update { it.copy(showUninstallDialog = false) }
+            refresh()
+            loadMarketPackages()
+            showToast("已卸载")
+        }
+    }
+
     fun importFromUrl(url: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isDownloading = true) }
@@ -113,32 +145,6 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
             _uiState.update { it.copy(isDownloading = false) }
             refresh()
             showToast(if (success) "导入成功" else "下载或解压失败，请检查链接")
-        }
-    }
-
-    fun deleteSchema(schema: SchemaMeta) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                SchemaManager.deleteSchemaFiles(context, schema.schemaId)
-            }
-            if (_uiState.value.currentSchema == schema.schemaId) {
-                // 自动切换到另一个可用方案：优先选已启用的，其次选第一个
-                val remaining = _uiState.value.allSchemas
-                    .filter { it.schemaId != schema.schemaId }
-                    .let { list ->
-                        list.firstOrNull { it.schemaId in _uiState.value.enabledSchemas }
-                            ?: list.firstOrNull()
-                    }
-                if (remaining != null) {
-                    selectSchema(remaining)
-                } else {
-                    // 没有任何其他方案了，重置当前方案防止残留无效 ID
-                    SettingsPreferences.setCurrentSchema(context, "")
-                    _uiState.update { it.copy(currentSchema = "") }
-                }
-            }
-            refresh()
-            showToast("${schema.name} 已删除")
         }
     }
 

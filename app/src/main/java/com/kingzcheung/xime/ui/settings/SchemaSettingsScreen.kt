@@ -22,15 +22,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.twotone.CloudDownload
 import androidx.compose.material.icons.twotone.Computer
@@ -60,6 +56,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -283,6 +280,84 @@ fun SchemaSettingsContent(
         )
     }
 
+    if (uiState.showUninstallDialog) {
+        val packages = uiState.marketPackages
+        val selectedIds = remember { mutableStateListOf<String>() }
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissUninstallDialog() },
+            title = { Text("卸载方案") },
+            text = {
+                if (packages.isEmpty()) {
+                    Text(
+                        "没有可卸载的方案",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Column {
+                        Text(
+                            "选择要卸载的方案：",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        packages.forEach { pkg ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (pkg.packageId in selectedIds) {
+                                            selectedIds.remove(pkg.packageId)
+                                        } else {
+                                            selectedIds.add(pkg.packageId)
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                            ) {
+                                Checkbox(
+                                    checked = pkg.packageId in selectedIds,
+                                    onCheckedChange = { checked ->
+                                        if (checked) selectedIds.add(pkg.packageId)
+                                        else selectedIds.remove(pkg.packageId)
+                                    }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(pkg.displayName, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "${pkg.schemaCount} 个输入方案 · ${pkg.fileCount} 个文件" +
+                                            if (pkg.version.isNotEmpty()) " · v${pkg.version}" else "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        selectedIds.forEach { viewModel.uninstallPackage(it) }
+                    },
+                    enabled = selectedIds.isNotEmpty(),
+                ) {
+                    Text(
+                        "卸载 (${selectedIds.size})",
+                        color = if (selectedIds.isNotEmpty()) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissUninstallDialog() }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     // Auto-close dialog when download finishes
     LaunchedEffect(uiState.isDownloading) {
         if (wasDownloading && !uiState.isDownloading) {
@@ -387,6 +462,22 @@ fun SchemaSettingsContent(
                                         modifier = Modifier.size(20.dp))
                                 }
                             )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            DropdownMenuItem(
+                                text = { Text("卸载方案", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.showUninstallDialog()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Delete, null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp))
+                                }
+                            )
                         }
                     }
                 },
@@ -438,7 +529,6 @@ fun SchemaSettingsContent(
                     isCurrent = schema.schemaId == uiState.currentSchema,
                     onToggle = { viewModel.toggleSchema(schema) },
                     onSelect = { viewModel.selectSchema(schema) },
-                    onDelete = { viewModel.deleteSchema(schema) }
                 )
             }
 
@@ -473,7 +563,6 @@ fun SchemaSettingsContent(
                     isCurrent = false,
                     onToggle = { viewModel.toggleSchema(schema) },
                     onSelect = { viewModel.selectSchema(schema) },
-                    onDelete = { viewModel.deleteSchema(schema) }
                 )
             }
         }
@@ -512,36 +601,7 @@ private fun SchemaToggleItem(
     isCurrent: Boolean,
     onToggle: () -> Unit,
     onSelect: () -> Unit,
-    onDelete: () -> Unit = {}
 ) {
-    val context = LocalContext.current
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("删除方案") },
-            text = {
-                val msg = if (isCurrent) {
-                    "「${schema.name}」是当前默认输入方案，删除后将自动切换到其他方案。\n\n相关的 .schema.yaml 和 .dict.yaml 文件将被移除。"
-                } else {
-                    "确定删除「${schema.name}」吗？\n相关的 .schema.yaml 和 .dict.yaml 文件将被移除。"
-                }
-                Text(msg)
-            },
-            confirmButton = {
-                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -616,17 +676,6 @@ private fun SchemaToggleItem(
                 checked = enabled,
                 onCheckedChange = { onToggle() }
             )
-            IconButton(
-                onClick = { showDeleteConfirm = true },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
         }
     }
 }
