@@ -26,10 +26,6 @@ class T9InputController(
         const val CLEAR_ALL = T9RimeBridge.CLEAR_ALL
     }
 
-    /** 推迟左侧候选区更新到下一帧，避免重组干扰触摸事件命中测试 */
-    private val candidateUpdater: android.os.Handler? =
-        try { android.os.Handler(android.os.Looper.getMainLooper()) } catch (_: Throwable) { null }
-
     private val rimeBridge = T9RimeBridge(onReplaceFullPinyin, onQueryRimeComposition, onRightCommitUndone)
 
     enum class LeftPanelState { IDLE, INPUT, SELECTION }
@@ -243,7 +239,7 @@ class T9InputController(
         // T9Buffer 自动处理字母/数字间的分隔——不需要手动插入 '
         pushCommand(T9Command.DigitPressed(digit))
         inputBuffer = inputBuffer.addDigit(digit)
-        candidateUpdater?.post { updateCandidates() } ?: updateCandidates()
+        updateCandidates()
 
         sendToRime()
         val elapsed = (System.nanoTime() - t0) / 1_000_000L
