@@ -58,13 +58,16 @@ data class BubbleDrawData(
     val normalFontSizePx: Float,
     val selectedBgRadiusPx: Float,
     val longPressIconBitmaps: List<Bitmap> = emptyList(),
+    val accentArgb: Int = 0xFF8F73E2.toInt(),
 )
 
 @Composable
 fun rememberSwipeBubbleDrawData(
     swipeState: SwipeState,
     keyBounds: Rect,
-    isDarkTheme: Boolean,
+    keyBackgroundColor: Color,
+    keyTextColor: Color,
+    accentColor: Color = Color(0xFF8F73E2),
     keyWidth: Float,
     keyboardWidth: Float,
 ): BubbleDrawData? {
@@ -88,12 +91,12 @@ fun rememberSwipeBubbleDrawData(
     val totalHeightPx = bodyHeightPx + pointerHeightPx
     val shadowRadiusPx = with(density) { 4.dp.toPx() }
 
+    val accentArgb = accentColor.toArgb()
+    val isDarkTheme = keyTextColor == Color(0xFFE8EAED)
     val bgColor = (if (swipeState.isDanger) {
         if (swipeState.isSwipeDown) Color(0xFF1A73E8) else Color(0xFFD93025)
-    } else if (isDarkTheme) com.kingzcheung.xime.ui.theme.KeyBackgroundDark
-    else com.kingzcheung.xime.ui.theme.KeyBackground).toArgb()
-    val textColor = (if (swipeState.isDanger) Color.White
-    else if (isDarkTheme) Color(0xFFE8EAED) else Color(0xFF202124)).toArgb()
+    } else keyBackgroundColor).toArgb()
+    val textColor = (if (swipeState.isDanger) Color.White else keyTextColor).toArgb()
 
     val chaiTypeface = remember {
         Typeface.createFromAsset(context.assets, "ChaiPUA-0.2.7-snow.ttf")
@@ -187,6 +190,7 @@ fun rememberSwipeBubbleDrawData(
         normalFontSizePx = normalFontSizePx,
         selectedBgRadiusPx = selectedBgRadiusPx,
         longPressIconBitmaps = longPressIconBitmaps,
+        accentArgb = accentArgb,
     )
 }
 
@@ -262,8 +266,11 @@ fun DrawScope.drawSwipeBubble(data: BubbleDrawData) {
         if (data.isLongPressMode) {
             canvas.save()
             canvas.clipRect(0f, 0f, data.bodyWidth, data.bodyHeightPx)
-            val accentColor = android.graphics.Color.argb(0xFF, 0x8F, 0x73, 0xE2)
-            val selectedBgColor = android.graphics.Color.argb(0x33, 0x8F, 0x73, 0xE2)
+            val accentColor = data.accentArgb
+            val selectedBgColor = android.graphics.Color.argb(
+                0x33, android.graphics.Color.red(accentColor),
+                android.graphics.Color.green(accentColor), android.graphics.Color.blue(accentColor)
+            )
             val cellWidth = data.bodyWidth / data.longPressItems.size
 
             data.longPressItems.forEachIndexed { index, item ->

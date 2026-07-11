@@ -290,6 +290,14 @@ object KeyboardThemes {
         return if (isDark) theme.accentDark else theme.accentLight
     }
 
+    /** 特殊键文字颜色：暗色用强调色，亮色用更深的版本以提高对比度。 */
+    fun getSpecialKeyTextColor(themeId: String, isDark: Boolean): Color {
+        val accent = getAccentColor(themeId, isDark)
+        return if (isDark) accent else Color(
+            red = accent.red * 0.6f, green = accent.green * 0.6f, blue = accent.blue * 0.6f
+        )
+    }
+
     fun getPrimaryColor(themeId: String, isDark: Boolean): Color {
         val theme = getThemeById(themeId)
         return if (isDark) theme.primaryDark else theme.primaryLight

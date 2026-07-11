@@ -84,7 +84,9 @@ fun CommonSymbolKeyboardLayout(
     val bubbleData = rememberSwipeBubbleDrawData(
         swipeState = swipeState,
         keyBounds = lastKeyBounds,
-        isDarkTheme = isDarkTheme,
+        keyBackgroundColor = keyBackgroundColor,
+        keyTextColor = keyTextColor,
+        accentColor = specialKeyTextColor,
         keyWidth = if (swipeState.isSwiping || swipeState.isPressed) lastKeyBounds.width else 0f,
         keyboardWidth = keyboardBounds.width,
     )
