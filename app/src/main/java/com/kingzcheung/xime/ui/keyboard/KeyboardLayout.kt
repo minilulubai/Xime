@@ -128,7 +128,7 @@ fun KeyboardLayout(
     val specialKeyBackgroundColor = if (uiState.isDarkTheme) kbColors.specialKeyBgColorDark?.let { longToColor(it) }
         ?: themeSpecialKeyColor else kbColors.specialKeyBgColor?.let { longToColor(it) } ?: themeSpecialKeyColor
     val specialKeyTextColor = if (uiState.isDarkTheme) Color.White
-        else KeyboardThemes.getAccentColor(uiState.themeId, false)
+        else KeyboardThemes.getSpecialKeyTextColor(uiState.themeId, false)
     val kbShadow = KeysConfigHelper.getKeyboardShadow()
     val kbKey = KeysConfigHelper.getKeyboardKeyConfig()
     val shadowEnabled = kbShadow.enabled
@@ -230,7 +230,9 @@ fun KeyboardLayout(
     val bubbleData = rememberSwipeBubbleDrawData(
         swipeState = swipeState,
         keyBounds = lastKeyBounds,
-        isDarkTheme = isDarkTheme,
+        keyBackgroundColor = keyBackgroundColor,
+        keyTextColor = keyTextColor,
+        accentColor = specialKeyTextColor,
         keyWidth = if (swipeState.isSwiping || swipeState.isPressed) lastKeyBounds.width else 0f,
         keyboardWidth = keyboardBounds.width
     )
@@ -1179,7 +1181,7 @@ private fun LandscapeKeyboardContent(
     val specialKeyBackgroundColor = if (uiState.isDarkTheme) kbColors.specialKeyBgColorDark?.let { longToColor(it) }
         ?: themeSpecialKeyColor else kbColors.specialKeyBgColor?.let { longToColor(it) } ?: themeSpecialKeyColor
     val specialKeyTextColor = if (uiState.isDarkTheme) Color.White
-        else KeyboardThemes.getAccentColor(uiState.themeId, false)
+        else KeyboardThemes.getSpecialKeyTextColor(uiState.themeId, false)
     val kbShadow = KeysConfigHelper.getKeyboardShadow()
     val kbKey = KeysConfigHelper.getKeyboardKeyConfig()
     val shadowEnabled = kbShadow.enabled

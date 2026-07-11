@@ -103,6 +103,7 @@ fun T9KeyboardLayout(
     modifier: Modifier = Modifier,
     onKeyPressDown: ((String) -> Unit)? = null,
     isFloatingMode: Boolean = false,
+    specialKeyTextColor: Color = Color.White,
 ) {
     val controller = t9Controller
     val configuration = LocalConfiguration.current
@@ -141,6 +142,7 @@ fun T9KeyboardLayout(
         shadowShapeRadius = shadowShapeRadius,
         onKeyPressDown = onKeyPressDown,
         onDelete = ::handleDelete,
+        specialKeyTextColor = specialKeyTextColor,
     )
 }
 
@@ -166,6 +168,7 @@ private fun T9KeyboardSwipeOverlay(
     shadowShapeRadius: Dp,
     onKeyPressDown: ((String) -> Unit)?,
     onDelete: () -> Unit,
+    specialKeyTextColor: Color = Color.White,
 ) {
     var swipeState by remember { mutableStateOf(SwipeState()) }
     var keyboardBounds by remember { mutableStateOf(Rect(0f, 0f, 0f, 0f)) }
@@ -191,7 +194,9 @@ private fun T9KeyboardSwipeOverlay(
     val bubbleData = rememberSwipeBubbleDrawData(
         swipeState = swipeState,
         keyBounds = lastKeyBounds,
-        isDarkTheme = isDarkTheme,
+        keyBackgroundColor = keyBackgroundColor,
+        keyTextColor = keyTextColor,
+        accentColor = specialKeyTextColor,
         keyWidth = if (swipeState.isSwiping || swipeState.isPressed) lastKeyBounds.width else 0f,
         keyboardWidth = keyboardBounds.width
     )

@@ -39,6 +39,8 @@ data class SchemaMarketUiState(
     val source: String = "",
     /** 用户选择的版本：schemeId → version 字符串 */
     val selectedVersions: Map<String, String> = emptyMap(),
+    /** 索引文件最后更新时间 */
+    val updatedAt: String = "",
 ) {
     val filteredSchemes: List<MarketSchemeItem>
         get() = if (searchQuery.isBlank()) schemes else schemes.filter {
@@ -104,6 +106,7 @@ class SchemaMarketViewModel(application: Application) : AndroidViewModel(applica
                             schemes = fetch.schemes,
                             isLoading = false,
                             source = fetch.source,
+                            updatedAt = fetch.updatedAt,
                             errorMessage = null,
                             downloadedIds = downloadedIds,
                             selectedVersions = mergedSel,

@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -26,6 +27,7 @@ data class InstallResult(
 data class SchemesFetch(
     val schemes: List<MarketSchemeItem>,
     val source: String,
+    val updatedAt: String = "",
 )
 
 /**
@@ -108,7 +110,7 @@ object XimeIndexSource {
                 Log.w(TAG, "tryFetchFromBase $host: 0 个方案，尝试下一个镜像")
                 return null
             }
-            return SchemesFetch(schemes, host)
+            return SchemesFetch(schemes, host, direct.updatedAt)
         } catch (e: Exception) {
             Log.w(TAG, "tryFetchFromBase $host failed: ${e.message}")
             return null
@@ -179,7 +181,7 @@ object XimeIndexSource {
 
     /**
      * 从 market 目录安装已下载的方案到 rime 目录（解压/复制 + 依赖补齐）。
-     * 返回安装结果，调用方据此更新已安装列表。
+     * 安装前扫描冲突文件并记录日志，安装仍然正常进行。
      */
     suspend fun installFromMarket(
         context: Context,
@@ -189,6 +191,15 @@ object XimeIndexSource {
         if (!SchemaManager.isSchemeDownloaded(context, scheme.id)) {
             return@withContext InstallResult(false, failureReason = "压缩包不存在，请先下载")
         }
+
+        // 安装前检测冲突（仅警告，不阻止安装）
+        val targetFiles = SchemaManager.listInstallTargetFiles(context, scheme.id)
+        val rimeDir = SchemaManager.getRimeDir(context)
+        val conflicts = targetFiles.filter { File(rimeDir, it).exists() }
+        if (conflicts.isNotEmpty()) {
+            Log.w(TAG, "installFromMarket ${scheme.id}: 以下文件将被覆盖：${conflicts.joinToString("、")}")
+        }
+
         val before = SchemaManager.discoverSchemas(context).map { it.schemaId }.toSet()
         val ok = SchemaManager.installFromMarketToRime(context, scheme.id)
         if (!ok) return@withContext InstallResult(false, failureReason = "安装失败")
@@ -216,6 +227,7 @@ object XimeIndexSource {
         )
         val unresolved = (completion.unresolved + completion.stillMissingFiles).distinct()
         if (unresolved.isNotEmpty()) Log.w(TAG, "installFromMarket ${scheme.id}: unresolved=$unresolved")
+
         InstallResult(success = true, unresolvedDeps = unresolved)
     }
 }
