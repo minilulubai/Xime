@@ -40,6 +40,8 @@ fun KeyboardLayoutScreen(
         else KeyboardThemes.getSpecialKeyTextColor(uiState.themeId, false)
     val kbShadow = KeysConfigHelper.getKeyboardShadow()
     val kbKey = KeysConfigHelper.getKeyboardKeyConfig()
+    val accentColor = KeyboardThemes.getAccentColor(uiState.themeId, uiState.isDarkTheme)
+
 
     val onGestureAction: (GestureAction, String) -> Unit = { action, value ->
         when (action) {
@@ -183,6 +185,7 @@ fun KeyboardLayoutScreen(
                     keyBackgroundColor = keyBgColor,
                     keyTextColor = keyTextColor,
                     specialKeyBackgroundColor = specialKeyBgColor,
+                    accentColor = accentColor,
                     keyboardBackgroundColor = keyboardBgColor,
                     shadowEnabled = kbShadow.enabled,
                     shadowElevation = kbShadow.elevation.dp,
