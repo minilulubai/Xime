@@ -266,8 +266,8 @@ class T9InputController(
                 inputBuffer = inputBuffer.addSelection(confirmed.pinyin, confirmed.digitLength)
             }
             // 无匹配音节：仅记录分词状态（separatorConsumedDigits 保持 null），不修改 inputBuffer
+            leftColumnLocked = true
         }
-        leftColumnLocked = true
         sendToRime()
     }
 
