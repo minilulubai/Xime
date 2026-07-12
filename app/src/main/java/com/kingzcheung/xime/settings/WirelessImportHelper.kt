@@ -132,54 +132,32 @@ class WirelessImportHelper(private val context: Context) {
                                 val contentStart = raf.filePointer
                                 val contentLen = partEnd - contentStart
 
-                                when {
-                                    name.endsWith(".zip", ignoreCase = true) ||
-                                    name.endsWith(".tar.gz", ignoreCase = true) ||
-                                    name.endsWith(".tgz", ignoreCase = true) -> {
-                                        val isTarGz = name.endsWith(".tar.gz", ignoreCase = true) || name.endsWith(".tgz", ignoreCase = true)
-                                        val istream = object : java.io.InputStream() {
-                                            var remaining = contentLen
-                                            var buf8 = ByteArray(8192)
-                                            override fun read(): Int {
-                                                if (remaining <= 0) return -1
-                                                val n = raf.read(buf8, 0, 1)
-                                                if (n <= 0) return -1
-                                                remaining--
-                                                return buf8[0].toInt() and 0xff
-                                            }
-                                            override fun read(b: ByteArray, off: Int, len: Int): Int {
-                                                if (remaining <= 0) return -1
-                                                val cnt = if (remaining < len) remaining.toInt() else len
-                                                val n = raf.read(b, off, cnt)
-                                                if (n <= 0) return -1
-                                                remaining -= n
-                                                return n
-                                            }
-                                            override fun available() = minOf(remaining, Int.MAX_VALUE.toLong()).toInt()
-                                        }
-                                        val ok = if (isTarGz)
-                                            SchemaManager.importTarGzFromStream(istream, rimeDir)
-                                        else
-                                            SchemaManager.importZipFromStream(istream, rimeDir)
-                                        if (ok) {
-                                            saved = true
-                                            _uploadResults.trySend(UploadResult(fileName = name, success = true))
-                                        } else {
-                                            _uploadResults.trySend(UploadResult(fileName = name, success = false, error = "解压失败"))
-                                        }
-                                    }
-                                    name.endsWith(".yaml") || name.endsWith(".schema.yaml") || name.endsWith(".dict.yaml") -> {
-                                        raf.seek(contentStart)
-                                        val data = ByteArray(contentLen.toInt())
-                                        raf.readFully(data)
-                                        File(rimeDir, name).writeBytes(data)
-                                        saved = true
-                                        _uploadResults.trySend(UploadResult(fileName = name, success = true))
-                                    }
-                                    else -> {
-                                        _uploadResults.trySend(UploadResult(fileName = name, success = false, error = "不支持的文件类型"))
-                                    }
-                                }
+                when {
+                    name.endsWith(".zip", ignoreCase = true) ||
+                    name.endsWith(".tar.gz", ignoreCase = true) ||
+                    name.endsWith(".tgz", ignoreCase = true) ||
+                    name.endsWith(".yaml") || name.endsWith(".schema.yaml") || name.endsWith(".dict.yaml") -> {
+                        // 保存到 market/{importId}/，不直接解压到 rime/
+                        val importId = SchemaManager.generateImportId()
+                        val pkgDir = if (name.endsWith(".yaml") || name.endsWith(".schema.yaml") || name.endsWith(".dict.yaml"))
+                            SchemaManager.getMarketDir(context, importId)
+                        else
+                            SchemaManager.getMarketDir(context, importId)
+                        pkgDir.mkdirs()
+                        val targetFile = File(pkgDir, name)
+
+                        raf.seek(contentStart)
+                        val data = ByteArray(contentLen.toInt())
+                        raf.readFully(data)
+                        targetFile.writeBytes(data)
+
+                        saved = true
+                        _uploadResults.trySend(UploadResult(fileName = name, success = true))
+                    }
+                    else -> {
+                        _uploadResults.trySend(UploadResult(fileName = name, success = false, error = "不支持的文件类型"))
+                    }
+                }
                                 pos = nextB + 2
                             }
                         }

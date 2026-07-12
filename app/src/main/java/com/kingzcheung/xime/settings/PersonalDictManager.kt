@@ -30,8 +30,34 @@ use_preset_vocabulary: false
     fun getPackFile(context: Context, schemaId: String): File =
         File(SchemaManager.getRimeDir(context), packFileName(schemaId))
 
-    fun getCustomPhraseFile(context: Context): File =
-        File(SchemaManager.getRimeDir(context), CUSTOM_PHRASE_FILE)
+    fun getCustomPhraseFile(context: Context, schemaId: String? = null): File {
+        val rimeDir = SchemaManager.getRimeDir(context)
+        val dictName = if (schemaId != null) getCustomPhraseDictName(rimeDir, schemaId)
+                       else CUSTOM_PHRASE_FILE.removeSuffix(".txt")
+        return File(rimeDir, "$dictName.txt")
+    }
+
+    /**
+     * 从方案的 .custom.yaml 中读取 `custom_phrase.user_dict` 定义的文件名。
+     * 例如 `user_dict: custom_phrase_double` → 对应 `custom_phrase_double.txt`。
+     * 若无声明则返回默认的 `custom_phrase`。
+     */
+    internal fun getCustomPhraseDictName(rimeDir: File, schemaId: String): String {
+        val customFile = File(rimeDir, "${schemaId}.custom.yaml")
+        if (!customFile.exists()) return CUSTOM_PHRASE_FILE.removeSuffix(".txt")
+        val text = customFile.readText(Charsets.UTF_8)
+        for (cpKey in listOf("\"custom_phrase\"", "'custom_phrase'", "custom_phrase:")) {
+            val idx = text.indexOf(cpKey)
+            if (idx < 0) continue
+            val after = text.substring(idx)
+            val udIdx = after.indexOf("user_dict")
+            if (udIdx < 0) continue
+            val line = after.substring(udIdx).lineSequence().firstOrNull() ?: continue
+            val value = line.substringAfter(":").trim().substringBefore(" #").substringBefore("\n")
+            if (value.isNotBlank()) return value
+        }
+        return CUSTOM_PHRASE_FILE.removeSuffix(".txt")
+    }
 
     fun ensureAllPackFilesExist(context: Context) {
         for (sid in listOf("pinyin_simp", "t9_pinyin", "wubi86")) {
@@ -43,8 +69,8 @@ use_preset_vocabulary: false
         }
     }
 
-    fun ensureCustomPhraseFileExists(context: Context) {
-        val file = getCustomPhraseFile(context)
+    fun ensureCustomPhraseFileExists(context: Context, schemaId: String? = null) {
+        val file = getCustomPhraseFile(context, schemaId)
         if (!file.exists()) {
             file.parentFile?.mkdirs()
             file.writeText("""# Rime table
@@ -56,28 +82,44 @@ use_preset_vocabulary: false
         }
     }
 
-    // ── 方案配置补丁 ──
-    //
-    // 词库扩展包 (packs) 依赖 prism 中存在对应的编码。
-    // 有 speller/algebra 的方案（如拼音），algebra 展开后所有有效编码都在 prism 中，
-    // packs 可以自由添加新词条。
-    // 无 speller/algebra 的方案（如五笔），prism 只包含词典条目中实际出现的编码，
-    // 需用 import_tables 合并词典，将个人词库编码一并编入 prism。
+    fun loadCustomPhrases(context: Context, schemaId: String? = null): List<DictEntry> {
+        val file = getCustomPhraseFile(context, schemaId)
+        if (!file.exists()) return emptyList()
+        return try {
+            parseStableDbEntries(file.readText(Charsets.UTF_8))
+        } catch (_: Exception) { emptyList() }
+    }
 
-    fun ensureSchemaPacks(context: Context) {
-        val rimeDir = SchemaManager.getRimeDir(context)
-        val enabledSchemas = SchemaManager.getEnabledSchemas(context)
-        for (schemaId in enabledSchemas) {
-            ensureSchemaPackInner(rimeDir, schemaId)
+    fun saveCustomPhrases(context: Context, schemaId: String? = null, entries: List<DictEntry>) {
+        val file = getCustomPhraseFile(context, schemaId)
+        file.parentFile?.mkdirs()
+        file.writeText(buildStableDbText(STABLEDB_HEADER, entries), Charsets.UTF_8)
+    }
+
+    /** 清理 custom_phrase 文件（仅当文件为空时删除，避免丢失用户数据）。 */
+    fun removeCustomPhraseFile(context: Context, schemaId: String? = null) {
+        val file = getCustomPhraseFile(context, schemaId)
+        if (file.exists() && file.readText(Charsets.UTF_8).lineSequence().count { it.isNotBlank() && !it.startsWith('#') } == 0) {
+            file.delete()
         }
     }
 
-    fun ensureSchemaPack(context: Context, schemaId: String) {
+    // ── 方案配置补丁 ──
+
+    suspend fun ensureSchemaPacks(context: Context) {
         val rimeDir = SchemaManager.getRimeDir(context)
-        ensureSchemaPackInner(rimeDir, schemaId)
+        val enabledSchemas = SchemaManager.getEnabledSchemas(context)
+        for (schemaId in enabledSchemas) {
+            ensureSchemaPackInner(rimeDir, context, schemaId)
+        }
     }
 
-    private fun ensureSchemaPackInner(rimeDir: java.io.File, schemaId: String) {
+    suspend fun ensureSchemaPack(context: Context, schemaId: String) {
+        val rimeDir = SchemaManager.getRimeDir(context)
+        ensureSchemaPackInner(rimeDir, context, schemaId)
+    }
+
+    private suspend fun ensureSchemaPackInner(rimeDir: java.io.File, context: Context, schemaId: String) {
         val schemaFile = java.io.File(rimeDir, "${schemaId}.schema.yaml")
         if (!schemaFile.exists()) return
         if (hasReverseLookupTranslator(schemaFile)) {
@@ -87,7 +129,21 @@ use_preset_vocabulary: false
         } else {
             applyMergedDictConfig(rimeDir, schemaId)
         }
-        applyCustomPhraseTranslator(rimeDir, schemaId)
+        val dictName = getCustomPhraseDictName(rimeDir, schemaId)
+        val phraseFile = File(rimeDir, "$dictName.txt")
+        if (!phraseFile.exists()) {
+            phraseFile.parentFile?.mkdirs()
+            phraseFile.writeText("""# Rime table
+# coding: utf-8
+#@/db_name	custom_phrase
+#@/db_type	tabledb
+#
+""", Charsets.UTF_8)
+        }
+        // 有实际条目时才注入翻译器，避免 Rime 因空 .table.bin 报错
+        if (phraseFile.readText(Charsets.UTF_8).lineSequence().count { it.isNotBlank() && !it.startsWith('#') } > 0) {
+            applyCustomPhraseTranslator(rimeDir, schemaId, dictName)
+        }
     }
 
     internal fun hasReverseLookupTranslator(schemaFile: java.io.File): Boolean {
@@ -96,7 +152,7 @@ use_preset_vocabulary: false
     }
 
     // 为方案添加 custom_phrase 翻译器（独立于主词典音节表）
-    internal fun applyCustomPhraseTranslator(rimeDir: java.io.File, schemaId: String) {
+    internal fun applyCustomPhraseTranslator(rimeDir: java.io.File, schemaId: String, dictName: String) {
         val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
         if (customFile.exists()) {
             val text = customFile.readText(Charsets.UTF_8)
@@ -106,7 +162,7 @@ use_preset_vocabulary: false
     - table_translator@custom_phrase
   "custom_phrase":
     dictionary: ""
-    user_dict: custom_phrase
+    user_dict: $dictName
     db_class: stabledb
     enable_completion: false
     enable_sentence: false
@@ -237,24 +293,6 @@ import_tables:
         val start = norm.indexOf("...\n")
         if (start >= 0) return norm.substring(0, start + 4)
         return defaultH
-    }
-
-    // ── 自定义短语 ──
-    // custom_phrase.txt 通过独立的 table_translator 加载（db_class: stabledb），
-    // 不走主词典音节表，任意编码在所有方案中均可使用。
-
-    fun loadCustomPhrases(context: Context): List<DictEntry> {
-        val file = getCustomPhraseFile(context)
-        if (!file.exists()) return emptyList()
-        return try {
-            parseStableDbEntries(file.readText(Charsets.UTF_8))
-        } catch (_: Exception) { emptyList() }
-    }
-
-    fun saveCustomPhrases(context: Context, entries: List<DictEntry>) {
-        val file = getCustomPhraseFile(context)
-        file.parentFile?.mkdirs()
-        file.writeText(buildStableDbText(STABLEDB_HEADER, entries), Charsets.UTF_8)
     }
 
     private const val STABLEDB_HEADER = """# Rime table

@@ -29,11 +29,14 @@ data class CustomPhraseUiState(
 
 class CustomPhraseViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
+    private var schemaId: String? = null
 
     private val _uiState = MutableStateFlow(CustomPhraseUiState())
     val uiState: StateFlow<CustomPhraseUiState> = _uiState.asStateFlow()
 
-    init {
+    fun setSchema(id: String?) {
+        if (schemaId == id) return
+        schemaId = id
         loadEntries()
     }
 
@@ -41,7 +44,7 @@ class CustomPhraseViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val entries = withContext(Dispatchers.IO) {
-                PersonalDictManager.loadCustomPhrases(context)
+                PersonalDictManager.loadCustomPhrases(context, schemaId)
             }
             _uiState.update {
                 it.copy(
@@ -58,13 +61,10 @@ class CustomPhraseViewModel(application: Application) : AndroidViewModel(applica
         val trimmedWord = word.trim()
         val trimmedCode = code.trim()
         if (trimmedWord.isEmpty() || trimmedCode.isEmpty()) return
-
         viewModelScope.launch {
             val current = _uiState.value.entries
             val updated = current + DictEntry(trimmedWord, trimmedCode, weight)
-            withContext(Dispatchers.IO) {
-                PersonalDictManager.saveCustomPhrases(context, updated)
-            }
+            withContext(Dispatchers.IO) { PersonalDictManager.saveCustomPhrases(context, schemaId, updated) }
             _uiState.update {
                 val query = it.searchQuery
                 it.copy(entries = updated, filteredEntries = filterEntries(updated, query))
@@ -76,14 +76,11 @@ class CustomPhraseViewModel(application: Application) : AndroidViewModel(applica
         val trimmedWord = word.trim()
         val trimmedCode = code.trim()
         if (trimmedWord.isEmpty() || trimmedCode.isEmpty()) return
-
         viewModelScope.launch {
             val current = _uiState.value.entries.toMutableList()
             if (index < 0 || index >= current.size) return@launch
             current[index] = DictEntry(trimmedWord, trimmedCode, weight)
-            withContext(Dispatchers.IO) {
-                PersonalDictManager.saveCustomPhrases(context, current)
-            }
+            withContext(Dispatchers.IO) { PersonalDictManager.saveCustomPhrases(context, schemaId, current) }
             _uiState.update {
                 val query = it.searchQuery
                 it.copy(entries = current, filteredEntries = filterEntries(current, query))
@@ -96,9 +93,7 @@ class CustomPhraseViewModel(application: Application) : AndroidViewModel(applica
             val current = _uiState.value.entries.toMutableList()
             if (index < 0 || index >= current.size) return@launch
             current.removeAt(index)
-            withContext(Dispatchers.IO) {
-                PersonalDictManager.saveCustomPhrases(context, current)
-            }
+            withContext(Dispatchers.IO) { PersonalDictManager.saveCustomPhrases(context, schemaId, current) }
             _uiState.update {
                 val query = it.searchQuery
                 it.copy(entries = current, filteredEntries = filterEntries(current, query))

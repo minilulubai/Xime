@@ -4,9 +4,11 @@ import android.content.Context
 import android.util.Log
 import com.kingzcheung.xime.settings.PersonalDictManager
 import com.kingzcheung.xime.settings.SchemaConfigHelper
+import com.kingzcheung.xime.settings.SchemaManifestManager
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.FileOutputStream
@@ -22,6 +24,9 @@ object RimeConfigHelper {
         // 迁移旧目录结构 (rime/shared/ + rime/user/) → 单一 rime/ 目录
         migrateOldStructure(context, rimeDir)
         
+        // 迁移旧版 market 目录（rime/market/ → market/）
+        migrateOldMarketDir(context)
+        
         if (!rimeDir.exists()) {
             rimeDir.mkdirs()
         }
@@ -31,7 +36,6 @@ object RimeConfigHelper {
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         // 确保个人词库和自定义短语文件存在，并为所有方案打补丁
         PersonalDictManager.ensureAllPackFilesExist(context)
-        PersonalDictManager.ensureCustomPhraseFileExists(context)
         PersonalDictManager.ensureSchemaPacks(context)
 
         Log.d(TAG, "Checking for missing schema files...")
@@ -45,6 +49,9 @@ object RimeConfigHelper {
         } catch (e: TimeoutCancellationException) {
             Log.w(TAG, "Schema download timed out, continuing with existing files")
         }
+
+        // 迁移旧版方案到清单系统（创建遗留清单）
+        SchemaManifestManager.migrateLegacySchemas(context)
         
         checkAndCleanBuildDir(rimeDir)
         listFilesRecursively(rimeDir, TAG)
@@ -65,8 +72,7 @@ object RimeConfigHelper {
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         PersonalDictManager.ensureAllPackFilesExist(context)
-        PersonalDictManager.ensureCustomPhraseFileExists(context)
-        PersonalDictManager.ensureSchemaPacks(context)
+        runBlocking { PersonalDictManager.ensureSchemaPacks(context) }
         checkAndCleanBuildDir(rimeDir)
         listFilesRecursively(rimeDir, TAG)
         
@@ -283,6 +289,32 @@ object RimeConfigHelper {
         oldUserDir.deleteRecursively()
         
         Log.i(TAG, "Migration complete")
+    }
+
+    /** 迁移旧版 market 目录（rime/market/ → market/）。 */
+    private fun migrateOldMarketDir(context: Context) {
+        val oldMarket = File(context.filesDir, "rime/market")
+        if (!oldMarket.exists()) return
+
+        val newMarket = SchemaManager.getMarketDir(context)
+        if (!newMarket.exists()) {
+            // 新位置不存在，直接重命名
+            if (oldMarket.renameTo(newMarket)) {
+                Log.i(TAG, "Migrated rime/market/ -> market/")
+            } else {
+                Log.w(TAG, "Failed to rename rime/market/ to market/")
+            }
+        } else {
+            // 新位置已存在，逐项合并
+            oldMarket.listFiles()?.forEach { sub ->
+                val target = File(newMarket, sub.name)
+                if (!target.exists()) {
+                    sub.renameTo(target)
+                }
+            }
+            oldMarket.deleteRecursively()
+            Log.i(TAG, "Merged rime/market/ into market/")
+        }
     }
 
     private fun listFilesRecursively(dir: File, tag: String, prefix: String = "") {

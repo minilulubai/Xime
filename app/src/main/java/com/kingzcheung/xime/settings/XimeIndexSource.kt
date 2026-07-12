@@ -181,7 +181,7 @@ object XimeIndexSource {
 
     /**
      * 从 market 目录安装已下载的方案到 rime 目录（解压/复制 + 依赖补齐）。
-     * 安装前扫描冲突文件并记录日志，安装仍然正常进行。
+     * 安装前检测文件冲突（同名且内容不同），发现真正冲突则阻止安装。
      */
     suspend fun installFromMarket(
         context: Context,
@@ -191,43 +191,21 @@ object XimeIndexSource {
         if (!SchemaManager.isSchemeDownloaded(context, scheme.id)) {
             return@withContext InstallResult(false, failureReason = "压缩包不存在，请先下载")
         }
-
-        // 安装前检测冲突（仅警告，不阻止安装）
-        val targetFiles = SchemaManager.listInstallTargetFiles(context, scheme.id)
-        val rimeDir = SchemaManager.getRimeDir(context)
-        val conflicts = targetFiles.filter { File(rimeDir, it).exists() }
-        if (conflicts.isNotEmpty()) {
-            Log.w(TAG, "installFromMarket ${scheme.id}: 以下文件将被覆盖：${conflicts.joinToString("、")}")
-        }
-
-        val before = SchemaManager.discoverSchemas(context).map { it.schemaId }.toSet()
-        val ok = SchemaManager.installFromMarketToRime(context, scheme.id)
-        if (!ok) return@withContext InstallResult(false, failureReason = "安装失败")
-
-        val after = SchemaManager.discoverSchemas(context).map { it.schemaId }.toSet()
-        val newIds = after - before
-        val installedSchemaId = when {
-            scheme.id in newIds -> scheme.id
-            newIds.size == 1 -> newIds.first()
-            newIds.isNotEmpty() -> {
-                Log.w(TAG, "installFromMarket ${scheme.id}: multiple new schemas detected: $newIds, using ${newIds.first()}")
-                newIds.first()
-            }
-            else -> {
-                Log.w(TAG, "installFromMarket ${scheme.id}: no new schema detected, falling back to market id")
-                scheme.id
-            }
-        }
-
-        val completion = RimeDependencyResolver.complete(
+        val result = SchemaManager.installPackageFromMarketDir(
             context = context,
-            schemaId = installedSchemaId,
+            packageId = scheme.id,
+            displayName = scheme.name,
+            version = scheme.currentVersion,
+            fromMarket = true,
             dependencies = scheme.dependencies,
-            resolveUrl = resolveDepUrl,
+            resolveDepUrl = resolveDepUrl,
         )
-        val unresolved = (completion.unresolved + completion.stillMissingFiles).distinct()
-        if (unresolved.isNotEmpty()) Log.w(TAG, "installFromMarket ${scheme.id}: unresolved=$unresolved")
-
-        InstallResult(success = true, unresolvedDeps = unresolved)
+        if (!result.success) {
+            val reason = result.failureReason ?: result.conflicts.joinToString("、") { c ->
+                "${c.fileName}（已被 ${c.claimedBy.joinToString("、")} 使用）"
+            }
+            return@withContext InstallResult(false, failureReason = reason)
+        }
+        InstallResult(success = true, unresolvedDeps = result.unresolvedDeps)
     }
 }

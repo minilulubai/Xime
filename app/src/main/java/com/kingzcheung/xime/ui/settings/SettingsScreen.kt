@@ -31,7 +31,6 @@ fun SettingsScreen(
                 onNavigateToKeyEffect = { navController.navigate(SettingsRoutes.KeyEffect) },
                 onNavigateToLayoutDisplay = { navController.navigate(SettingsRoutes.LayoutDisplay) },
                 onNavigateToDictionary = { navController.navigate(SettingsRoutes.Dictionary) },
-                onNavigateToCustomPhrase = { navController.navigate(SettingsRoutes.CustomPhrase) },
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
                 onNavigateToSpeechToText = { navController.navigate(SettingsRoutes.SpeechToText) },
@@ -53,7 +52,7 @@ fun SettingsScreen(
                     onWizardBack()
                 },
                 onNavigateToMarket = { navController.navigate(SettingsRoutes.SchemaMarket) },
-                onNavigateToRimeFileBrowser = { navController.navigate(SettingsRoutes.RimeFileBrowser) }
+                onNavigateToRimeFileBrowser = { navController.navigate(SettingsRoutes.RimeFileBrowser) },
             )
         }
         composable(SettingsRoutes.SchemaMarket) {
@@ -62,6 +61,12 @@ fun SettingsScreen(
                 onNavigateToDetail = { schemeId ->
                     navController.navigate("schema_market_detail/$schemeId")
                 },
+                onNavigateToLocal = { navController.navigate(SettingsRoutes.SchemaLocal) },
+            )
+        }
+        composable(SettingsRoutes.SchemaLocal) {
+            SchemaLocalContent(
+                onBack = { navController.popBackStack() },
             )
         }
         composable(
@@ -133,11 +138,6 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.SchemaDictBrowser) {
             SchemaDictBrowserContent(
-                onBack = { navController.popBackStack() }
-            )
-        }
-        composable(SettingsRoutes.CustomPhrase) {
-            CustomPhraseContent(
                 onBack = { navController.popBackStack() }
             )
         }
