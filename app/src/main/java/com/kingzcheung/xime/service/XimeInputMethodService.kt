@@ -2371,20 +2371,18 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     
     private fun pageDown() {
         postRimeJob {
-            if (rimeEngine.pageDown()) {
-                withContext(Dispatchers.Main) {
-                    updateUI()
-                }
+            rimeEngine.pageDown()
+            withContext(Dispatchers.Main) {
+                updateUI()
             }
         }
     }
     
     private fun pageUp() {
         postRimeJob {
-            if (rimeEngine.pageUp()) {
-                withContext(Dispatchers.Main) {
-                    updateUI()
-                }
+            rimeEngine.pageUp()
+            withContext(Dispatchers.Main) {
+                updateUI()
             }
         }
     }
