@@ -106,7 +106,7 @@ fun CandidatePage(
 
             // 翻页按钮
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -152,7 +152,7 @@ fun CandidatePage(
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Box(
                 modifier = Modifier
                     .size(28.dp)
