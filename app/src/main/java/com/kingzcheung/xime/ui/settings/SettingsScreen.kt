@@ -53,7 +53,7 @@ fun SettingsScreen(
                     onWizardBack()
                 },
                 onNavigateToMarket = { navController.navigate(SettingsRoutes.SchemaMarket) },
-                onNavigateToRimeFileBrowser = { navController.navigate(SettingsRoutes.RimeFileBrowser) }
+                onNavigateToRimeFileBrowser = { navController.navigate(SettingsRoutes.RimeFileBrowser) },
             )
         }
         composable(SettingsRoutes.SchemaMarket) {
@@ -62,6 +62,12 @@ fun SettingsScreen(
                 onNavigateToDetail = { schemeId ->
                     navController.navigate("schema_market_detail/$schemeId")
                 },
+                onNavigateToLocal = { navController.navigate(SettingsRoutes.SchemaLocal) },
+            )
+        }
+        composable(SettingsRoutes.SchemaLocal) {
+            SchemaLocalContent(
+                onBack = { navController.popBackStack() },
             )
         }
         composable(

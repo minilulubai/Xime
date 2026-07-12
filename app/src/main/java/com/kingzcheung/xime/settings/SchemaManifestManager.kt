@@ -127,15 +127,18 @@ object SchemaManifestManager {
     /**
      * 检测待安装方案与已安装方案的文件冲突。
      * 仅报告真正冲突（同名不同内容）；同内容视为共享依赖自动放行。
+     *
+     * @param newFileSha256 待安装方案中各目标文件的 sha256 映射。
+     *   从市场包的归档内容计算得到，而非从 rime/ 目录下已有文件计算。
      */
     suspend fun detectConflicts(
         context: Context,
         schemeId: String,
         targetFiles: List<String>,
+        newFileSha256: Map<String, String> = emptyMap(),
     ): List<FileConflictInfo> = withContext(Dispatchers.IO) {
         val registry = loadRegistry(context)
         val files = registry.optJSONObject("files") ?: return@withContext emptyList()
-        val rimeDir = SchemaManager.getRimeDir(context)
         val conflicts = mutableListOf<FileConflictInfo>()
 
         for (fileName in targetFiles) {
@@ -145,10 +148,7 @@ object SchemaManifestManager {
             if (jsonArrayToList(claimants).any { it == schemeId }) continue
 
             val existingSha256 = entry.optString("sha256", "")
-            val targetFile = File(rimeDir, fileName)
-            if (!targetFile.exists()) continue
-
-            val newSha256 = fileSha256(targetFile) ?: continue
+            val newSha256 = newFileSha256[fileName] ?: continue
             if (existingSha256 != newSha256) {
                 conflicts.add(FileConflictInfo(
                     fileName = fileName,

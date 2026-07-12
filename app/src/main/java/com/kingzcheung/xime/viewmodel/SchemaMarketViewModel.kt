@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kingzcheung.xime.BuildConfig
-import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.settings.MarketSchemeItem
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.XimeIndexSource
@@ -23,15 +22,10 @@ data class SchemaMarketUiState(
     val downloadingId: String? = null,
     /** 下载进度 0f~1f */
     val downloadProgress: Float = 0f,
-    /** 正在解压/安装的方案 id */
-    val extractingId: String? = null,
     /** 已下载到 market 目录的方案 id（压缩包文件存在） */
     val downloadedIds: Set<String> = emptySet(),
-    /** 已解压安装到 rime 目录的方案 id */
-    val installedIds: Set<String> = emptySet(),
     /** sha256 校验状态：null=未提供sha256, true=校验通过, false=校验不通过 */
     val sha256Status: Map<String, Boolean?> = emptyMap(),
-    val isDeploying: Boolean = false,
     val errorMessage: String? = null,
     val toastMessage: String? = null,
     val searchQuery: String = "",
@@ -180,106 +174,6 @@ class SchemaMarketViewModel(application: Application) : AndroidViewModel(applica
                 else -> "已下载「${item.scheme.name}」"
             }
             showToast(toast)
-        }
-    }
-
-    /** 从 market 目录解压/复制已下载的方案到 rime 目录。 */
-    fun installFromMarket(item: MarketSchemeItem) {
-        if (_uiState.value.extractingId != null) {
-            showToast("正在安装其他方案，请稍候")
-            return
-        }
-        if (!item.compatible) {
-            showToast("需 App ≥ ${item.minAppVersion}")
-            return
-        }
-        viewModelScope.launch {
-            _uiState.update { it.copy(extractingId = item.scheme.id) }
-            val selVer = _uiState.value.selectedVersions
-            val urlById = _uiState.value.schemes.associate { si ->
-                val v = selVer[si.scheme.id]?.let { ver ->
-                    si.scheme.versions.firstOrNull { it.version == ver }
-                } ?: si.scheme.resolvedVersion()
-                si.scheme.id to v?.downloadUrls?.firstOrNull()?.url
-            }
-            val result = withContext(Dispatchers.IO) {
-                XimeIndexSource.installFromMarket(
-                    context, item.scheme,
-                    resolveDepUrl = { id: String -> urlById[id]?.takeIf { it.isNotBlank() } },
-                )
-            }
-            // 安装失败时确保目录清理干净，然后刷新状态让按钮恢复为"下载"
-            if (!result.success) {
-                withContext(Dispatchers.IO) {
-                    val dir = SchemaManager.getMarketDir(context, item.scheme.id)
-                    if (dir.exists()) dir.deleteRecursively()
-                }
-            }
-            val stillDownloaded = withContext(Dispatchers.IO) {
-                SchemaManager.isSchemeDownloaded(context, item.scheme.id)
-            }
-            _uiState.update { st ->
-                st.copy(
-                    extractingId = null,
-                    downloadedIds = if (stillDownloaded) st.downloadedIds else st.downloadedIds - item.scheme.id,
-                    sha256Status = if (stillDownloaded) st.sha256Status else st.sha256Status - item.scheme.id,
-                    installedIds = if (result.success) st.installedIds + item.scheme.id else st.installedIds,
-                )
-            }
-            val msg = when {
-                !result.success && !stillDownloaded ->
-                    "文件不完整，已自动删除，请重新下载"
-                !result.success -> result.failureReason ?: "安装失败"
-                result.unresolvedDeps.isNotEmpty() ->
-                    "已安装，部分依赖未获取：${result.unresolvedDeps.joinToString("、").take(60)}"
-                else -> "已安装「${item.scheme.name}」，点「部署」生效"
-            }
-            showToast(msg)
-        }
-    }
-
-    /** 删除已下载到 market 目录的方案压缩包（不删除已解压到 rime 的文件）。 */
-    fun deleteDownloadedScheme(schemeId: String) {
-        viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                SchemaManager.deleteSchemeArchive(context, schemeId)
-            }
-            if (ok) {
-                _uiState.update {
-                    it.copy(
-                        downloadedIds = it.downloadedIds - schemeId,
-                        sha256Status = it.sha256Status - schemeId,
-                    )
-                }
-                showToast("已删除压缩包")
-            } else {
-                showToast("删除失败")
-            }
-        }
-    }
-
-    /** 部署(全局编译已启用方案)。rime 部署是全局的,装好后点一次即可让方案生效。 */
-    fun deploy() {
-        if (_uiState.value.isDeploying) {
-            showToast("正在部署中，请稍候")
-            return
-        }
-        viewModelScope.launch {
-            _uiState.update { it.copy(isDeploying = true) }
-            val success = withContext(Dispatchers.IO) {
-                val engine = RimeEngine.getInstance()
-                engine.startMaintenance(false)
-                var waited = 0L
-                while (engine.isMaintaining() && waited < 120_000L) {
-                    Thread.sleep(100)
-                    waited += 100
-                }
-                val done = !engine.isMaintaining()
-                if (done) engine.updateLastBuildTime()
-                done
-            }
-            _uiState.update { it.copy(isDeploying = false) }
-            showToast(if (success) "部署完成" else "部署失败")
         }
     }
 

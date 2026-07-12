@@ -23,6 +23,9 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 import java.util.zip.ZipInputStream
@@ -91,6 +94,160 @@ object SchemaManager {
         if (!dir.exists()) return emptyList()
         val files = dir.listFiles()?.filter { it.isFile } ?: return emptyList()
         return files.flatMap { listArchiveTargetFiles(it) }
+    }
+
+    /**
+     * 计算市场包中每个目标文件的 sha256（用于冲突检测）。
+     * 与 [listInstallTargetFiles] 对应，返回值是相同结构的目标文件名 → sha256。
+     */
+    suspend fun computeTargetSha256Map(context: Context, schemeId: String): Map<String, String> = withContext(Dispatchers.IO) {
+        val dir = getMarketDir(context, schemeId)
+        if (!dir.exists()) return@withContext emptyMap()
+        val files = dir.listFiles()?.filter { it.isFile } ?: return@withContext emptyMap()
+        val result = mutableMapOf<String, String>()
+
+        for (file in files) {
+            when {
+                file.name.endsWith(".zip", ignoreCase = true) -> {
+                    val entryNames = mutableListOf<String>()
+                    ZipFile(file).use { zip ->
+                        zip.entries().asSequence().forEach { entry ->
+                            if (!entry.isDirectory && !isAppleDouble(entry.name)) {
+                                entryNames.add(entry.name)
+                            }
+                        }
+                    }
+                    val baseDir = findSchemaBaseDir(entryNames)
+                    ZipFile(file).use { zip ->
+                        zip.entries().asSequence().forEach { entry ->
+                            val originalName = entry.name
+                            if (entry.isDirectory || isAppleDouble(originalName)) return@forEach
+                            val name = originalName.removePrefix(baseDir)
+                            if (isProtectedImportName(name)) return@forEach
+                            val bytes = zip.getInputStream(entry).readBytes()
+                            result[name] = sha256Hex(bytes)
+                        }
+                    }
+                }
+
+                file.name.endsWith(".tar.gz", ignoreCase = true) || file.name.endsWith(".tgz", ignoreCase = true) -> {
+                    val entryNames = mutableListOf<String>()
+                    file.inputStream().buffered().use { input ->
+                        TarArchiveInputStream(GzipCompressorInputStream(input)).use { tarIn ->
+                            var entry = tarIn.nextEntry
+                            while (entry != null) {
+                                if (!entry.isDirectory && !isAppleDouble(entry.name)) {
+                                    entryNames.add(entry.name)
+                                }
+                                entry = tarIn.nextEntry
+                            }
+                        }
+                    }
+                    val baseDir = findSchemaBaseDir(entryNames)
+                    file.inputStream().buffered().use { input ->
+                        TarArchiveInputStream(GzipCompressorInputStream(input)).use { tarIn ->
+                            var entry = tarIn.nextEntry
+                            while (entry != null) {
+                                val originalName = entry.name
+                                if (entry.isDirectory || isAppleDouble(originalName)) {
+                                    entry = tarIn.nextEntry
+                                    continue
+                                }
+                                val name = originalName.removePrefix(baseDir)
+                                if (isProtectedImportName(name)) {
+                                    entry = tarIn.nextEntry
+                                    continue
+                                }
+                                val bytes = tarIn.readBytes()
+                                result[name] = sha256Hex(bytes)
+                                entry = tarIn.nextEntry
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    if (!isProtectedImportName(file.name)) {
+                        result[file.name] = sha256Hex(file.readBytes())
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    data class InstallFromDirResult(
+        val success: Boolean,
+        val conflicts: List<FileConflictInfo> = emptyList(),
+        val newSchemaIds: List<String> = emptyList(),
+        val unresolvedDeps: List<String> = emptyList(),
+        val failureReason: String? = null,
+    )
+
+    /**
+     * 从 market/{packageId}/ 执行统一安装：冲突检测 → 解压 → 清单创建。
+     * 所有导入路径（市场/文件/URL）最终都汇聚于此。
+     */
+    suspend fun installPackageFromMarketDir(
+        context: Context,
+        packageId: String,
+        displayName: String,
+        version: String = "",
+        fromMarket: Boolean = false,
+        dependencies: List<String> = emptyList(),
+        resolveDepUrl: (String) -> String? = { null },
+    ): InstallFromDirResult = withContext(Dispatchers.IO) {
+        val dir = getMarketDir(context, packageId)
+        if (!dir.exists() || dir.listFiles()?.none { it.isFile } != false) {
+            return@withContext InstallFromDirResult(success = false, failureReason = "压缩包不存在")
+        }
+
+        val targetFiles = listInstallTargetFiles(context, packageId)
+        if (targetFiles.isEmpty()) {
+            return@withContext InstallFromDirResult(success = false, failureReason = "归档中没有文件")
+        }
+
+        val sha256Map = computeTargetSha256Map(context, packageId)
+        val conflicts = SchemaManifestManager.detectConflicts(context, packageId, targetFiles, sha256Map)
+        if (conflicts.isNotEmpty()) {
+            return@withContext InstallFromDirResult(success = false, conflicts = conflicts)
+        }
+
+        val before = discoverSchemas(context).map { it.schemaId }.toSet()
+        val ok = installFromMarketToRime(context, packageId)
+        if (!ok) return@withContext InstallFromDirResult(success = false, failureReason = "安装失败")
+
+        val after = discoverSchemas(context).map { it.schemaId }.toSet()
+        val newIds = (after - before).toList()
+
+        var unresolved = emptyList<String>()
+        var dependencyIds = emptyList<String>()
+        if (dependencies.isNotEmpty()) {
+            val completion = RimeDependencyResolver.complete(
+                context = context,
+                schemaId = newIds.firstOrNull() ?: packageId,
+                dependencies = dependencies,
+                resolveUrl = resolveDepUrl,
+            )
+            unresolved = (completion.unresolved + completion.stillMissingFiles).distinct()
+            dependencyIds = completion.downloaded
+        }
+
+        SchemaManifestManager.createManifest(
+            context = context,
+            schemeId = packageId,
+            displayName = displayName,
+            version = version,
+            fromMarket = fromMarket,
+            extractedFiles = targetFiles,
+            dependencyIds = dependencyIds,
+        )
+
+        if (fromMarket) {
+            SettingsPreferences.addInstalledMarketId(context, packageId)
+        }
+
+        InstallFromDirResult(success = true, newSchemaIds = newIds, unresolvedDeps = unresolved)
     }
 
     /** 解析单个归档（或普通文件）将被释放到 rime/ 的目标文件名列表。 */
@@ -265,6 +422,10 @@ object SchemaManager {
     fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
+    /** 生成基于当前时间的导入 ID，如 import_20260712_015947。 */
+    fun generateImportId(): String =
+        "import_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
 
     /** 导入归档时禁止覆盖系统文件（保护应用核心配置与系统元数据）。 */
     fun isProtectedImportName(name: String): Boolean {
@@ -495,35 +656,17 @@ object SchemaManager {
     suspend fun importSchemaFile(context: Context, uri: Uri): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                val rimeDir = getRimeDir(context)
-                if (!rimeDir.exists()) rimeDir.mkdirs()
-
                 val displayName = getFileName(context, uri) ?: return@withContext false
-                val importId = "import_" + sha256Hex(displayName.toByteArray()).take(12)
+                val importId = generateImportId()
+                val pkgDir = getMarketDir(context, importId)
+                pkgDir.mkdirs()
 
-                val targetFiles: List<String>
-                if (displayName.endsWith(".zip", ignoreCase = true)) {
-                    targetFiles = importZipWithFileList(context, uri, rimeDir)
-                } else {
-                    val targetFile = File(rimeDir, displayName)
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        FileOutputStream(targetFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    } ?: return@withContext false
-                    targetFiles = listOf(displayName)
-                }
+                val archiveFile = File(pkgDir, displayName)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    archiveFile.outputStream().use { output -> input.copyTo(output) }
+                } ?: return@withContext false
 
-                SchemaManifestManager.createManifest(
-                    context = context,
-                    schemeId = importId,
-                    displayName = displayName.removeSuffix(".zip").removeSuffix(".tar.gz").removeSuffix(".tgz"),
-                    version = "",
-                    fromMarket = false,
-                    extractedFiles = targetFiles,
-                )
-
-                Log.i(TAG, "Imported: $displayName ($importId)")
+                Log.i(TAG, "Imported $displayName -> $importId (not installed yet)")
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import schema file", e)
@@ -767,9 +910,6 @@ object SchemaManager {
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val rimeDir = getRimeDir(context)
-            if (!rimeDir.exists()) rimeDir.mkdirs()
-
             val isZip = url.endsWith(".zip", ignoreCase = true)
             val isTarGz = url.endsWith(".tar.gz", ignoreCase = true) || url.endsWith(".tgz", ignoreCase = true)
             if (!isZip && !isTarGz) {
@@ -777,15 +917,15 @@ object SchemaManager {
                 return@withContext false
             }
 
-            // 确定压缩包保存路径
             val ext = when {
                 isZip -> ".zip"
                 url.endsWith(".tgz", ignoreCase = true) -> ".tgz"
                 else -> ".tar.gz"
             }
-            val marketDir = getMarketDir(context)
-            if (!marketDir.exists()) marketDir.mkdirs()
-            val archiveFile = File(marketDir, archiveName ?: (url.substringAfterLast("/").takeIf { it.isNotBlank() } ?: "download$ext"))
+            val importId = generateImportId()
+            val pkgDir = getMarketDir(context, importId)
+            pkgDir.mkdirs()
+            val archiveFile = File(pkgDir, archiveName ?: (url.substringAfterLast("/").takeIf { it.isNotBlank() } ?: "download$ext"))
 
             val client = OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
@@ -795,11 +935,11 @@ object SchemaManager {
             client.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.e(TAG, "Download failed: ${response.code} $url")
+                    pkgDir.deleteRecursively()
                     return@withContext false
                 }
                 val body = response.body ?: return@withContext false
 
-                // 下载到 market 目录的压缩包文件，边写边算 SHA-256
                 val totalBytes = body.contentLength()
                 var downloadedBytes = 0L
                 val md = MessageDigest.getInstance("SHA-256")
@@ -822,25 +962,13 @@ object SchemaManager {
                     val actual = md.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
                     if (!actual.equals(expectedSha256.trim(), ignoreCase = true)) {
                         Log.e(TAG, "sha256 mismatch for $url: expected=${expectedSha256.trim()} actual=$actual")
-                        archiveFile.delete()
+                        pkgDir.deleteRecursively()
                         return@withContext false
                     }
                 }
-                // 解压前列出目标文件
-                val targetFiles = listArchiveTargetFiles(archiveFile)
-                // 解压到 rime 目录
-                if (isZip) importZipFromFile(archiveFile, rimeDir) else importTarGzFromFile(archiveFile, rimeDir)
 
-                // 为导入创建清单（自动分配 ID）
-                val importId = "import_" + sha256Hex(url.toByteArray()).take(12)
-                SchemaManifestManager.createManifest(
-                    context = context,
-                    schemeId = importId,
-                    displayName = archiveFile.nameWithoutExtension,
-                    version = "",
-                    fromMarket = false,
-                    extractedFiles = targetFiles,
-                )
+                Log.i(TAG, "Downloaded $url -> $importId (not installed yet)")
+                true
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to import from URL: $url", e)

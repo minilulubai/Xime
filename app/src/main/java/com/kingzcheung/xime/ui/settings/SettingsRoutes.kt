@@ -4,6 +4,7 @@ object SettingsRoutes {
     const val Main = "main"
     const val Schema = "schema"
     const val SchemaMarket = "schema_market"
+    const val SchemaLocal = "schema_local"
     const val SchemaMarketDetail = "schema_market_detail/{schemeId}"
     const val Theme = "theme"
     const val KeyEffect = "key_effect"
