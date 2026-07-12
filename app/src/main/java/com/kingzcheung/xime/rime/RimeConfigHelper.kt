@@ -8,6 +8,7 @@ import com.kingzcheung.xime.settings.SchemaManifestManager
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.io.FileOutputStream
@@ -35,7 +36,6 @@ object RimeConfigHelper {
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         // 确保个人词库和自定义短语文件存在，并为所有方案打补丁
         PersonalDictManager.ensureAllPackFilesExist(context)
-        PersonalDictManager.ensureCustomPhraseFileExists(context)
         PersonalDictManager.ensureSchemaPacks(context)
 
         Log.d(TAG, "Checking for missing schema files...")
@@ -72,8 +72,7 @@ object RimeConfigHelper {
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
         PersonalDictManager.ensureAllPackFilesExist(context)
-        PersonalDictManager.ensureCustomPhraseFileExists(context)
-        PersonalDictManager.ensureSchemaPacks(context)
+        runBlocking { PersonalDictManager.ensureSchemaPacks(context) }
         checkAndCleanBuildDir(rimeDir)
         listFilesRecursively(rimeDir, TAG)
         

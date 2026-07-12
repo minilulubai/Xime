@@ -181,6 +181,15 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
             val result = withContext(Dispatchers.IO) {
                 SchemaManifestManager.uninstallWithManifest(context, item.packageId)
             }
+            // 若卸载后没有已安装的方案了，全量清理 rime/ 残留
+            val remaining = withContext(Dispatchers.IO) {
+                SchemaManifestManager.getInstalledPackages(context)
+            }
+            if (remaining.isEmpty()) {
+                withContext(Dispatchers.IO) {
+                    SchemaManager.cleanRimeDir(context)
+                }
+            }
             showToast(result.message)
             loadLocalPackages()
         }

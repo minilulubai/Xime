@@ -73,7 +73,6 @@ fun SettingsMainContent(
     onNavigateToKeyEffect: () -> Unit,
     onNavigateToLayoutDisplay: () -> Unit,
     onNavigateToDictionary: () -> Unit,
-    onNavigateToCustomPhrase: () -> Unit,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSmartPrediction: () -> Unit,
     onNavigateToSpeechToText: () -> Unit,
@@ -231,20 +230,8 @@ fun SettingsMainContent(
                     SettingsItem(
                         icon = Icons.TwoTone.Ballot,
                         title = "词库管理",
-                        subtitle = "管理用户词库",
+                        subtitle = "管理个人词库和自定义短语",
                         onClick = onNavigateToDictionary,
-                        showArrow = true
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 56.dp),
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                    SettingsItem(
-                        icon = Icons.TwoTone.TypeSpecimen,
-                        title = "自定义短语",
-                        subtitle = "管理自定义短语",
-                        onClick = onNavigateToCustomPhrase,
                         showArrow = true
                     )
                 })

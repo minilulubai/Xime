@@ -64,6 +64,23 @@ object SchemaManager {
     fun getRimeDir(context: Context): File =
         File(context.filesDir, "rime")
 
+    /** 清空 rime/ 目录除 default.yaml、xime.yaml 及受保护文件之外的所有文件。 */
+    fun cleanRimeDir(context: Context) {
+        val rimeDir = getRimeDir(context)
+        if (!rimeDir.exists()) return
+        rimeDir.listFiles()?.forEach { file ->
+            val name = file.name
+            if (name == "default.yaml" || name == "xime.yaml") return@forEach
+            if (isProtectedImportName(name)) return@forEach
+            if (file.isDirectory) {
+                file.deleteRecursively()
+            } else {
+                file.delete()
+            }
+        }
+        Log.i(TAG, "rime/ directory cleaned")
+    }
+
     /** market 根目录（与 rime/ 同级，不属于 Rime 数据）。 */
     fun getMarketDir(context: Context): File =
         File(context.filesDir, "market")
@@ -440,8 +457,8 @@ object SchemaManager {
         val base = name.substringAfterLast('/')
         return base == "default.yaml" ||
                base == "xime.yaml" ||
-               name.startsWith(".registry") ||
-               name.startsWith(".manifests")
+               base == "custom_phrase.txt" ||
+               name.startsWith(".registry")
     }
 
     /** macOS Apple Double 资源分支文件（__MACOSX/ 或 ._ 前缀），应当在解压时跳过。 */
@@ -663,21 +680,31 @@ object SchemaManager {
 
     suspend fun importSchemaFile(context: Context, uri: Uri): Boolean {
         return withContext(Dispatchers.IO) {
+            val importId = generateImportId()
+            val pkgDir = getMarketDir(context, importId)
             try {
-                val displayName = getFileName(context, uri) ?: return@withContext false
-                val importId = generateImportId()
-                val pkgDir = getMarketDir(context, importId)
+                val displayName = getFileName(context, uri) ?: run {
+                    pkgDir.deleteRecursively(); return@withContext false
+                }
                 pkgDir.mkdirs()
-
                 val archiveFile = File(pkgDir, displayName)
-                context.contentResolver.openInputStream(uri)?.use { input ->
+
+                val inputStream = when (uri.scheme) {
+                    "file" -> java.io.FileInputStream(uri.path!!)
+                    else -> context.contentResolver.openInputStream(uri)
+                }
+                inputStream?.use { input ->
                     archiveFile.outputStream().use { output -> input.copyTo(output) }
-                } ?: return@withContext false
+                } ?: run {
+                    pkgDir.deleteRecursively()
+                    return@withContext false
+                }
 
                 Log.i(TAG, "Imported $displayName -> $importId (not installed yet)")
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import schema file", e)
+                try { if (pkgDir.exists()) pkgDir.deleteRecursively() } catch (_: Exception) {}
                 false
             }
         }

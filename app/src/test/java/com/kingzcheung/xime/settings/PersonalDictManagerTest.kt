@@ -4,10 +4,23 @@ import android.content.Context
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import java.io.File
+
+private fun createCustomPhraseFile(rimeDir: File, schemaId: String) {
+    val dictName = PersonalDictManager.getCustomPhraseDictName(rimeDir, schemaId)
+    File(rimeDir, "$dictName.txt").writeText("""# Rime table
+# coding: utf-8
+#@/db_name	custom_phrase
+#@/db_type	tabledb
+#
+hello	hw
+123	abc
+""")
+}
 
 private fun mockContext(): Context {
     val tmpDir = File.createTempFile("mock_context", "").apply { delete(); mkdirs() }
@@ -386,7 +399,7 @@ c	d
     fun `saveCustomPhrases writes to custom_phrase dot txt`() {
         val context = mockContext()
         val entries = listOf(DictEntry("kingzcheung@gmail.com", "yxdz", 99))
-        PersonalDictManager.saveCustomPhrases(context, entries)
+        PersonalDictManager.saveCustomPhrases(context, null, entries)
         val file = PersonalDictManager.getCustomPhraseFile(context)
         assertTrue(file.exists())
         val loaded = PersonalDictManager.parseStableDbEntries(file.readText(Charsets.UTF_8))
@@ -396,7 +409,7 @@ c	d
     @Test
     fun `applyCustomPhraseTranslator adds translator to custom yaml`() {
         val rimeDir = createTempDir()
-        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86")
+        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86", "custom_phrase")
         val customFile = File(rimeDir, "wubi86.custom.yaml")
         assertTrue(customFile.exists())
         val text = customFile.readText(Charsets.UTF_8)
@@ -407,10 +420,85 @@ c	d
     @Test
     fun `applyCustomPhraseTranslator is idempotent`() {
         val rimeDir = createTempDir()
-        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86")
-        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86")
+        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86", "custom_phrase")
+        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86", "custom_phrase")
         val text = File(rimeDir, "wubi86.custom.yaml").readText(Charsets.UTF_8)
         assertEquals(1, text.split("table_translator@custom_phrase").size - 1)
+    }
+
+    @Test
+    fun `applyCustomPhraseTranslator with custom dictName uses that dictName in config`() {
+        val rimeDir = createTempDir()
+        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86", "custom_phrase_double")
+        val text = File(rimeDir, "wubi86.custom.yaml").readText(Charsets.UTF_8)
+        assertTrue(text.contains("user_dict: custom_phrase_double"))
+    }
+
+    @Test
+    fun `applyCustomPhraseTranslator with custom dictName is idempotent`() {
+        val rimeDir = createTempDir()
+        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86", "custom_phrase_double")
+        PersonalDictManager.applyCustomPhraseTranslator(rimeDir, "wubi86", "custom_phrase_double")
+        val text = File(rimeDir, "wubi86.custom.yaml").readText(Charsets.UTF_8)
+        assertEquals(1, text.split("table_translator@custom_phrase").size - 1)
+    }
+
+    @Test
+    fun `getCustomPhraseDictName reads user_dict from custom yaml`() {
+        val rimeDir = createTempDir()
+        File(rimeDir, "wubi86.custom.yaml").writeText("""patch:
+  "custom_phrase":
+    user_dict: custom_phrase_double
+""")
+        val rimeDirFinal = rimeDir
+        val result = PersonalDictManager.run { getCustomPhraseDictName(rimeDirFinal, "wubi86") }
+        assertEquals("custom_phrase_double", result)
+    }
+
+    @Test
+    fun `getCustomPhraseDictName returns default when no custom yaml`() {
+        val rimeDir = createTempDir()
+        val rimeDirFinal = rimeDir
+        val result = PersonalDictManager.run { getCustomPhraseDictName(rimeDirFinal, "wubi86") }
+        assertEquals("custom_phrase", result)
+    }
+
+    @Test
+    fun `getCustomPhraseDictName returns default when no custom_phrase section`() {
+        val rimeDir = createTempDir()
+        File(rimeDir, "wubi86.custom.yaml").writeText("""patch:
+  "translator/packs": ["user_simp_pinyin"]
+""")
+        val rimeDirFinal = rimeDir
+        val result = PersonalDictManager.run { getCustomPhraseDictName(rimeDirFinal, "wubi86") }
+        assertEquals("custom_phrase", result)
+    }
+
+    @Test
+    fun `saveCustomPhrases with schemaId writes to the correct custom dict file`() {
+        val context = mockContext()
+        val rimeDir = File(context.filesDir, "rime")
+        rimeDir.mkdirs()
+        File(rimeDir, "wubi86.custom.yaml").writeText("""patch:
+  "custom_phrase":
+    user_dict: custom_phrase_double
+""")
+        val entries = listOf(DictEntry("test", "ce", 1))
+        PersonalDictManager.saveCustomPhrases(context, "wubi86", entries)
+        val file = File(rimeDir, "custom_phrase_double.txt")
+        assertTrue(file.exists())
+        val loaded = PersonalDictManager.parseStableDbEntries(file.readText(Charsets.UTF_8))
+        assertTrue(loaded.any { it.word == "test" })
+    }
+
+    @Test
+    fun `saveCustomPhrases without schemaId writes to default custom_phrase dot txt`() {
+        val context = mockContext()
+        val entries = listOf(DictEntry("hello", "hw"))
+        PersonalDictManager.saveCustomPhrases(context, null, entries)
+        val file = PersonalDictManager.getCustomPhraseFile(context)
+        assertEquals("custom_phrase.txt", file.name)
+        assertTrue(file.exists())
     }
 
     // ── 方案补丁 ──
@@ -449,7 +537,8 @@ speller:
   algebra:
     - erase/^xx$/
 """.trimIndent())
-        PersonalDictManager.ensureSchemaPack(context, "pinyin_simp")
+        createCustomPhraseFile(rimeDir, "pinyin_simp")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "pinyin_simp") }
         val customFile = java.io.File(rimeDir, "pinyin_simp.custom.yaml")
         assertTrue("custom.yaml should be created for schema with algebra", customFile.exists())
         val text = customFile.readText(Charsets.UTF_8)
@@ -467,7 +556,7 @@ speller:
   alphabet: abcdefghijklmnopqrstuvwxyz
   max_code_length: 4
 """.trimIndent())
-        PersonalDictManager.ensureSchemaPack(context, "wubi86")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "wubi86") }
         assertTrue("merged dict should be created", java.io.File(rimeDir, "wubi86_merged.dict.yaml").exists())
         val customFile = java.io.File(rimeDir, "wubi86.custom.yaml")
         assertTrue("custom.yaml should be created", customFile.exists())
@@ -485,7 +574,8 @@ translator:
   dictionary: wubi86_pinyin
   reverse_lookup_translator: true
 """.trimIndent())
-        PersonalDictManager.ensureSchemaPack(context, "wubi86_pinyin")
+        createCustomPhraseFile(rimeDir, "wubi86_pinyin")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "wubi86_pinyin") }
         val customFile = java.io.File(rimeDir, "wubi86_pinyin.custom.yaml")
         assertTrue("custom.yaml should be created (custom_phrase only)", customFile.exists())
         val text = customFile.readText(Charsets.UTF_8)
@@ -501,7 +591,7 @@ translator:
         val rimeDir = java.io.File(context.filesDir, "rime")
         rimeDir.mkdirs()
         // no schema file created
-        PersonalDictManager.ensureSchemaPack(context, "nonexistent")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "nonexistent") }
         val customFile = java.io.File(rimeDir, "nonexistent.custom.yaml")
         assertFalse("no custom.yaml should be created for missing schema", customFile.exists())
     }
@@ -517,8 +607,9 @@ speller:
   algebra:
     - erase/^xx$/
 """.trimIndent())
-        PersonalDictManager.ensureSchemaPack(context, "pinyin_simp")
-        PersonalDictManager.ensureSchemaPack(context, "pinyin_simp")
+        createCustomPhraseFile(rimeDir, "pinyin_simp")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "pinyin_simp") }
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "pinyin_simp") }
         val text = java.io.File(rimeDir, "pinyin_simp.custom.yaml").readText(Charsets.UTF_8)
         // packs line should appear only once
         assertEquals(1, text.split("user_simp_pinyin").size - 1)
@@ -610,7 +701,7 @@ patch:
         // applyCustomPhraseTranslator creates <schemaId>.custom.yaml
         val file = File(dir, "wubi86.custom.yaml")
         file.writeText("# just a comment\n", Charsets.UTF_8)
-        PersonalDictManager.applyCustomPhraseTranslator(dir, "wubi86")
+        PersonalDictManager.applyCustomPhraseTranslator(dir, "wubi86", "custom_phrase")
         val text = file.readText(Charsets.UTF_8)
         assertTrue("patch: should be created", text.contains("patch:"))
         assertTrue("content should be added under patch", text.contains("table_translator@custom_phrase"))
@@ -690,7 +781,7 @@ patch:
     - lua_filter@custom_filter
   menu/page_size: 8
 """, Charsets.UTF_8)
-        PersonalDictManager.applyCustomPhraseTranslator(dir, "pinyin_simp")
+        PersonalDictManager.applyCustomPhraseTranslator(dir, "pinyin_simp", "custom_phrase")
         val text = file.readText(Charsets.UTF_8)
         assertTrue("Lua filter preserved", text.contains("lua_filter@custom_filter"))
         assertTrue("page_size preserved", text.contains("menu/page_size: 8"))
@@ -715,7 +806,8 @@ speller:
     - lua_filter@my_filter
   menu/page_size: 8
 """, Charsets.UTF_8)
-        PersonalDictManager.ensureSchemaPack(context, "flypy")
+        createCustomPhraseFile(rimeDir, "flypy")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "flypy") }
         val text = java.io.File(rimeDir, "flypy.custom.yaml").readText(Charsets.UTF_8)
         // Lua 配置保留
         assertTrue(text.contains("lua_filter@my_filter"))
@@ -736,8 +828,8 @@ speller:
   existing_key: value
 """, Charsets.UTF_8)
         PersonalDictManager.applyPackConfig(dir, "pinyin_simp")
-        PersonalDictManager.applyCustomPhraseTranslator(dir, "pinyin_simp")
-        PersonalDictManager.applyCustomPhraseTranslator(dir, "pinyin_simp")
+        PersonalDictManager.applyCustomPhraseTranslator(dir, "pinyin_simp", "custom_phrase")
+        PersonalDictManager.applyCustomPhraseTranslator(dir, "pinyin_simp", "custom_phrase")
         PersonalDictManager.applyPackConfig(dir, "pinyin_simp")
         val text = file.readText(Charsets.UTF_8)
         assertTrue("existing key preserved", text.contains("existing_key: value"))
@@ -764,7 +856,8 @@ speller:
     - lua_filter@custom_filter
   menu/page_size: 8
 """, Charsets.UTF_8)
-        PersonalDictManager.ensureSchemaPack(context, "wubi86")
+        createCustomPhraseFile(rimeDir, "wubi86")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "wubi86") }
         val text = java.io.File(rimeDir, "wubi86.custom.yaml").readText(Charsets.UTF_8)
         assertTrue("Lua filter preserved", text.contains("lua_filter@custom_filter"))
         assertTrue("page_size preserved", text.contains("menu/page_size: 8"))
@@ -789,7 +882,8 @@ translator:
     - lua_filter@custom_filter
   menu/page_size: 8
 """, Charsets.UTF_8)
-        PersonalDictManager.ensureSchemaPack(context, "wubi86_pinyin")
+        createCustomPhraseFile(rimeDir, "wubi86_pinyin")
+        runBlocking { PersonalDictManager.ensureSchemaPack(context, "wubi86_pinyin") }
         val text = java.io.File(rimeDir, "wubi86_pinyin.custom.yaml").readText(Charsets.UTF_8)
         assertTrue("Lua filter preserved", text.contains("lua_filter@custom_filter"))
         assertTrue("page_size preserved", text.contains("menu/page_size: 8"))

@@ -103,6 +103,10 @@ fun SchemaSettingsContent(
     LaunchedEffect(tabIndex) {
         if (tabIndex == 0) viewModel.refresh() else localViewModel.loadLocalPackages()
     }
+    // 导入完成后刷新本地包列表
+    LaunchedEffect(Unit) {
+        viewModel.importCompleted.collect { localViewModel.loadLocalPackages() }
+    }
     var showMenu by remember { mutableStateOf(false) }
     var showWirelessSheet by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }

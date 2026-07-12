@@ -31,7 +31,6 @@ fun SettingsScreen(
                 onNavigateToKeyEffect = { navController.navigate(SettingsRoutes.KeyEffect) },
                 onNavigateToLayoutDisplay = { navController.navigate(SettingsRoutes.LayoutDisplay) },
                 onNavigateToDictionary = { navController.navigate(SettingsRoutes.Dictionary) },
-                onNavigateToCustomPhrase = { navController.navigate(SettingsRoutes.CustomPhrase) },
                 onNavigateToPlugins = { navController.navigate(SettingsRoutes.Plugins) },
                 onNavigateToSmartPrediction = { navController.navigate(SettingsRoutes.SmartPrediction) },
                 onNavigateToSpeechToText = { navController.navigate(SettingsRoutes.SpeechToText) },
@@ -139,11 +138,6 @@ fun SettingsScreen(
         }
         composable(SettingsRoutes.SchemaDictBrowser) {
             SchemaDictBrowserContent(
-                onBack = { navController.popBackStack() }
-            )
-        }
-        composable(SettingsRoutes.CustomPhrase) {
-            CustomPhraseContent(
                 onBack = { navController.popBackStack() }
             )
         }

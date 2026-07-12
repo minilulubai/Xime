@@ -44,7 +44,13 @@ class SchemaManagerImportTest {
         assertFalse(SchemaManager.isProtectedImportName("default.custom.yaml"))
         assertFalse(SchemaManager.isProtectedImportName("xime.custom.yaml"))
         assertTrue(SchemaManager.isProtectedImportName(".registry.json"))
-        assertTrue(SchemaManager.isProtectedImportName(".manifests/my_scheme.json"))
+        assertFalse(SchemaManager.isProtectedImportName(".manifests/my_scheme.json"))
+    }
+
+    @Test
+    fun `protects custom_phrase dot txt from import`() {
+        assertTrue(SchemaManager.isProtectedImportName("custom_phrase.txt"))
+        assertTrue(SchemaManager.isProtectedImportName("sub/dir/custom_phrase.txt"))
     }
 
     // ── findSchemaBaseDir：剥 GitHub 归档壳目录(修 essay.txt 落进 rime-essay-master/ 子目录) ──

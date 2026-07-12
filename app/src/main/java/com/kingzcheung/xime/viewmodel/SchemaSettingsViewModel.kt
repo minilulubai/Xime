@@ -14,8 +14,11 @@ import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import com.kingzcheung.xime.settings.SchemaMeta
 import com.kingzcheung.xime.settings.SettingsPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,6 +40,9 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
 
     private val _uiState = MutableStateFlow(SchemaUiState())
     val uiState: StateFlow<SchemaUiState> = _uiState.asStateFlow()
+
+    private val _importCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val importCompleted: SharedFlow<Unit> = _importCompleted.asSharedFlow()
 
     init {
         refresh()
@@ -101,6 +107,7 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             val success = SchemaManager.importSchemaFile(context, uri)
             refresh()
+            _importCompleted.tryEmit(Unit)
             if (success) {
                 showToast("导入成功")
             } else {
@@ -148,6 +155,7 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
             }
             _uiState.update { it.copy(isDownloading = false) }
             refresh()
+            _importCompleted.tryEmit(Unit)
             showToast(if (success) "导入成功" else "下载或解压失败，请检查链接")
         }
     }
