@@ -228,17 +228,11 @@ private fun LocalPackageCard(
                     }
                     item.installed -> {
                         OutlinedButton(onClick = onUninstall) { Text("卸载") }
-                        Spacer(Modifier.width(8.dp))
-                        if (!item.isImport) {
-                            OutlinedButton(onClick = onUninstall, enabled = false) {
-                                Text("已从市场安装")
-                            }
-                        }
                     }
                     item.downloaded -> OutlinedButton(onClick = onInstall) { Text("安装") }
                 }
                 Spacer(Modifier.weight(1f))
-                if (item.downloaded) {
+                if (item.packageId != "builtin" && item.downloaded) {
                     IconButton(
                         onClick = onDelete,
                         modifier = Modifier.size(36.dp),

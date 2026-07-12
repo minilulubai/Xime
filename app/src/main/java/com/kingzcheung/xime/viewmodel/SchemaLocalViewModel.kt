@@ -3,7 +3,6 @@ package com.kingzcheung.xime.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.kingzcheung.xime.settings.FileConflictInfo
 import com.kingzcheung.xime.settings.SchemaManifestManager
 import com.kingzcheung.xime.settings.SchemaManager
 import kotlinx.coroutines.Dispatchers
@@ -89,6 +88,29 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
         if (_uiState.value.installingId != null) return
         viewModelScope.launch {
             _uiState.update { it.copy(installingId = item.packageId) }
+
+            // 检查 rime/ 下是否已有其他方案（无论是否被清单追踪）
+            val hasSchemas = withContext(Dispatchers.IO) {
+                SchemaManager.discoverSchemas(context).isNotEmpty()
+            }
+            if (hasSchemas) {
+                _uiState.update { it.copy(installingId = null) }
+                val otherInstalled = withContext(Dispatchers.IO) {
+                    SchemaManifestManager.getInstalledPackages(context)
+                        .map { it.packageId }
+                        .filter { it != item.packageId }
+                }
+                val targetIds = if (otherInstalled.isNotEmpty()) otherInstalled else listOf("builtin")
+                _uiState.update {
+                    it.copy(
+                        conflictPackageId = item.packageId,
+                        conflictingSchemeIds = targetIds,
+                    )
+                }
+                return@launch
+            }
+
+            // 直接安装（后续由 UI 提示用户部署）
             val result = withContext(Dispatchers.IO) {
                 SchemaManager.installPackageFromMarketDir(
                     context = context,
@@ -99,16 +121,6 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
                 )
             }
             _uiState.update { st -> st.copy(installingId = null) }
-            if (!result.success && result.conflicts.isNotEmpty()) {
-                val schemeIds = result.conflicts.flatMap { c: FileConflictInfo -> c.claimedBy }.distinct()
-                _uiState.update {
-                    it.copy(
-                        conflictPackageId = item.packageId,
-                        conflictingSchemeIds = schemeIds,
-                    )
-                }
-                return@launch
-            }
             if (result.success) {
                 showToast("已安装「${item.displayName}」，点「部署」生效")
             } else {
@@ -153,6 +165,7 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun deleteDownloaded(item: LocalPackageItem) {
+        if (item.packageId == "builtin") { showToast("内置方案不可删除"); return }
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 val dir = SchemaManager.getMarketDir(context, item.packageId)

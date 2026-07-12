@@ -66,6 +66,10 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
     fun toggleSchema(schema: SchemaMeta) {
         val enabled = _uiState.value.enabledSchemas.toMutableList()
         if (schema.schemaId in enabled) {
+            if (enabled.size <= 1) {
+                showToast("至少启用一个方案")
+                return
+            }
             enabled.remove(schema.schemaId)
         } else {
             enabled.add(schema.schemaId)

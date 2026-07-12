@@ -99,6 +99,10 @@ fun SchemaSettingsContent(
     var tabIndex by remember { mutableStateOf(0) }
     // F6: 从方案市场/导入返回时自动重扫描，新装方案立即出现
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh(); localViewModel.loadLocalPackages() }
+    // 切 tab 时刷新对应列表，保持数据一致
+    LaunchedEffect(tabIndex) {
+        if (tabIndex == 0) viewModel.refresh() else localViewModel.loadLocalPackages()
+    }
     var showMenu by remember { mutableStateOf(false) }
     var showWirelessSheet by remember { mutableStateOf(false) }
     var showUrlDialog by remember { mutableStateOf(false) }
@@ -819,7 +823,7 @@ private fun LocalPackageItemCard(
                     item.downloaded -> OutlinedButton(onClick = onInstall) { Text("安装") }
                 }
                 Spacer(Modifier.weight(1f))
-                if (item.downloaded) {
+                if (item.packageId != "builtin" && item.downloaded) {
                     IconButton(
                         onClick = onDelete,
                         modifier = Modifier.size(36.dp),

@@ -247,6 +247,14 @@ object SchemaManager {
             SettingsPreferences.addInstalledMarketId(context, packageId)
         }
 
+        // 至少启用一个新方案，避免 RimeEngine 因 schema_list 为空而挂起
+        val firstSchema = newIds.firstOrNull()
+            ?: targetFiles.firstOrNull { it.endsWith(".schema.yaml") }
+                ?.removeSuffix(".schema.yaml")
+        if (firstSchema != null) {
+            setEnabledSchemas(context, listOf(firstSchema))
+        }
+
         InstallFromDirResult(success = true, newSchemaIds = newIds, unresolvedDeps = unresolved)
     }
 
@@ -343,7 +351,7 @@ object SchemaManager {
         return allOk
     }
 
-    private fun getBuildDir(context: Context): File =
+    internal fun getBuildDir(context: Context): File =
         File(getRimeDir(context), "build")
 
     private fun getCustomYamlFile(context: Context): File =

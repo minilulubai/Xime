@@ -295,6 +295,14 @@ object SchemaManifestManager {
                 if (file.exists()) {
                     file.delete()
                 }
+                // 清理对应的编译缓存
+                if (fn.endsWith(".schema.yaml")) {
+                    val schemaId = fn.removeSuffix(".schema.yaml")
+                    val buildDir = SchemaManager.getBuildDir(context)
+                    buildDir.listFiles { f ->
+                        f.name.startsWith(schemaId + ".")
+                    }?.forEach { it.delete() }
+                }
                 // 从注册表中移除该文件的所有记录
                 allFiles.remove(fn)
                 deletedCount++
@@ -336,13 +344,46 @@ object SchemaManifestManager {
      * 为旧版已安装方案创建/合并遗留清单。
      * v1 → v2：把旧版单条 per-schema 清单合并成一个 `builtin` 包。
      */
+    /**
+     * 确保 market/builtin/ 目录存在，若不存在则从已安装的内置方案文件创建。
+     * 仅在首次或目录缺失时执行。
+     */
+    private suspend fun ensureBuiltinBackup(context: Context) {
+        withContext(Dispatchers.IO) {
+            val builtinDir = SchemaManager.getMarketDir(context, BUILTIN_PACKAGE_ID)
+            if (builtinDir.exists() && builtinDir.listFiles()?.isNotEmpty() == true) return@withContext
+            try {
+                val rimeDir = SchemaManager.getRimeDir(context)
+                builtinDir.mkdirs()
+                val manifestFile = getManifestFile(context, BUILTIN_PACKAGE_ID)
+                if (!manifestFile.exists()) return@withContext
+                val manifest = JSONObject(manifestFile.readText())
+                val files = manifest.optJSONObject("files") ?: return@withContext
+                val keys = files.keys()
+                while (keys.hasNext()) {
+                    val fn = keys.next() as String
+                    val src = File(rimeDir, fn)
+                    if (src.exists()) {
+                        src.copyTo(File(builtinDir, fn), overwrite = true)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "failed to backup builtin", e)
+            }
+        }
+    }
+
     suspend fun migrateLegacySchemas(context: Context) {
         val prefs = SettingsPreferences.getPrefsPublic(context)
         val prevVersion = prefs.getInt(KEY_MIGRATION_VERSION, 0)
-        if (prevVersion >= MIGRATION_VERSION_CURRENT) return
 
         withContext(Dispatchers.IO) {
             try {
+                // 确保 market/builtin/ 存在（迁移前没有此目录的旧版本会在此补齐）
+                ensureBuiltinBackup(context)
+
+                if (prevVersion >= MIGRATION_VERSION_CURRENT) return@withContext
+
                 val rimeDir = SchemaManager.getRimeDir(context)
                 getManifestsDir(context).mkdirs()
                 var changed = false
@@ -378,6 +419,8 @@ object SchemaManifestManager {
                         if (dictFile.exists()) allYamlFiles.add("$dictName.dict.yaml")
                     }
 
+                    val builtinDir = SchemaManager.getMarketDir(context, BUILTIN_PACKAGE_ID)
+                    builtinDir.mkdirs()
                     for (fn in allYamlFiles) {
                         val file = File(rimeDir, fn)
                         if (!file.exists()) continue
@@ -386,6 +429,7 @@ object SchemaManifestManager {
                             put("sha256", sha256)
                             put("size", file.length())
                         })
+                        file.copyTo(File(builtinDir, fn), overwrite = true)
                     }
 
                     val manifest = JSONObject().apply {
