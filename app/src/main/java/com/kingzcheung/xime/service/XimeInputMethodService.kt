@@ -84,6 +84,8 @@ import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.rime.T9InputController
 import com.kingzcheung.xime.rime.convertT9PreeditToPinyin
+import com.kingzcheung.xime.rime.buildT9DisplayState
+
 import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
 import com.kingzcheung.xime.settings.SettingsPreferences
@@ -1489,6 +1491,12 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     private fun clearInputState() {
         calculatorEngine.clear()
         rimeEngine.clearComposition()
+        t9PartialCommitTexts.clear()
+        uiState.value = uiState.value.copy(
+            t9ResetSignal = uiState.value.t9ResetSignal + 1,
+            t9RightCandidateSelectedCount = 0,
+            t9SelectedCandidatePinyin = ""
+        )
         candidateState.value = candidateState.value.copy(
             candidates = emptyList(),
             candidateComments = emptyList(),
@@ -1550,20 +1558,40 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         }
 
         val isT9Schema = isT9Schema(uiState.value.currentSchemaId)
-        val displayText = if (isT9Schema) {
+        // T9 候选词过滤：根据左侧选择历史过滤不匹配的候选词
+        val (t9FilteredTexts, t9FilteredComments) = if (isT9Schema) {
+            keyboardCallbacks?.onFilterT9Candidates?.invoke(filteredTexts, filteredComments)
+                ?: (filteredTexts to filteredComments)
+        } else {
+            filteredTexts to filteredComments
+        }
+        val displayText: String
+        val displayCandidates: List<String>
+        val displayComments: List<String>
+        val isComposing: Boolean
+        if (isT9Schema) {
             val rawPreedit = if (preeditText.isNotEmpty()) preeditText else inputText
             val convertedPreedit = convertT9PreeditToPinyin(rawPreedit, candidatesWithComments.firstOrNull()?.comment ?: "")
-            PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, convertedPreedit)
+            val display = buildT9DisplayState(
+                t9PartialCommitTexts, convertedPreedit, inputText, t9FilteredTexts, t9FilteredComments
+            )
+            displayText = display.displayText
+            displayCandidates = display.displayCandidates
+            displayComments = display.displayComments
+            isComposing = display.isComposing
         } else {
-            inputText
+            displayText = inputText
+            displayCandidates = filteredTexts
+            displayComments = filteredComments
+            isComposing = inputText.isNotEmpty()
         }
-        val isComposing = inputText.isNotEmpty() || (isT9Schema && t9PartialCommitTexts.isNotEmpty())
+
 
         candidateState.value = candidateState.value.copy(
             inputText = displayText,
             preeditText = displayText,
-            candidates = filteredTexts,
-            candidateComments = filteredComments,
+            candidates = displayCandidates,
+            candidateComments = displayComments,
             isComposing = isComposing,
             associationCandidates = if ((isAsciiMode || !isChineseMode) && pendingEnglish.isEmpty()) emptyList() else candidateState.value.associationCandidates,
             isShowingRecentClipboard = false,
@@ -1606,20 +1634,39 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         // 非 T9 方案（如双拼）使用原始输入文本显示，
         // 避免显示 rime speller 展开后的编码（如双拼 i → ch）
         val isT9Schema = isT9Schema(uiState.value.currentSchemaId)
-        val displayText = if (isT9Schema) {
+        // T9 候选词过滤：根据左侧选择历史（全拼/简拼）过滤不匹配的候选词
+        val (t9FilteredTexts, t9FilteredComments) = if (isT9Schema) {
+            keyboardCallbacks?.onFilterT9Candidates?.invoke(filteredTexts, filteredComments)
+                ?: (filteredTexts to filteredComments)
+        } else {
+            filteredTexts to filteredComments
+        }
+        val displayText: String
+        val displayCandidates: List<String>
+        val displayComments: List<String>
+        val isComposing: Boolean
+        if (isT9Schema) {
             val rawPreedit = if (result.preeditText.isNotEmpty()) result.preeditText else result.inputText
             val convertedPreedit = convertT9PreeditToPinyin(rawPreedit, candidatesWithComments.firstOrNull()?.comment ?: "")
-            PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, convertedPreedit)
+            val display = buildT9DisplayState(
+                t9PartialCommitTexts, convertedPreedit, result.inputText, t9FilteredTexts, t9FilteredComments
+            )
+            displayText = display.displayText
+            displayCandidates = display.displayCandidates
+            displayComments = display.displayComments
+            isComposing = display.isComposing
         } else {
-            result.inputText
+            displayText = result.inputText
+            displayCandidates = filteredTexts
+            displayComments = filteredComments
+            isComposing = result.inputText.isNotEmpty()
         }
-        val isComposing = result.inputText.isNotEmpty() || (isT9Schema && t9PartialCommitTexts.isNotEmpty())
 
         candidateState.value = candidateState.value.copy(
             inputText = displayText,
             preeditText = displayText,
-            candidates = filteredTexts,
-            candidateComments = filteredComments,
+            candidates = displayCandidates,
+            candidateComments = displayComments,
             isComposing = isComposing,
             associationCandidates = if ((isAsciiMode || !isChineseMode) && pendingEnglish.isEmpty()) emptyList() else candidateState.value.associationCandidates,
             isShowingRecentClipboard = false,
@@ -1964,6 +2011,18 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     commitText(input)
                                 }
                                 rimeEngine.clearComposition()
+                                // T9模式：清空partialCommit累积文本，避免下一轮输入
+                                // preedit中残留上一轮的提交内容（如"看"→下一轮"看jihua"）
+                                if (isT9Schema(state.currentSchemaId)) {
+                                    withContext(Dispatchers.Main) {
+                                        t9PartialCommitTexts.clear()
+                                        uiState.value = uiState.value.copy(
+                                            t9ResetSignal = uiState.value.t9ResetSignal + 1,
+                                            t9RightCandidateSelectedCount = 0,
+                                            t9SelectedCandidatePinyin = ""
+                                        )
+                                    }
+                                }
                                 needsUIUpdate = true
                             }
                         }
@@ -2224,21 +2283,22 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
 
         // 在 RIME 真正 select/commit 之前，先同步通知 T9 控制器消费数字。
         // 控制器返回 true 表示输入序列已被该候选词完整消费，服务层应视为 full commit。
+        val candidateTextLength = selectedCandidate?.length ?: 0
         val fullyConsumed = if (isT9) {
-            keyboardCallbacks?.onT9RightCandidateWillBeSelected?.invoke(candidatePinyin) ?: false
+            keyboardCallbacks?.onT9RightCandidateWillBeSelected?.invoke(candidatePinyin, candidateTextLength) ?: false
         } else {
             false
         }
 
         if (rimeEngine.selectCandidate(index)) {
             val committedText = rimeEngine.commit()
-            val isFullCommit = if (isT9 && committedText.isEmpty() && fullyConsumed) {
-                // committedText 为空说明 RIME 未实际提交，但 T9 控制器消费了全部数字。
-                // 此时需检查 RIME 是否还有活动 composition，若有则是 partial commit 误判。
-                val comp = rimeEngine.getComposition()
-                comp.input.isEmpty()
+            // T9 模式下 fullyConsumed 是判断 full/partial commit 的唯一权威：
+            // 当控制器明确 partial commit 时，即使 RIME commit() 返回非空文本
+            // （RIME 内部做了 partial commit），也不应走 full commit 路径。
+            val isFullCommit = if (isT9) {
+                fullyConsumed && selectedCandidate != null
             } else {
-                committedText.isNotEmpty() || (isT9 && fullyConsumed && selectedCandidate != null)
+                committedText.isNotEmpty()
             }
             if (isFullCommit) {
                 if (SettingsPreferences.isSmartPredictionEnabled(this) && selectedCandidate != null && AssociationManager.isInitialized()) {
@@ -2286,6 +2346,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             t9RightCandidateSelectedCount = uiState.value.t9RightCandidateSelectedCount + 1,
                             t9SelectedCandidatePinyin = candidatePinyin ?: ""
                         )
+                        // RIME commit() 已清除 composition，需要控制器重新发送剩余数字到 RIME
+                        keyboardCallbacks?.onT9ForceSendToRime?.invoke()
                     }
                     updateUI()
                 }

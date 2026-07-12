@@ -89,6 +89,9 @@ object T9PinyinMap {
         return firstSyllableOptions(digits, maxResults).map { it.pinyin }
     }
 
+    /** pinyinToDigitCode 结果缓存（惰性填充，有效拼音结果才缓存） */
+    private val pinyinCodeCache = mutableMapOf<String, String>()
+
     /**
      * 将拼音字符串转为九宫格数字编码。
      *
@@ -96,12 +99,16 @@ object T9PinyinMap {
      * 若包含无法映射的字符则返回 null。
      */
     fun pinyinToDigitCode(pinyin: String): String? {
-        return buildString {
-            for (ch in pinyin.lowercase()) {
+        val key = pinyin.lowercase()
+        pinyinCodeCache[key]?.let { return it }
+        val code = buildString {
+            for (ch in key) {
                 val digit = LETTER_TO_DIGIT[ch] ?: return null
                 append(digit)
             }
         }
+        pinyinCodeCache[key] = code
+        return code
     }
 
     /** 编码→拼音映射（精确匹配） */
@@ -134,6 +141,18 @@ object T9PinyinMap {
             remaining = remaining.drop(best.digitLength)
         }
         return result
+    }
+
+    /**
+     * 判断两个拼音的 T9 数字编码是否匹配（一个编码是另一个的前缀）。
+     *
+     * 九键中"g"和"ge"同属数字"4"+"3"="43"区，但"g"只映射"4"。
+     * 这解决场景6中精确拼音比较"ge"=="g"失败的问题。
+     */
+    fun areDigitCodesMatching(a: String, b: String): Boolean {
+        val codeA = pinyinToDigitCode(a) ?: return false
+        val codeB = pinyinToDigitCode(b) ?: return false
+        return codeA == codeB || codeA.startsWith(codeB) || codeB.startsWith(codeA)
     }
 
     /** 字母→数字映射 */
