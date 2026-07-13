@@ -470,8 +470,39 @@ class T9RightCommitHandler {
         if (effectiveLetterCount > 0) {
             if (effectiveLetterCount < selectedPinyin.length) {
                 if (prevSelectedOption != null) {
-                    // SELECTION 态：保留未消费部分为字母形式（与 scenario 16 设计一致）
                     val consumedPinyin = selectedPinyin.take(effectiveLetterCount)
+                    // 场景18：候选词 pinyin 是 prevSelectedOption.pinyin 的真前缀
+                    // （如 candidatePinyin="ti", prevSelectedOption.pinyin="tian"）。
+                    // removeConsumedSelections 只能移除完整匹配的选择条目，无法处理
+                    // "消费选中项部分 pinyin" 的情况——此时 consumedPinyin 比选中项更短，
+                    // 不匹配任何完整选择，removeConsumedSelections 什么都不会移除，
+                    // 导致 buffer 保持原状、与 RIME 已消费的状态不一致。
+                    // 正确语义：相当于用户从选中项切换到更短的拼音选择（同一层切换），
+                    // 消费 consumedPinyin 对应数字，剩余转纯数字 buffer。
+                    // 与下方 INPUT 态分支逻辑一致；buffer 从字母变为数字时必须清空
+                    // selectionHistory（与 tryShengmuFallback / apostrophe 声母匹配分支
+                    // 的 clearSelectionHistory() + enterInput() 模式一致）。
+                    if (consumedPinyin.length < prevSelectedOption.pinyin.length &&
+                        prevSelectedOption.pinyin.startsWith(consumedPinyin)) {
+                        val remainingDigits = T9PinyinMap.pinyinToDigitCode(
+                            selectedPinyin.drop(effectiveLetterCount))
+                        if (remainingDigits != null) {
+                            ctx.inputBuffer = T9Buffer(
+                                digitSequence = remainingDigits,
+                                selections = emptyList(),
+                                consumedCount = 0,
+                                totalDigitsEntered = remainingDigits.length,
+                            )
+                            ctx.leftColumnLocked = false
+                            ctx.stateMachine.clearSelectionHistory()
+                            ctx.stateMachine.enterInput()
+                            ctx.syncState()
+                            ctx.updateCandidates(true)
+                            ctx.setRimeInput(ctx.inputBuffer.toBufferString())
+                            return false
+                        }
+                    }
+                    // SELECTION 态：保留未消费部分为字母形式（与 scenario 16 设计一致）
                     ctx.inputBuffer = removeConsumedSelections(ctx, buf, consumedPinyin)
                     ctx.leftColumnLocked = false
                     return restorePrevState(ctx, prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin)

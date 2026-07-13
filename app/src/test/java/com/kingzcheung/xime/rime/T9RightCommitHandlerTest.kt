@@ -1336,6 +1336,84 @@ class T9RightCommitHandlerTest {
         assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
     }
 
+    // ── 场景18：右选候选词 pinyin 是选中项 pinyin 的真前缀，应切换选择并消费 ──
+    //
+    // 操作流程（来自 .trae/docs/T9测试/异常输入流程.md 场景18，行99-110）：
+    // 1. 输入 826 8426；预编辑 "tan tiao"
+    // 2. 左选 tao → "tao'8426"
+    // 3. 右选"饕"(tao) → partial commit → "8426"
+    // 4. 左选 tian → "tian"（SELECTION 态，tian 高亮）
+    // 5. 右选"惕"(comment="ti") → 候选词 pinyin "ti" 是选中项 "tian" 的真前缀
+    //
+    // 期望：相当于用户从 tian 切换到 ti，消费 ti(数字84)，剩余 26(an) 转纯数字 buffer
+    // 根因（修复前）：SELECTION 态分支调用 removeConsumedSelections("ti")，但 "ti" 不是
+    //   selections=[tian] 中任何选择的完整 pinyin，无法移除 → buffer 保持 [tian] 不变，
+    //   与 RIME 已消费"ti"的状态不一致 → 左侧候选区不刷新，tian 仍显示选中态
+
+    @Test
+    fun `scenario 18 - right candidate pinyin shorter than selected option switches selection and leaves remaining digits`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 826 + 分词键 + 8426
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1")
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        assertEquals("tan'8426", ctrl.bufferString)
+
+        // 步骤2: 左选 tao
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        assertEquals("tao'8426", ctrl.bufferString)
+
+        // 步骤3: 右选"饕"(tao) → partial commit，selectionHistory 被清空
+        ctrl.onRightCandidateSelected("tao", 1)
+        assertEquals("8426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertTrue(ctrl.selectionHistory.isEmpty())
+
+        // 步骤4: 左选 tian → SELECTION(tian, "8426")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("tian", 4), ctrl.selectedOption)
+
+        // 步骤5: 右选"惕"(comment="ti", textLength=1)
+        // 候选词 pinyin "ti" 是 prevSelectedOption.pinyin "tian" 的真前缀
+        // 期望：切换选择 tian→ti，消费 ti(数字84)，剩余 26(an) 转纯数字 buffer
+        val result = ctrl.onRightCandidateSelected("ti", 1)
+        assertFalse("Step 5: Should be partial commit — 'an' digits remain", result)
+        assertEquals("26", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull("Step 5: selectedOption must be null after switching to digit buffer", ctrl.selectedOption)
+        assertTrue(
+            "Step 5: selectionHistory must be cleared after switching to digit buffer",
+            ctrl.selectionHistory.isEmpty()
+        )
+    }
+
+    @Test
+    fun `scenario 18 - after switching to digit buffer left candidates refresh to an options`() {
+        val ctrl = createController()
+
+        // 前置步骤同上
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1")
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        ctrl.onRightCandidateSelected("tao", 1)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+
+        // 步骤5: 右选"惕"(ti)
+        ctrl.onRightCandidateSelected("ti", 1)
+        assertEquals("26", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 步骤6: 左侧候选区应刷新为数字 26 对应的拼音候选（an/ao/bo...）
+        // 修复前：左侧候选区仍为旧的 [tian, tiao, ti, t, u, v]，tian 仍显示选中态
+        // 与场景18描述的预期左侧候选区【an，ao，bo，a,b,c】一致
+        assertPinyins(ctrl, "an", "ao", "bo", "a", "b", "c")
+    }
+
     // ── 辅助方法 ──
 
     private fun createController(): T9InputController {
