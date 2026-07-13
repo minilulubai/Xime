@@ -644,7 +644,8 @@ class T9RightCommitHandler {
     ): Boolean {
         val buf = ctx.inputBuffer
         val selectedPinyin = buf.selectedPinyin
-        if (hasSyllableBoundaries && candidateTextLength >= commentSyllables.size) {
+        if (hasSyllableBoundaries && candidateTextLength >= commentSyllables.size &&
+            commentSyllables.size >= ctx.stateMachine.selectionHistory.size) {
             val candidateClean = candidatePinyin?.filter { it.isLetter() } ?: ""
             if (candidateClean.isNotEmpty()) {
                 val candidateDigitCode = T9PinyinMap.pinyinToDigitCode(candidateClean)
