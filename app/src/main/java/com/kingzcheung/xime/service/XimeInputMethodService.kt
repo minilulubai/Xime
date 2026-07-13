@@ -855,7 +855,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                                     )
                                                     Log.d(TAG, "Confirmed pending English: '$text'")
                                                 } else {
-                                                    currentInputConnection?.deleteSurroundingText(pendingEnglish.length, 0)
+                                                    // 键入时已用 setComposingText 建立 composing region，
+                                                    // commitText 自然替换 composing 文本，终端也兼容。
                                                     commitText(text)
                                                     candidateState.value = candidateState.value.copy(
                                                         pendingEnglishText = "",
@@ -2158,28 +2159,43 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     needsUIUpdate = true
                                     Log.d(TAG, "Shift+letter in Chinese mode: Rime consumed key but didn't produce uppercase, committing '$char' directly")
                                 } else {
-                                    uiEventChannel.trySend {
-                                        if (result.committedText.isNotEmpty()) commitText(result.committedText)
-                                        updateUIWithResult(result)
-                                        if (calculatorEngine.isActive()) updateCalculatorCandidates()
+                                    val committed = result.committedText
+                                    if (state.isAsciiMode && committed.isNotEmpty() && result.inputText.isEmpty() && result.candidates.isEmpty()) {
+                                        val current = candState.pendingEnglishText
+                                        val newPending = current + committed
+                                        candidateState.value = candidateState.value.copy(pendingEnglishText = newPending)
+                                        withContext(Dispatchers.Main) {
+                                            currentInputConnection?.setComposingText(newPending, 1)
+                                        }
+                                        uiEventChannel.trySend {
+                                            updateUIWithResult(result)
+                                            if (calculatorEngine.isActive()) updateCalculatorCandidates()
+                                        }
+                                    } else {
+                                        uiEventChannel.trySend {
+                                            if (committed.isNotEmpty()) commitText(committed)
+                                            updateUIWithResult(result)
+                                            if (calculatorEngine.isActive()) updateCalculatorCandidates()
+                                        }
                                     }
                                 }
                             } else {
                                 val isAscii = state.isAsciiMode
                                 if (!candState.isComposing || isShiftedChinese) {
-                                    if (isAscii) {
-                                        val charToCommit = if (isShifted) char.uppercase() else char.lowercase()
-                                        val currentPending = candState.pendingEnglishText
-                                        val newPending = currentPending + charToCommit
-                                        uiEventChannel.trySend {
-                                            commitText(charToCommit)
-                                            candidateState.value = candidateState.value.copy(
-                                                pendingEnglishText = newPending,
-                                                associationCandidates = emptyList()
-                                            )
-                                        }
-                                        needsUIUpdate = true
-                                        Log.d(TAG, "English mode: committed '$charToCommit', pending text '$newPending'")
+                                                    if (isAscii) {
+                                                        val charToCommit = if (isShifted) char.uppercase() else char.lowercase()
+                                                        val currentPending = candState.pendingEnglishText
+                                                        val newPending = currentPending + charToCommit
+                                                        // 用 setComposingText 建立 composing region，选关联候选时 commitText 自然替换
+                                                        withContext(Dispatchers.Main) {
+                                                            currentInputConnection?.setComposingText(newPending, 1)
+                                                        }
+                                                        candidateState.value = candidateState.value.copy(
+                                                            pendingEnglishText = newPending,
+                                                            associationCandidates = emptyList()
+                                                        )
+                                                        needsUIUpdate = true
+                                                        Log.d(TAG, "English mode: setComposingText '$newPending'")
                                     } else {
                                         committedText = char
                                         needsUIUpdate = true
