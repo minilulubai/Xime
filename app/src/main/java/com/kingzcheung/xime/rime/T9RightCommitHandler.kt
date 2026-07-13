@@ -561,10 +561,18 @@ class T9RightCommitHandler {
             ctx.stateMachine.selectionHistory.joinToString("") { it.pinyin } == selectedPinyin &&
             candidateTextLength > 0 &&
             candidateTextLength >= ctx.stateMachine.selectionHistory.size
+        // 场景19（"er 儿"边界条件）：候选词各音节简拼首字母数字码逐位对齐整个 buffer
+        // 数字码时，全拼选中项被多音节简拼拆分消费（如 he(43) 被 ha(4)+er(3) 消费），
+        // 应判定 full commit。isAllSelectedConsumed 要求音节数==选择数会在此失效。
+        val isJianpinAlignedFullCommit = hasSyllableBoundaries &&
+            candidateTextLength > 0 &&
+            candidateTextLength >= commentSyllables.size &&
+            isFullCommitByJianpinAlignment(selectedPinyin, commentSyllables)
         val isFullCommit = (hasSyllableBoundaries && candidateTextLength > 0 &&
             candidateTextLength >= commentSyllables.size &&
             (selectedPinyin.dropLast(prevSelectedOption.pinyin.length).isEmpty() ||
-                isAllSelectedConsumed(selectedPinyin, commentSyllables, ctx.stateMachine.selectionHistory))) ||
+                isAllSelectedConsumed(selectedPinyin, commentSyllables, ctx.stateMachine.selectionHistory) ||
+                isJianpinAlignedFullCommit)) ||
             isFullCommitWithoutBoundaries
         if (isFullCommit) {
             clearAndEnterIdle(ctx)

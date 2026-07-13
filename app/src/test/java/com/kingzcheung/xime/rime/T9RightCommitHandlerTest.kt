@@ -1414,6 +1414,162 @@ class T9RightCommitHandlerTest {
         assertPinyins(ctrl, "an", "ao", "bo", "a", "b", "c")
     }
 
+    // ── 场景19：简拼对齐的全拼选中项被候选词多音节简拼消费，应 full commit ──
+    //
+    // 操作流程（来自 .trae/docs/T9测试/异常输入流程.md 场景19，行121-138）：
+    // 1. 输入 5143（5 + 分词键 + 43）→ j'ge（j 由分词键确认，43 由 RIME 推断为 ge）
+    // 2. 左选 k → k'43（替换 j 为 k）
+    // 3. 左选 he → khe（SELECTION(he)，he 高亮）
+    // 4. 右选"卡哈尔"(comment="ka ha er", textLength=3) → 候选 3 音节 ka/ha/er 的
+    //    简拼首字母数字码 = 5/4/3 = "543" = buffer 数字码
+    //
+    // 期望：full commit，buffer 清空，进入 IDLE
+    // 根因（修复前）：isAllSelectedConsumed 要求 commentSyllables.size == selectionHistory.size
+    //   （3 != 2 失败），且候选最后音节 "er" 既不精确匹配选中项 "he"（"37"!="43"），
+    //   也不满足简拼缩写匹配（he.digitLength=2，非简拼）→ 误判 partial commit，
+    //   仅消费非选中部分 "k"，保留 "he"，预编辑文本残留 "卡哈尔he"。
+    //   "er 儿" 是边界条件：he(digits 43) 被 ka/ha/er 三音节简拼(5/4/3)完整消费。
+
+    @Test
+    fun `scenario 19 - jianpin-aligned candidate ka ha er full commits consuming entire buffer`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143（5 + 分词键 + 43）
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k → 替换分词键确认的 j
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 he → SELECTION(he)，buffer="khe"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("he", 2))
+        assertEquals("khe", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("he", 2), ctrl.selectedOption)
+
+        // 步骤4: 右选"卡哈尔"(comment="ka ha er", textLength=3)
+        // ka→k(5) ha→h(4) er→e(3)，三音节简拼首字母数字码 "543" == buffer 数字码
+        val result = ctrl.onRightCandidateSelected("ka ha er", 3)
+        assertTrue("Should be full commit — ka/ha/er 简拼对齐 543 消费全部输入", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
+        assertTrue(ctrl.selectionHistory.isEmpty())
+    }
+
+    @Test
+    fun `scenario 19 - isFullCommitByJianpinAlignment pure function detects digit-by-digit alignment`() {
+        // 纯函数：候选词各音节简拼首字母数字码逐位等于 buffer 数字码
+        assertTrue(isFullCommitByJianpinAlignment("khe", listOf("ka", "ha", "er")))
+        // er 单独也能对齐 e(3)
+        assertTrue(isFullCommitByJianpinAlignment("e", listOf("er")))
+        // 简拼缩写候选（ke→k, bei→b, er→e）对齐 "kbe"→"523"
+        assertTrue(isFullCommitByJianpinAlignment("kbe", listOf("ke", "bei", "er")))
+        // 音节数 ≠ 数字位数 → 不触发（交由既有路径）
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("kao", "he")))
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("ke", "hen")))
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("kan")))
+        // 某音节首字母数字码不匹配
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("ka", "ha", "san")))
+        // 空入参
+        assertFalse(isFullCommitByJianpinAlignment("khe", emptyList()))
+        assertFalse(isFullCommitByJianpinAlignment("", listOf("ka")))
+    }
+
+    // ── 场景19 后续：候选词 index 错位修复（上屏错词问题）──
+    //
+    // 问题：filterCandidatesBySelectionHistory 将候选词分为 FULL/PREFIX 两组重排序，
+    // 导致 UI 列表 index 与 RIME 原始候选词 index 不对应。
+    // selectCandidateAsync 用 UI index 调用 rimeEngine.selectCandidate(index)，
+    // RIME 选错词 → commit() 返回错误文本 → full commit 上屏错词。
+    // 例：selectionHistory=[k, he] 时，RIME 原始列表 [考核, 恐吓, 可恨, 课后, 跨行,
+    // 卡哈尔, 开盒儿, 看会儿, 看, 可]，过滤后 [考核, 恐吓, 开盒儿, 课后, 跨行,
+    // 卡哈尔, 看会儿, 看, 可]（可恨被排除、开盒儿从 index=6 前移到 index=2）。
+    // 用户右选"开盒儿"(UI index=2) → selectCandidate(2) → RIME 选"可恨"(已被排除) →
+    // 甚至可能选到"恐吓" → 上屏"恐吓"而非"开盒儿"。
+    //
+    // 修复：resolveRimeCandidateIndex 通过候选词文本查找 RIME 原始候选词 index。
+
+    @Test
+    fun `resolveRimeCandidateIndex returns raw index when candidate text found in raw list`() {
+        // RIME 原始候选词列表
+        val rawCandidates = listOf("考核", "恐吓", "可恨", "课后", "跨行", "卡哈尔", "开盒儿", "看会儿", "看", "可")
+        // 用户选"开盒儿"（UI index=2，因过滤重排序），但 RIME 原始 index=6
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 2,
+            selectedCandidate = "开盒儿",
+            rawCandidates = rawCandidates,
+        )
+        assertEquals("应返回 RIME 原始 index=6", 6, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex returns first match when duplicate candidate texts exist`() {
+        val rawCandidates = listOf("看", "可", "看", "可")
+        // 重复文本"看"在 index=0 和 index=2，应返回第一个（index=0）
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 1,
+            selectedCandidate = "看",
+            rawCandidates = rawCandidates,
+        )
+        assertEquals(0, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex falls back to uiIndex when candidate text not in raw list`() {
+        // 候选词文本不在 RIME 原始列表中（如 UI 层补充的候选词），回退 uiIndex
+        val rawCandidates = listOf("考核", "恐吓", "可恨")
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 5,
+            selectedCandidate = "自定义词",
+            rawCandidates = rawCandidates,
+        )
+        assertEquals("找不到时回退 uiIndex", 5, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex falls back to uiIndex when selectedCandidate is null`() {
+        val rawCandidates = listOf("考核", "恐吓")
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 1,
+            selectedCandidate = null,
+            rawCandidates = rawCandidates,
+        )
+        assertEquals("selectedCandidate 为 null 时回退 uiIndex", 1, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex falls back to uiIndex when rawCandidates is empty`() {
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 3,
+            selectedCandidate = "开盒儿",
+            rawCandidates = emptyList(),
+        )
+        assertEquals("rawCandidates 为空时回退 uiIndex", 3, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex scenario 19 - ka ha er full commit selects correct raw index`() {
+        // 场景19 完整模拟：selectionHistory=[k, he]
+        // RIME 原始列表（基于 preedit "k'he"）：
+        //   [考核(kao he), 恐吓(kong he), 可恨(ke hen), 课后(ke hou), 跨行(kua hang),
+        //    卡哈尔(ka ha er), 开盒儿(kai he er), 看会儿(kan hu er), 看(kan), 可(ke)]
+        // filterCandidatesBySelectionHistory 后（FULL 在前，PREFIX 在后，NONE 排除）：
+        //   FULL: 考核, 恐吓, 开盒儿（kai→k, he→he, er 无对应选择但所有 selection 已匹配）
+        //   PREFIX: 课后, 跨行, 卡哈尔, 看会儿, 看, 可
+        //   NONE(排除): 可恨
+        //   过滤后: [考核, 恐吓, 开盒儿, 课后, 跨行, 卡哈尔, 看会儿, 看, 可]
+        val rawCandidates = listOf("考核", "恐吓", "可恨", "课后", "跨行", "卡哈尔", "开盒儿", "看会儿", "看", "可")
+        // 用户右选"卡哈尔"（过滤后 UI index=5），RIME 原始 index=5 → 一致（巧合）
+        assertEquals(5, resolveRimeCandidateIndex(5, "卡哈尔", rawCandidates))
+        // 用户右选"开盒儿"（过滤后 UI index=2），RIME 原始 index=6 → 修复错位
+        assertEquals(6, resolveRimeCandidateIndex(2, "开盒儿", rawCandidates))
+        // 用户右选"看会儿"（过滤后 UI index=6），RIME 原始 index=7 → 修复错位
+        assertEquals(7, resolveRimeCandidateIndex(6, "看会儿", rawCandidates))
+    }
+
     // ── 辅助方法 ──
 
     private fun createController(): T9InputController {

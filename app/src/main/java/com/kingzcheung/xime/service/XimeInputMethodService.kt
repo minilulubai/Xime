@@ -85,6 +85,7 @@ import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.rime.T9InputController
 import com.kingzcheung.xime.rime.convertT9PreeditToPinyin
 import com.kingzcheung.xime.rime.buildT9DisplayState
+import com.kingzcheung.xime.rime.resolveRimeCandidateIndex
 
 import com.kingzcheung.xime.settings.SchemaConfigHelper
 import com.kingzcheung.xime.settings.SchemaManager
@@ -2307,7 +2308,17 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             false
         }
 
-        if (rimeEngine.selectCandidate(index)) {
+        // T9 模式：UI 候选词列表经过 filterCandidatesBySelectionHistory 过滤/重排序
+        // （FULL 在前、PREFIX 在后、NONE 排除），其 index 可能与 RIME 原始候选词
+        // index 不对应。通过候选词文本查找 RIME 原始候选词的真实 index，确保
+        // selectCandidate 选对词（场景19 后续修复：上屏错词问题）。
+        val rimeIndex = if (isT9 && selectedCandidate != null) {
+            resolveRimeCandidateIndex(index, selectedCandidate, rimeEngine.getCandidates().toList())
+        } else {
+            index
+        }
+
+        if (rimeEngine.selectCandidate(rimeIndex)) {
             val committedText = rimeEngine.commit()
             // T9 模式下 fullyConsumed 是判断 full/partial commit 的唯一权威：
             // 当控制器明确 partial commit 时，即使 RIME commit() 返回非空文本
@@ -2325,9 +2336,19 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         Log.d(TAG, "Learned: '$lastChar' + '$selectedCandidate'")
                     }
                 }
-                // T9 模式：将 partial commit 累积文本与 RIME committedText 合并后上屏，
-                // 避免之前 partial commit 的文本丢失
-                val textToMerge = if (committedText.isNotEmpty()) committedText else selectedCandidate!!
+                // T9 full commit：优先使用用户明确选中的候选词文本作为上屏文本。
+                // UI 候选词列表经 filterCandidatesBySelectionHistory 过滤/重排序后 index
+                // 可能与 RIME 原始候选词 index 不对应。即使已通过 resolveRimeCandidateIndex
+                // 修正了 selectCandidate 的 index，仍以用户选中的 selectedCandidate 为权威
+                // 上屏文本（双保险），避免 RIME commit() 因任何原因返回错误文本。
+                // 非 T9 模式仍保持 RIME committedText 优先（可能含简繁转换等处理）。
+                val textToMerge = if (isT9 && fullyConsumed && selectedCandidate != null) {
+                    selectedCandidate
+                } else if (committedText.isNotEmpty()) {
+                    committedText
+                } else {
+                    selectedCandidate!!
+                }
                 val fullCommitText = if (isT9) {
                     PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, textToMerge)
                 } else {
