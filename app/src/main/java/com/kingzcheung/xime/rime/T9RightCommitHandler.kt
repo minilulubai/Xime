@@ -382,7 +382,17 @@ class T9RightCommitHandler {
             buf.withRemainingDigits(remainingDigits, buf)
         }
         ctx.leftColumnLocked = false
-        if (ctx.inputBuffer.isEmpty) ctx.stateMachine.enterIdle() else ctx.stateMachine.enterInput()
+        if (ctx.inputBuffer.isEmpty) {
+            ctx.stateMachine.enterIdle()
+        } else {
+            // withRemainingDigits 创建 selections=emptyList()，已消费全部选择。
+            // 必须同步清理 selectionHistory，否则残留条目会导致后续左选→右选时
+            // isFullCommitWithoutBoundaries 误判（场景17 根因：
+            // joinToString 拼接残留+新条目 ≠ selectedPinyin）。
+            // 与上方 isShengmuMatch/isFullPinyinMatch 分支 line 350-351 一致。
+            ctx.stateMachine.clearSelectionHistory()
+            ctx.stateMachine.enterInput()
+        }
         ctx.syncState()
         ctx.updateCandidates(true)
         ctx.setRimeInput(ctx.inputBuffer.toBufferString())

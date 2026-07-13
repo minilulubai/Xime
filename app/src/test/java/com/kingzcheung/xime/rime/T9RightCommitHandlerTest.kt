@@ -1238,6 +1238,104 @@ class T9RightCommitHandlerTest {
         assertNull(ctrl.selectedOption)
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 场景17：全拼输入，左选拼音→右选候选词(partial)→左选拼音→右选候选词
+    //       第二次右选应 full commit 但因 selectionHistory 残留误判为 partial
+    //
+    // 操作流程（来自 .trae/docs/T9测试/异常输入流程.md 场景17，行81-94）：
+    //   1. 输入 826 + 分词键(1) + 8426 → buffer="tan'8426"
+    //      （T9PinyinMap 中 826=tao/tan, 8426=tian/tiao）
+    //   2. 左选 tao → 替换 tan → buffer="tao'8426"
+    //   3. 右选"饕"(comment="tao", textLength=1) → partial commit, buffer="8426"
+    //   4. 左选 tian → buffer="tian", SELECTION(tian, "8426")
+    //   5. 右选"天"(comment="tian", textLength=1) → 应 full commit, buffer="", IDLE
+    //
+    // 修复前根因：
+    //   步骤3 的 apostrophe else 分支调用 withRemainingDigits 创建 selections=emptyList()
+    //   但 enterInput() 不清理 selectionHistory，残留 [tao]；
+    //   步骤4 左选 tian 后 selectionHistory=[tao,tian]；
+    //   步骤5 isFullCommitWithoutBoundaries 检查 joinToString="taotian"≠"tian" → 判定失败
+    //   → 误为 partial commit，预编辑文本变成"饕天tian"而非上屏"饕天"。
+    //
+    // 修复后：
+    //   步骤3 清理 selectionHistory，步骤5 正确判定为 full commit。
+    //
+    // 注意：多音节候选词如"提案"(comment="ti an")走 hasSyllableBoundaries 路径，
+    //       不依赖 selectionHistory，因此不受此 bug 影响（与场景描述一致）。
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario 17 - partial commit then left select then right select should full commit`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 826 + 分词键(1) + 8426 → buffer="tan'8426"
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1") // 分词键：自动确认首音节 tan（firstSyllableOptions("826") 首项）
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        assertEquals("tan'8426", ctrl.bufferString)
+
+        // 步骤2: 左选 tao → 替换 tan → buffer="tao'8426"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        assertEquals("tao'8426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("tao", 3), ctrl.selectedOption)
+
+        // 步骤3: 右选"饕"(comment="tao", textLength=1) → partial commit
+        //   候选词"饕"的拼音"tao"恰好匹配已选拼音"tao"，消费选中项，保留未分配数字"8426"
+        val result1 = ctrl.onRightCandidateSelected("tao", 1)
+        assertFalse("Step 3: Should be partial commit — unassigned digits 8426 remain", result1)
+        assertEquals("8426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        // 关键不变式：partial commit 消费了全部 selections 后，selectionHistory 必须同步清理
+        assertTrue(
+            "Step 3: selectionHistory must be cleared after partial commit consumed all selections",
+            ctrl.selectionHistory.isEmpty()
+        )
+
+        // 步骤4: 左选 tian → buffer="tian", SELECTION(tian, "8426")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("tian", 4), ctrl.selectedOption)
+        assertEquals("8426", ctrl.selectionCandidateDigits)
+
+        // 步骤5: 右选"天"(comment="tian", textLength=1) → 应 full commit
+        //   修复前：selectionHistory=[tao,tian] → joinToString="taotian"≠"tian" → 误判 partial
+        //   修复后：selectionHistory=[tian] → joinToString="tian"=="tian" → 正确判定 full commit
+        val result2 = ctrl.onRightCandidateSelected("tian", 1)
+        assertTrue("Step 5: Should be full commit — '天' consumes all remaining input", result2)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    @Test
+    fun `scenario 17 - multi-syllable candidate ti an also full commits after fix`() {
+        // 场景17 步骤6变体：步骤4后右选"提案"(comment="ti an", textLength=2)
+        // 多音节候选词走 hasSyllableBoundaries 路径，不受 selectionHistory 残留影响，
+        // 但修复后此路径同样应正确 full commit。
+        val ctrl = createController()
+
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1")
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        assertEquals("tao'8426", ctrl.bufferString)
+
+        // 步骤3: 右选"饕" → partial commit
+        ctrl.onRightCandidateSelected("tao", 1)
+        assertEquals("8426", ctrl.bufferString)
+
+        // 步骤4: 左选 tian
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+
+        // 步骤5变体: 右选"提案"(comment="ti an", textLength=2) → full commit
+        val result = ctrl.onRightCandidateSelected("ti an", 2)
+        assertTrue("Should be full commit — '提案' consumes all remaining input", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
     // ── 辅助方法 ──
 
     private fun createController(): T9InputController {
