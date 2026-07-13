@@ -19,9 +19,11 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
+import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -141,8 +143,8 @@ object SchemaManager {
                             if (entry.isDirectory || isAppleDouble(originalName)) return@forEach
                             val name = originalName.removePrefix(baseDir)
                             if (isProtectedImportName(name)) return@forEach
-                            val bytes = zip.getInputStream(entry).readBytes()
-                            result[name] = sha256Hex(bytes)
+                            val hash = streamSha256(zip.getInputStream(entry))
+                            result[name] = hash
                         }
                     }
                 }
@@ -175,8 +177,8 @@ object SchemaManager {
                                     entry = tarIn.nextEntry
                                     continue
                                 }
-                                val bytes = tarIn.readBytes()
-                                result[name] = sha256Hex(bytes)
+                                val hash = streamSha256(tarIn)
+                                result[name] = hash
                                 entry = tarIn.nextEntry
                             }
                         }
@@ -185,7 +187,8 @@ object SchemaManager {
 
                 else -> {
                     if (!isProtectedImportName(file.name)) {
-                        result[file.name] = sha256Hex(file.readBytes())
+                        val hash = fileSha256(file)
+                        if (hash != null) result[file.name] = hash
                     }
                 }
             }
@@ -447,6 +450,24 @@ object SchemaManager {
     fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
+    fun streamSha256(input: InputStream): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        DigestInputStream(input, digest).use { dis ->
+            val buffer = ByteArray(8192)
+            while (dis.read(buffer) != -1) { }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    fun fileSha256(file: File): String? {
+        return try {
+            FileInputStream(file).use { streamSha256(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "sha256 failed for ${file.name}", e)
+            null
+        }
+    }
 
     /** 生成基于当前时间的导入 ID，如 import_20260712_015947。 */
     fun generateImportId(): String =

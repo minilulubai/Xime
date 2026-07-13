@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
+import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -109,13 +111,16 @@ object SchemaManifestManager {
 
     // ── SHA256 helper ──
 
-    private fun sha256Hex(bytes: ByteArray): String =
-        MessageDigest.getInstance("SHA-256").digest(bytes)
-            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-
     private fun fileSha256(file: File): String? {
         return try {
-            sha256Hex(file.readBytes())
+            val digest = MessageDigest.getInstance("SHA-256")
+            FileInputStream(file).use { input ->
+                DigestInputStream(input, digest).use { dis ->
+                    val buffer = ByteArray(8192)
+                    while (dis.read(buffer) != -1) { }
+                }
+            }
+            digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
         } catch (e: Exception) {
             Log.w(TAG, "sha256 failed for ${file.name}", e)
             null
