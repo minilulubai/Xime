@@ -849,6 +849,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                             val pendingEnglish = cs.pendingEnglishText
                                             if (pendingEnglish.isNotEmpty()) {
                                                 if (index == 0 && text == pendingEnglish) {
+                                                    commitText(text)
                                                     candidateState.value = candidateState.value.copy(
                                                         pendingEnglishText = "",
                                                         associationCandidates = emptyList()
@@ -1995,13 +1996,13 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
 
                     if (pendingEnglish.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
-                            commitText(" ")
+                            commitText(pendingEnglish + " ")
                             candidateState.value = candidateState.value.copy(
                                 pendingEnglishText = "",
                                 associationCandidates = emptyList()
                             )
                         }
-                        Log.d(TAG, "Space: added space after pending English '$pendingEnglish'")
+                        Log.d(TAG, "Space: committed '$pendingEnglish '")
                     } else if (candState.isComposing) {
                         if (candState.candidates.isNotEmpty()) {
                             selectCandidateAsync(0)
@@ -2108,15 +2109,15 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     // 所有按键统一经过 Rime 引擎
                     // 字母键不进入此分支（即使 pendingEnglish 非空），需要继续积累编码
                     if (pendingEnglish.isNotEmpty() && !key.matches(Regex("[a-zA-Z]"))) {
+                        val finalKey = if (isShifted) (shiftedSymbol(key, !state.isAsciiMode) ?: key) else key
                         withContext(Dispatchers.Main) {
-                            commitText(if (isShifted) (shiftedSymbol(key, !state.isAsciiMode) ?: key) else key)
+                            commitText(pendingEnglish + finalKey)
                             candidateState.value = candidateState.value.copy(
                                 pendingEnglishText = "",
                                 associationCandidates = emptyList()
                             )
                         }
-                        Log.d(TAG, "Symbol: added '$key' after pending English '$pendingEnglish'")
-                        needsUIUpdate = true
+                        Log.d(TAG, "Symbol: committed '$pendingEnglish$finalKey'")
                     } else {
                         val isChinese = !state.isAsciiMode
                         val char = if (isShifted) (shiftedSymbol(key, isChinese) ?: key.uppercase()) else key
