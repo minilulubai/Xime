@@ -119,6 +119,16 @@ object RimeConfigHelper {
         return true
     }
 
+    private fun fileUpdateDigest(digest: java.security.MessageDigest, file: File) {
+        if (!file.exists()) return
+        java.io.FileInputStream(file).use { input ->
+            java.security.DigestInputStream(input, digest).use { dis ->
+                val buffer = ByteArray(8192)
+                while (dis.read(buffer) != -1) { }
+            }
+        }
+    }
+
     private fun computeDeploymentHash(context: Context): String {
         val rimeDir = File(context.filesDir, "rime")
         val digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -128,18 +138,18 @@ object RimeConfigHelper {
             val schemaFile = File(rimeDir, "$schemaId.schema.yaml")
             if (schemaFile.exists()) {
                 digest.update(schemaId.toByteArray())
-                digest.update(schemaFile.readBytes())
+                fileUpdateDigest(digest, schemaFile)
             }
             val customFile = File(rimeDir, "$schemaId.custom.yaml")
             if (customFile.exists()) {
-                digest.update(customFile.readBytes())
+                fileUpdateDigest(digest, customFile)
             }
         }
 
         val defaultYaml = File(rimeDir, "default.yaml")
         if (defaultYaml.exists()) {
             digest.update("default".toByteArray())
-            digest.update(defaultYaml.readBytes())
+            fileUpdateDigest(digest, defaultYaml)
         }
 
         return digest.digest().joinToString("") { String.format("%02x", it) }

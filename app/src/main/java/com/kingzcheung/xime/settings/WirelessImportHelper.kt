@@ -147,9 +147,16 @@ class WirelessImportHelper(private val context: Context) {
                         val targetFile = File(pkgDir, name)
 
                         raf.seek(contentStart)
-                        val data = ByteArray(contentLen.toInt())
-                        raf.readFully(data)
-                        targetFile.writeBytes(data)
+                        targetFile.outputStream().use { out ->
+                            val buf = ByteArray(8192)
+                            var remaining = contentLen
+                            while (remaining > 0) {
+                                val toRead = minOf(buf.size.toLong(), remaining).toInt()
+                                raf.readFully(buf, 0, toRead)
+                                out.write(buf, 0, toRead)
+                                remaining -= toRead
+                            }
+                        }
 
                         saved = true
                         _uploadResults.trySend(UploadResult(fileName = name, success = true))
