@@ -1238,6 +1238,338 @@ class T9RightCommitHandlerTest {
         assertNull(ctrl.selectedOption)
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // 场景17：全拼输入，左选拼音→右选候选词(partial)→左选拼音→右选候选词
+    //       第二次右选应 full commit 但因 selectionHistory 残留误判为 partial
+    //
+    // 操作流程（来自 .trae/docs/T9测试/异常输入流程.md 场景17，行81-94）：
+    //   1. 输入 826 + 分词键(1) + 8426 → buffer="tan'8426"
+    //      （T9PinyinMap 中 826=tao/tan, 8426=tian/tiao）
+    //   2. 左选 tao → 替换 tan → buffer="tao'8426"
+    //   3. 右选"饕"(comment="tao", textLength=1) → partial commit, buffer="8426"
+    //   4. 左选 tian → buffer="tian", SELECTION(tian, "8426")
+    //   5. 右选"天"(comment="tian", textLength=1) → 应 full commit, buffer="", IDLE
+    //
+    // 修复前根因：
+    //   步骤3 的 apostrophe else 分支调用 withRemainingDigits 创建 selections=emptyList()
+    //   但 enterInput() 不清理 selectionHistory，残留 [tao]；
+    //   步骤4 左选 tian 后 selectionHistory=[tao,tian]；
+    //   步骤5 isFullCommitWithoutBoundaries 检查 joinToString="taotian"≠"tian" → 判定失败
+    //   → 误为 partial commit，预编辑文本变成"饕天tian"而非上屏"饕天"。
+    //
+    // 修复后：
+    //   步骤3 清理 selectionHistory，步骤5 正确判定为 full commit。
+    //
+    // 注意：多音节候选词如"提案"(comment="ti an")走 hasSyllableBoundaries 路径，
+    //       不依赖 selectionHistory，因此不受此 bug 影响（与场景描述一致）。
+    // ═══════════════════════════════════════════════════════════════
+
+    @Test
+    fun `scenario 17 - partial commit then left select then right select should full commit`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 826 + 分词键(1) + 8426 → buffer="tan'8426"
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1") // 分词键：自动确认首音节 tan（firstSyllableOptions("826") 首项）
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        assertEquals("tan'8426", ctrl.bufferString)
+
+        // 步骤2: 左选 tao → 替换 tan → buffer="tao'8426"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        assertEquals("tao'8426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("tao", 3), ctrl.selectedOption)
+
+        // 步骤3: 右选"饕"(comment="tao", textLength=1) → partial commit
+        //   候选词"饕"的拼音"tao"恰好匹配已选拼音"tao"，消费选中项，保留未分配数字"8426"
+        val result1 = ctrl.onRightCandidateSelected("tao", 1)
+        assertFalse("Step 3: Should be partial commit — unassigned digits 8426 remain", result1)
+        assertEquals("8426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        // 关键不变式：partial commit 消费了全部 selections 后，selectionHistory 必须同步清理
+        assertTrue(
+            "Step 3: selectionHistory must be cleared after partial commit consumed all selections",
+            ctrl.selectionHistory.isEmpty()
+        )
+
+        // 步骤4: 左选 tian → buffer="tian", SELECTION(tian, "8426")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("tian", 4), ctrl.selectedOption)
+        assertEquals("8426", ctrl.selectionCandidateDigits)
+
+        // 步骤5: 右选"天"(comment="tian", textLength=1) → 应 full commit
+        //   修复前：selectionHistory=[tao,tian] → joinToString="taotian"≠"tian" → 误判 partial
+        //   修复后：selectionHistory=[tian] → joinToString="tian"=="tian" → 正确判定 full commit
+        val result2 = ctrl.onRightCandidateSelected("tian", 1)
+        assertTrue("Step 5: Should be full commit — '天' consumes all remaining input", result2)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    @Test
+    fun `scenario 17 - multi-syllable candidate ti an also full commits after fix`() {
+        // 场景17 步骤6变体：步骤4后右选"提案"(comment="ti an", textLength=2)
+        // 多音节候选词走 hasSyllableBoundaries 路径，不受 selectionHistory 残留影响，
+        // 但修复后此路径同样应正确 full commit。
+        val ctrl = createController()
+
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1")
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        assertEquals("tao'8426", ctrl.bufferString)
+
+        // 步骤3: 右选"饕" → partial commit
+        ctrl.onRightCandidateSelected("tao", 1)
+        assertEquals("8426", ctrl.bufferString)
+
+        // 步骤4: 左选 tian
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+
+        // 步骤5变体: 右选"提案"(comment="ti an", textLength=2) → full commit
+        val result = ctrl.onRightCandidateSelected("ti an", 2)
+        assertTrue("Should be full commit — '提案' consumes all remaining input", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+    }
+
+    // ── 场景18：右选候选词 pinyin 是选中项 pinyin 的真前缀，应切换选择并消费 ──
+    //
+    // 操作流程（来自 .trae/docs/T9测试/异常输入流程.md 场景18，行99-110）：
+    // 1. 输入 826 8426；预编辑 "tan tiao"
+    // 2. 左选 tao → "tao'8426"
+    // 3. 右选"饕"(tao) → partial commit → "8426"
+    // 4. 左选 tian → "tian"（SELECTION 态，tian 高亮）
+    // 5. 右选"惕"(comment="ti") → 候选词 pinyin "ti" 是选中项 "tian" 的真前缀
+    //
+    // 期望：相当于用户从 tian 切换到 ti，消费 ti(数字84)，剩余 26(an) 转纯数字 buffer
+    // 根因（修复前）：SELECTION 态分支调用 removeConsumedSelections("ti")，但 "ti" 不是
+    //   selections=[tian] 中任何选择的完整 pinyin，无法移除 → buffer 保持 [tian] 不变，
+    //   与 RIME 已消费"ti"的状态不一致 → 左侧候选区不刷新，tian 仍显示选中态
+
+    @Test
+    fun `scenario 18 - right candidate pinyin shorter than selected option switches selection and leaves remaining digits`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 826 + 分词键 + 8426
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1")
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        assertEquals("tan'8426", ctrl.bufferString)
+
+        // 步骤2: 左选 tao
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        assertEquals("tao'8426", ctrl.bufferString)
+
+        // 步骤3: 右选"饕"(tao) → partial commit，selectionHistory 被清空
+        ctrl.onRightCandidateSelected("tao", 1)
+        assertEquals("8426", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertTrue(ctrl.selectionHistory.isEmpty())
+
+        // 步骤4: 左选 tian → SELECTION(tian, "8426")
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("tian", 4), ctrl.selectedOption)
+
+        // 步骤5: 右选"惕"(comment="ti", textLength=1)
+        // 候选词 pinyin "ti" 是 prevSelectedOption.pinyin "tian" 的真前缀
+        // 期望：切换选择 tian→ti，消费 ti(数字84)，剩余 26(an) 转纯数字 buffer
+        val result = ctrl.onRightCandidateSelected("ti", 1)
+        assertFalse("Step 5: Should be partial commit — 'an' digits remain", result)
+        assertEquals("26", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+        assertNull("Step 5: selectedOption must be null after switching to digit buffer", ctrl.selectedOption)
+        assertTrue(
+            "Step 5: selectionHistory must be cleared after switching to digit buffer",
+            ctrl.selectionHistory.isEmpty()
+        )
+    }
+
+    @Test
+    fun `scenario 18 - after switching to digit buffer left candidates refresh to an options`() {
+        val ctrl = createController()
+
+        // 前置步骤同上
+        for (d in listOf("8", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onDigitPressed("1")
+        for (d in listOf("8", "4", "2", "6")) ctrl.onDigitPressed(d)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tao", 3))
+        ctrl.onRightCandidateSelected("tao", 1)
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("tian", 4))
+        assertEquals("tian", ctrl.bufferString)
+
+        // 步骤5: 右选"惕"(ti)
+        ctrl.onRightCandidateSelected("ti", 1)
+        assertEquals("26", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.INPUT, ctrl.leftPanelState)
+
+        // 步骤6: 左侧候选区应刷新为数字 26 对应的拼音候选（an/ao/bo...）
+        // 修复前：左侧候选区仍为旧的 [tian, tiao, ti, t, u, v]，tian 仍显示选中态
+        // 与场景18描述的预期左侧候选区【an，ao，bo，a,b,c】一致
+        assertPinyins(ctrl, "an", "ao", "bo", "a", "b", "c")
+    }
+
+    // ── 场景19：简拼对齐的全拼选中项被候选词多音节简拼消费，应 full commit ──
+    //
+    // 操作流程（来自 .trae/docs/T9测试/异常输入流程.md 场景19，行121-138）：
+    // 1. 输入 5143（5 + 分词键 + 43）→ j'ge（j 由分词键确认，43 由 RIME 推断为 ge）
+    // 2. 左选 k → k'43（替换 j 为 k）
+    // 3. 左选 he → khe（SELECTION(he)，he 高亮）
+    // 4. 右选"卡哈尔"(comment="ka ha er", textLength=3) → 候选 3 音节 ka/ha/er 的
+    //    简拼首字母数字码 = 5/4/3 = "543" = buffer 数字码
+    //
+    // 期望：full commit，buffer 清空，进入 IDLE
+    // 根因（修复前）：isAllSelectedConsumed 要求 commentSyllables.size == selectionHistory.size
+    //   （3 != 2 失败），且候选最后音节 "er" 既不精确匹配选中项 "he"（"37"!="43"），
+    //   也不满足简拼缩写匹配（he.digitLength=2，非简拼）→ 误判 partial commit，
+    //   仅消费非选中部分 "k"，保留 "he"，预编辑文本残留 "卡哈尔he"。
+    //   "er 儿" 是边界条件：he(digits 43) 被 ka/ha/er 三音节简拼(5/4/3)完整消费。
+
+    @Test
+    fun `scenario 19 - jianpin-aligned candidate ka ha er full commits consuming entire buffer`() {
+        val ctrl = createController()
+
+        // 步骤1: 输入 5143（5 + 分词键 + 43）
+        ctrl.onDigitPressed("5"); ctrl.onDigitPressed("1")
+        ctrl.onDigitPressed("4"); ctrl.onDigitPressed("3")
+        assertEquals("j'43", ctrl.bufferString)
+
+        // 步骤2: 左选 k → 替换分词键确认的 j
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("k", 1))
+        assertEquals("k'43", ctrl.bufferString)
+
+        // 步骤3: 左选 he → SELECTION(he)，buffer="khe"
+        ctrl.onChoiceSelected(T9PinyinMap.SyllableOption("he", 2))
+        assertEquals("khe", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.SELECTION, ctrl.leftPanelState)
+        assertEquals(T9PinyinMap.SyllableOption("he", 2), ctrl.selectedOption)
+
+        // 步骤4: 右选"卡哈尔"(comment="ka ha er", textLength=3)
+        // ka→k(5) ha→h(4) er→e(3)，三音节简拼首字母数字码 "543" == buffer 数字码
+        val result = ctrl.onRightCandidateSelected("ka ha er", 3)
+        assertTrue("Should be full commit — ka/ha/er 简拼对齐 543 消费全部输入", result)
+        assertEquals("", ctrl.bufferString)
+        assertEquals(T9InputController.LeftPanelState.IDLE, ctrl.leftPanelState)
+        assertNull(ctrl.selectedOption)
+        assertTrue(ctrl.selectionHistory.isEmpty())
+    }
+
+    @Test
+    fun `scenario 19 - isFullCommitByJianpinAlignment pure function detects digit-by-digit alignment`() {
+        // 纯函数：候选词各音节简拼首字母数字码逐位等于 buffer 数字码
+        assertTrue(isFullCommitByJianpinAlignment("khe", listOf("ka", "ha", "er")))
+        // er 单独也能对齐 e(3)
+        assertTrue(isFullCommitByJianpinAlignment("e", listOf("er")))
+        // 简拼缩写候选（ke→k, bei→b, er→e）对齐 "kbe"→"523"
+        assertTrue(isFullCommitByJianpinAlignment("kbe", listOf("ke", "bei", "er")))
+        // 音节数 ≠ 数字位数 → 不触发（交由既有路径）
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("kao", "he")))
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("ke", "hen")))
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("kan")))
+        // 某音节首字母数字码不匹配
+        assertFalse(isFullCommitByJianpinAlignment("khe", listOf("ka", "ha", "san")))
+        // 空入参
+        assertFalse(isFullCommitByJianpinAlignment("khe", emptyList()))
+        assertFalse(isFullCommitByJianpinAlignment("", listOf("ka")))
+    }
+
+    // ── 场景19 后续：候选词 index 错位修复（上屏错词问题）──
+    //
+    // 问题：filterCandidatesBySelectionHistory 将候选词分为 FULL/PREFIX 两组重排序，
+    // 导致 UI 列表 index 与 RIME 原始候选词 index 不对应。
+    // selectCandidateAsync 用 UI index 调用 rimeEngine.selectCandidate(index)，
+    // RIME 选错词 → commit() 返回错误文本 → full commit 上屏错词。
+    // 例：selectionHistory=[k, he] 时，RIME 原始列表 [考核, 恐吓, 可恨, 课后, 跨行,
+    // 卡哈尔, 开盒儿, 看会儿, 看, 可]，过滤后 [考核, 恐吓, 开盒儿, 课后, 跨行,
+    // 卡哈尔, 看会儿, 看, 可]（可恨被排除、开盒儿从 index=6 前移到 index=2）。
+    // 用户右选"开盒儿"(UI index=2) → selectCandidate(2) → RIME 选"可恨"(已被排除) →
+    // 甚至可能选到"恐吓" → 上屏"恐吓"而非"开盒儿"。
+    //
+    // 修复：resolveRimeCandidateIndex 通过候选词文本查找 RIME 原始候选词 index。
+
+    @Test
+    fun `resolveRimeCandidateIndex returns raw index when candidate text found in raw list`() {
+        // RIME 原始候选词列表
+        val rawCandidates = listOf("考核", "恐吓", "可恨", "课后", "跨行", "卡哈尔", "开盒儿", "看会儿", "看", "可")
+        // 用户选"开盒儿"（UI index=2，因过滤重排序），但 RIME 原始 index=6
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 2,
+            selectedCandidate = "开盒儿",
+            rawCandidates = rawCandidates,
+        )
+        assertEquals("应返回 RIME 原始 index=6", 6, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex returns first match when duplicate candidate texts exist`() {
+        val rawCandidates = listOf("看", "可", "看", "可")
+        // 重复文本"看"在 index=0 和 index=2，应返回第一个（index=0）
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 1,
+            selectedCandidate = "看",
+            rawCandidates = rawCandidates,
+        )
+        assertEquals(0, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex falls back to uiIndex when candidate text not in raw list`() {
+        // 候选词文本不在 RIME 原始列表中（如 UI 层补充的候选词），回退 uiIndex
+        val rawCandidates = listOf("考核", "恐吓", "可恨")
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 5,
+            selectedCandidate = "自定义词",
+            rawCandidates = rawCandidates,
+        )
+        assertEquals("找不到时回退 uiIndex", 5, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex falls back to uiIndex when selectedCandidate is null`() {
+        val rawCandidates = listOf("考核", "恐吓")
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 1,
+            selectedCandidate = null,
+            rawCandidates = rawCandidates,
+        )
+        assertEquals("selectedCandidate 为 null 时回退 uiIndex", 1, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex falls back to uiIndex when rawCandidates is empty`() {
+        val result = resolveRimeCandidateIndex(
+            uiIndex = 3,
+            selectedCandidate = "开盒儿",
+            rawCandidates = emptyList(),
+        )
+        assertEquals("rawCandidates 为空时回退 uiIndex", 3, result)
+    }
+
+    @Test
+    fun `resolveRimeCandidateIndex scenario 19 - ka ha er full commit selects correct raw index`() {
+        // 场景19 完整模拟：selectionHistory=[k, he]
+        // RIME 原始列表（基于 preedit "k'he"）：
+        //   [考核(kao he), 恐吓(kong he), 可恨(ke hen), 课后(ke hou), 跨行(kua hang),
+        //    卡哈尔(ka ha er), 开盒儿(kai he er), 看会儿(kan hu er), 看(kan), 可(ke)]
+        // filterCandidatesBySelectionHistory 后（FULL 在前，PREFIX 在后，NONE 排除）：
+        //   FULL: 考核, 恐吓, 开盒儿（kai→k, he→he, er 无对应选择但所有 selection 已匹配）
+        //   PREFIX: 课后, 跨行, 卡哈尔, 看会儿, 看, 可
+        //   NONE(排除): 可恨
+        //   过滤后: [考核, 恐吓, 开盒儿, 课后, 跨行, 卡哈尔, 看会儿, 看, 可]
+        val rawCandidates = listOf("考核", "恐吓", "可恨", "课后", "跨行", "卡哈尔", "开盒儿", "看会儿", "看", "可")
+        // 用户右选"卡哈尔"（过滤后 UI index=5），RIME 原始 index=5 → 一致（巧合）
+        assertEquals(5, resolveRimeCandidateIndex(5, "卡哈尔", rawCandidates))
+        // 用户右选"开盒儿"（过滤后 UI index=2），RIME 原始 index=6 → 修复错位
+        assertEquals(6, resolveRimeCandidateIndex(2, "开盒儿", rawCandidates))
+        // 用户右选"看会儿"（过滤后 UI index=6），RIME 原始 index=7 → 修复错位
+        assertEquals(7, resolveRimeCandidateIndex(6, "看会儿", rawCandidates))
+    }
+
     // ── 辅助方法 ──
 
     private fun createController(): T9InputController {
