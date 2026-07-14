@@ -87,10 +87,12 @@ object ModelDownloader {
             throw IOException("HTTP ${response.code}")
         }
 
-        val totalBytes = response.body?.contentLength() ?: -1L
+        val body = response.body ?: throw IOException("Response body is null")
+        val totalBytes = body.contentLength()
         var downloadedBytes = 0L
 
-        response.body?.byteStream()?.use { input ->
+        targetFile.parentFile?.mkdirs()
+        body.byteStream().use { input ->
             FileOutputStream(targetFile).use { output ->
                 val buffer = ByteArray(8192)
                 var bytesRead: Int
@@ -102,6 +104,11 @@ object ModelDownloader {
                     }
                 }
             }
+        }
+
+        if (totalBytes > 0 && downloadedBytes != totalBytes) {
+            targetFile.delete()
+            throw IOException("Download incomplete: $downloadedBytes/$totalBytes bytes")
         }
 
         FileLogger.i(TAG, "Downloaded ${targetFile.name}: $downloadedBytes bytes")
@@ -126,10 +133,12 @@ object ModelDownloader {
                 throw IOException("HTTP ${response.code}")
             }
 
-            val totalBytes = response.body?.contentLength() ?: -1L
+            val body = response.body ?: throw IOException("Response body is null")
+            val totalBytes = body.contentLength()
             var downloadedBytes = 0L
 
-            response.body?.byteStream()?.use { input ->
+            tmpFile.parentFile?.mkdirs()
+            body.byteStream().use { input ->
                 FileOutputStream(tmpFile).use { output ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
@@ -142,6 +151,14 @@ object ModelDownloader {
                         }
                     }
                 }
+            }
+
+            if (totalBytes > 0 && downloadedBytes != totalBytes) {
+                throw IOException("Download incomplete: $downloadedBytes/$totalBytes bytes")
+            }
+
+            if (!tmpFile.exists() || tmpFile.length() == 0L) {
+                throw IOException("Archive file is missing or empty")
             }
 
             onProgress(ModelDownloadState.Downloading(0.85f, downloadedBytes, totalBytes))

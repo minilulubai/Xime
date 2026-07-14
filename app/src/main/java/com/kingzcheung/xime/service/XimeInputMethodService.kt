@@ -41,6 +41,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -93,6 +94,7 @@ import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.keyboard.KeyboardView
 import com.kingzcheung.xime.ui.keyboard.isT9Schema
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.ui.theme.XimeTheme
@@ -123,6 +125,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         private const val DARK_MODE_DARK = 1
         private const val DARK_MODE_SYSTEM = 2
         private const val HARDWARE_CANDIDATE_BAR_HEIGHT = 72
+        private const val SAFE_TEXT_LIMIT = 262144
 
     }
 
@@ -147,7 +150,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }.asCoroutineDispatcher()
     
     private val keyJobs = Channel<Job>(Channel.UNLIMITED)
-    private val uiEventChannel = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+    private val uiEventChannel = Channel<suspend () -> Unit>(Channel.CONFLATED)
 
     init {
         serviceScope.launch {
@@ -165,6 +168,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     private val uiState = mutableStateOf(InputUIState())
     private val candidateState = mutableStateOf(CandidateState())
     private val clipboardItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
+    private val voiceAmplitudeState = mutableFloatStateOf(0f)
     private val quickSendItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
     private val recentClipboardItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
     private var hasHardwareKeyboard = false
@@ -217,6 +221,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             pendingVoiceAction = null
             action?.invoke()
 
+            voiceAmplitudeState.floatValue = 0f
             uiState.value = uiState.value.copy(
                 isVoiceMode = false,
                 voiceButtonState = VoiceButtonState(),
@@ -226,6 +231,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             )
             isTrackingVoiceButtons = false
             keyboardViewModel.exitVoice()
+        },
+        onAmplitudeChanged = { amplitude ->
+            voiceAmplitudeState.floatValue = amplitude
         }
     )
     
@@ -807,7 +815,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                 voicePluginName = state.voicePluginName,
                                 voiceRecognitionState = state.voiceRecognitionState,
                                 voiceRecognizedText = state.voiceRecognizedText,
-                                voiceAmplitude = state.voiceAmplitude,
+                                voiceAmplitude = voiceAmplitudeState.floatValue,
                                 isSttEnabled = state.isSttEnabled,
                                 toolbarButtons = state.toolbarButtons,
                                 isCalculatorMode = calculatorEngine.isActive(),
@@ -936,12 +944,12 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     onCursorMove = { direction ->
                                         val ic = currentInputConnection
                                         if (ic != null) {
-                                            val textBefore = ic.getTextBeforeCursor(Int.MAX_VALUE, 0)
-                                            val textAfter = ic.getTextAfterCursor(Int.MAX_VALUE, 0)
-                                            val selStart = textBefore?.length ?: 0
-                                            val totalLen = selStart + (textAfter?.length ?: 0)
-                                            val newSel = (selStart + direction).coerceIn(0, totalLen)
-                                            ic.setSelection(newSel, newSel)
+                                            val count = abs(direction)
+                                            val keyCode = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+                                            for (i in 1..count) {
+                                                ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                                                ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+                                            }
                                         }
                                     },
                                     onGestureAction = { action, value ->
@@ -1480,6 +1488,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
 
     override fun onFinishInput() {
         super.onFinishInput()
+        clipboardCollectorJob?.cancel()
+        clipboardCollectorJob = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         clearInputState()
         recentClipboardItemsState.value = emptyList()
@@ -1519,12 +1529,16 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             SettingsPreferences.getPrefsPublic(this).unregisterOnSharedPreferenceChangeListener(it)
         }
         RimeEngine.setDeploymentCallback { _, _ -> }
+        if (::clipboardManager.isInitialized) {
+            clipboardManager.release()
+        }
         _viewModelStore.clear()
         feedbackManager.release()
         rimeEngine.destroy()
         voiceRecognitionHandler.release()
         ExtensionManager.release()
         serviceScope.cancel()
+        keyProcessingDispatcher.close()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
@@ -1893,7 +1907,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     updateCalculatorCandidates()
                     // 记录当前输入框中的文本以便撤回
                     val inputFieldText = withContext(Dispatchers.Main) {
-                        currentInputConnection?.getTextBeforeCursor(Int.MAX_VALUE, 0)?.toString() ?: ""
+                        currentInputConnection?.getTextBeforeCursor(SAFE_TEXT_LIMIT, 0)?.toString() ?: ""
                     }
                     lastClearedText = inputFieldText + candState.inputText
                     rimeEngine.clearComposition()
@@ -2599,8 +2613,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 ic.setSelection(0, 0)
             }
             "end" -> {
-                val textBefore = ic.getTextBeforeCursor(Int.MAX_VALUE, 0) ?: ""
-                val textAfter = ic.getTextAfterCursor(Int.MAX_VALUE, 0) ?: ""
+                val textBefore = ic.getTextBeforeCursor(SAFE_TEXT_LIMIT, 0) ?: ""
+                val textAfter = ic.getTextAfterCursor(SAFE_TEXT_LIMIT, 0) ?: ""
                 ic.setSelection(textBefore.length + textAfter.length, textBefore.length + textAfter.length)
             }
         }

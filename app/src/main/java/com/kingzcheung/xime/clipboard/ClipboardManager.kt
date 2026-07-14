@@ -165,6 +165,13 @@ class ClipboardManager private constructor(private val context: Context) {
     fun stopListening() {
         androidClipboardManager.removePrimaryClipChangedListener(clipboardListener)
     }
+
+    fun release() {
+        stopListening()
+        _clipboardItems.value = emptyList()
+        _quickSendItems.value = emptyList()
+        _recentItems.value = emptyList()
+    }
     
     fun addItem(text: String) {
         if (text.isBlank()) return

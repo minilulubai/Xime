@@ -253,15 +253,19 @@ class SherpaAsrEngine(private val context: Context) {
     fun processAudio(samples: FloatArray) {
         val currentStream = stream
         val currentRecognizer = recognizer
-        if (currentStream == null || currentRecognizer == null) {
+        if (currentStream == null || currentRecognizer == null || samples.isEmpty()) {
             return
         }
         
         currentStream.acceptWaveform(samples, SAMPLE_RATE)
         
+        var decoded = false
         while (currentRecognizer.isReady(currentStream)) {
             currentRecognizer.decode(currentStream)
+            decoded = true
         }
+        
+        if (!decoded) return
         
         val text = currentRecognizer.getResult(currentStream).text
         if (text.isNotEmpty()) {
