@@ -19,7 +19,8 @@ class VoiceRecognitionHandler(
     private val onStateChanged: (InputUIState) -> Unit,
     private val getState: () -> InputUIState,
     private val getInputConnection: () -> InputConnection?,
-    private val onVoiceComplete: () -> Unit = {}
+    private val onVoiceComplete: () -> Unit = {},
+    private val onAmplitudeChanged: (Float) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "VoiceRecognition"
@@ -256,6 +257,6 @@ class VoiceRecognitionHandler(
         val now = System.currentTimeMillis()
         if (now - lastAmplitudeUpdate < 80) return
         lastAmplitudeUpdate = now
-        onStateChanged(getState().copy(voiceAmplitude = amplitude))
+        onAmplitudeChanged(amplitude)
     }
 }

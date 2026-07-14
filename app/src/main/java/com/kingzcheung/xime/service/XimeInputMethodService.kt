@@ -41,6 +41,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -148,7 +149,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }.asCoroutineDispatcher()
     
     private val keyJobs = Channel<Job>(Channel.UNLIMITED)
-    private val uiEventChannel = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+    private val uiEventChannel = Channel<suspend () -> Unit>(Channel.CONFLATED)
 
     init {
         serviceScope.launch {
@@ -166,6 +167,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     private val uiState = mutableStateOf(InputUIState())
     private val candidateState = mutableStateOf(CandidateState())
     private val clipboardItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
+    private val voiceAmplitudeState = mutableFloatStateOf(0f)
     private val quickSendItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
     private val recentClipboardItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
     private var hasHardwareKeyboard = false
@@ -218,6 +220,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             pendingVoiceAction = null
             action?.invoke()
 
+            voiceAmplitudeState.floatValue = 0f
             uiState.value = uiState.value.copy(
                 isVoiceMode = false,
                 voiceButtonState = VoiceButtonState(),
@@ -227,6 +230,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             )
             isTrackingVoiceButtons = false
             keyboardViewModel.exitVoice()
+        },
+        onAmplitudeChanged = { amplitude ->
+            voiceAmplitudeState.floatValue = amplitude
         }
     )
     
@@ -808,7 +814,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                 voicePluginName = state.voicePluginName,
                                 voiceRecognitionState = state.voiceRecognitionState,
                                 voiceRecognizedText = state.voiceRecognizedText,
-                                voiceAmplitude = state.voiceAmplitude,
+                                voiceAmplitude = voiceAmplitudeState.floatValue,
                                 isSttEnabled = state.isSttEnabled,
                                 toolbarButtons = state.toolbarButtons,
                                 isCalculatorMode = calculatorEngine.isActive(),
@@ -1481,6 +1487,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
 
     override fun onFinishInput() {
         super.onFinishInput()
+        clipboardCollectorJob?.cancel()
+        clipboardCollectorJob = null
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         clearInputState()
         recentClipboardItemsState.value = emptyList()
@@ -1520,12 +1528,16 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             SettingsPreferences.getPrefsPublic(this).unregisterOnSharedPreferenceChangeListener(it)
         }
         RimeEngine.setDeploymentCallback { _, _ -> }
+        if (::clipboardManager.isInitialized) {
+            clipboardManager.release()
+        }
         _viewModelStore.clear()
         feedbackManager.release()
         rimeEngine.destroy()
         voiceRecognitionHandler.release()
         ExtensionManager.release()
         serviceScope.cancel()
+        keyProcessingDispatcher.close()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     }
