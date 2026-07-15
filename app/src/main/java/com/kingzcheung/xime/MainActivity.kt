@@ -212,13 +212,14 @@ class MainActivity : ComponentActivity() {
     
     private fun importSchema(uri: android.net.Uri) {
         prewarmScope.launch {
-            val success = SchemaManager.importSchemaFile(this@MainActivity, uri)
+            val result = SchemaManager.importSchemaFile(this@MainActivity, uri)
             launch(Dispatchers.Main) {
-                Toast.makeText(
-                    this@MainActivity,
-                    if (success) "方案导入成功，请到「输入方案」页面部署" else "方案导入失败",
-                    Toast.LENGTH_LONG
-                ).show()
+                val msg = when {
+                    !result.success -> "方案导入失败"
+                    result.installedDirect -> "方案导入成功，已放入 rime 目录"
+                    else -> "方案导入成功，请到「输入方案」页面部署"
+                }
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
             }
         }
     }

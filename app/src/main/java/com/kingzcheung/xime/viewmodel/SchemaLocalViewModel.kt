@@ -138,6 +138,8 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
             _uiState.update { it.copy(conflictPackageId = null, installingId = pkgId) }
             for (sid in _uiState.value.conflictingSchemeIds) {
                 withContext(Dispatchers.IO) {
+                    // 先刷新 builtin 清单：APP 更新后可能新增了未被清单追踪的文件
+                    SchemaManifestManager.refreshBuiltinManifest(context)
                     SchemaManifestManager.uninstallWithManifest(context, sid)
                 }
             }
@@ -178,8 +180,9 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
 
     fun uninstall(item: LocalPackageItem) {
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                SchemaManifestManager.uninstallWithManifest(context, item.packageId)
+            withContext(Dispatchers.IO) {
+                SchemaManager.deleteSchemaFiles(context, item.packageId)
+                SchemaManager.deleteSchemeArchive(context, item.packageId)
             }
             // 若卸载后没有已安装的方案了，全量清理 rime/ 残留
             val remaining = withContext(Dispatchers.IO) {
@@ -190,7 +193,7 @@ class SchemaLocalViewModel(application: Application) : AndroidViewModel(applicat
                     SchemaManager.cleanRimeDir(context)
                 }
             }
-            showToast(result.message)
+            showToast("已卸载")
             loadLocalPackages()
         }
     }

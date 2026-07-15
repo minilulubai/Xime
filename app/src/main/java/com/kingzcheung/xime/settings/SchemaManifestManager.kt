@@ -388,7 +388,7 @@ object SchemaManifestManager {
 
     private const val KEY_MIGRATION_VERSION = "manifest_migration_version"
     private const val MIGRATION_VERSION_CURRENT = 3
-    private const val BUILTIN_PACKAGE_ID = "builtin"
+    internal const val BUILTIN_PACKAGE_ID = "builtin"
 
     /**
      * 为旧版已安装方案创建/合并遗留清单。
@@ -464,6 +464,9 @@ object SchemaManifestManager {
                 // 确保 market/builtin/ 存在（迁移前没有此目录的旧版本会在此补齐）
                 ensureBuiltinBackup(context)
 
+                // 每次启动将 untracked 文件追加到 builtin 清单（APP 更新后新文件不会被旧清单追踪）
+                refreshBuiltinManifest(context)
+
                 if (prevVersion >= MIGRATION_VERSION_CURRENT) return@withContext
 
                 val rimeDir = SchemaManager.getRimeDir(context)
@@ -486,12 +489,13 @@ object SchemaManifestManager {
                     }
                 }
 
-                // 扫描 rime/ 下所有文件，归入 builtin 包（排除系统文件与 build/）
+                // 扫描 rime/ 下所有文件，归入 builtin 包（排除系统文件与用户数据）
                 val allFilesInRime = mutableSetOf<String>()
                 rimeDir.walkTopDown().forEach { f ->
                     if (!f.isFile) return@forEach
                     val relPath = f.toRelativeString(rimeDir).replace('\\', '/')
                     if (isProtectedSystemFile(relPath)) return@forEach
+                    if (isUserDataFile(relPath)) return@forEach
                     allFilesInRime.add(relPath)
                 }
                 if (allFilesInRime.isNotEmpty()) {
@@ -552,6 +556,93 @@ object SchemaManifestManager {
     }
 
     // ── Market Package Listing ──
+
+    /** 判断文件是否为用户数据或系统配置（不应被清单追踪，卸载时不应被删除）。 */
+    private fun isUserDataFile(relPath: String): Boolean {
+        if (relPath.startsWith("build/")) return true
+        if (relPath.contains(".userdb/")) return true
+        if (relPath.endsWith(".custom.yaml")) return true
+        if (relPath == "installation.yaml") return true
+        if (relPath == "custom_phrase.txt") return true
+        if (relPath == "xime.custom.yaml") return true
+        return false
+    }
+
+    /**
+     * 扫描 rime/ 下未被任何包（registry）追踪的文件，追加到 builtin 清单和注册表中。
+     *
+     * APP 更新后新版 assets 可能新增了文件，但 builtin 清单仅在首次迁移时创建一次，
+     * 新增文件不会被追踪，导致卸载 builtin 包时删不干净。每次安装前调用此函数，
+     * 可确保所有内置文件都在清单中。
+     *
+     * 用户数据文件（.userdb/、*.custom.yaml、installation.yaml、custom_phrase.txt）
+     * 不会被追踪，确保卸载时不被误删。
+     */
+    suspend fun refreshBuiltinManifest(context: Context) = withContext(Dispatchers.IO) {
+        val rimeDir = SchemaManager.getRimeDir(context)
+        if (!rimeDir.exists()) return@withContext
+
+        val registry = loadRegistry(context)
+        val allFiles = registry.optJSONObject("files") ?: JSONObject()
+
+        // 找出 rime/ 中未被任何包追踪且非用户数据的文件
+        val untracked = mutableMapOf<String, File>()
+        rimeDir.walkTopDown().forEach { f ->
+            if (!f.isFile) return@forEach
+            val relPath = f.toRelativeString(rimeDir).replace('\\', '/')
+            if (isProtectedSystemFile(relPath)) return@forEach
+            if (isUserDataFile(relPath)) return@forEach
+            if (allFiles.has(relPath)) return@forEach
+            untracked[relPath] = f
+        }
+        if (untracked.isEmpty()) return@withContext
+
+        val existingManifest = loadManifest(context, BUILTIN_PACKAGE_ID)
+        val fileEntries = existingManifest?.optJSONObject("files") ?: JSONObject()
+
+        for ((relPath, file) in untracked) {
+            val sha256 = SchemaManager.fileSha256(file) ?: continue
+            fileEntries.put(relPath, JSONObject().apply {
+                put("sha256", sha256)
+                put("size", file.length())
+            })
+            allFiles.put(relPath, JSONObject().apply {
+                put("sha256", sha256)
+                put("size", file.length())
+                put("claimedBy", JSONArray(listOf(BUILTIN_PACKAGE_ID)))
+            })
+        }
+
+        // 更新或创建 builtin 清单
+        if (existingManifest != null) {
+            existingManifest.put("files", fileEntries)
+            saveManifest(context, BUILTIN_PACKAGE_ID, existingManifest)
+        } else {
+            val manifest = JSONObject().apply {
+                put("schemeId", BUILTIN_PACKAGE_ID)
+                put("displayName", "系统内置方案")
+                put("version", "")
+                put("installedAt",
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date()))
+                put("fromMarket", false)
+                put("legacy", true)
+                put("files", fileEntries)
+            }
+            saveManifest(context, BUILTIN_PACKAGE_ID, manifest)
+        }
+
+        registry.put("files", allFiles)
+        saveRegistry(context, registry)
+
+        // 同步备份到 market/builtin/
+        val builtinDir = SchemaManager.getMarketDir(context, BUILTIN_PACKAGE_ID)
+        builtinDir.mkdirs()
+        for ((relPath, file) in untracked) {
+            file.copyTo(File(builtinDir, relPath), overwrite = true)
+        }
+
+        Log.i(TAG, "refreshBuiltinManifest: added ${untracked.size} untracked files")
+    }
 
     /** 从注册表查询指定 schemaId 所属的包 ID。 */
     suspend fun getPackageIdForSchema(context: Context, schemaId: String): String? = withContext(Dispatchers.IO) {

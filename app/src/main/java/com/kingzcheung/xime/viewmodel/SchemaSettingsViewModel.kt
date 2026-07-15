@@ -105,11 +105,15 @@ class SchemaSettingsViewModel(application: Application) : AndroidViewModel(appli
 
     fun importSchemaFile(uri: Uri) {
         viewModelScope.launch {
-            val success = SchemaManager.importSchemaFile(context, uri)
+            val result = SchemaManager.importSchemaFile(context, uri)
             refresh()
             _importCompleted.tryEmit(Unit)
-            if (success) {
-                showToast("导入成功")
+            if (result.success) {
+                if (result.installedDirect) {
+                    showToast("导入成功，已放入 rime 目录")
+                } else {
+                    showToast("导入成功，请到「本地方案」安装")
+                }
             } else {
                 showToast("导入失败")
             }
