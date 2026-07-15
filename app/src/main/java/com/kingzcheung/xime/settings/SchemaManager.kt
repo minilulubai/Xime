@@ -143,7 +143,7 @@ object SchemaManager {
                             if (entry.isDirectory || isAppleDouble(originalName)) return@forEach
                             val name = originalName.removePrefix(baseDir)
                             if (isProtectedImportName(name)) return@forEach
-                            val hash = streamSha256(zip.getInputStream(entry))
+                            val hash = zip.getInputStream(entry).use { streamSha256(it) }
                             result[name] = hash
                         }
                     }
@@ -453,10 +453,10 @@ object SchemaManager {
 
     fun streamSha256(input: InputStream): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        DigestInputStream(input, digest).use { dis ->
-            val buffer = ByteArray(8192)
-            while (dis.read(buffer) != -1) { }
-        }
+        val dis = DigestInputStream(input, digest)
+        val buffer = ByteArray(8192)
+        while (dis.read(buffer) != -1) { }
+        // 不关闭 dis——调用方负责管理流的生命周期
         return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
@@ -683,9 +683,10 @@ object SchemaManager {
         } else {
             // 降级到传统逻辑（无清单的旧方案）
             val rimeDir = getRimeDir(context)
+            // 先读 dictName 再删 schema.yaml，否则 getReferencedDictName 永远返回 null
+            val dictName = getReferencedDictName(context, schemaId) ?: schemaId
             val schemaFile = File(rimeDir, "$schemaId.schema.yaml")
             if (schemaFile.exists()) schemaFile.delete()
-            val dictName = getReferencedDictName(context, schemaId) ?: schemaId
             val dictFile = File(rimeDir, "$dictName.dict.yaml")
             if (dictFile.exists()) dictFile.delete()
             Log.i(TAG, "Legacy uninstall for $schemaId (dict=$dictName)")
@@ -699,35 +700,82 @@ object SchemaManager {
         return true
     }
 
-    suspend fun importSchemaFile(context: Context, uri: Uri): Boolean {
-        return withContext(Dispatchers.IO) {
+    data class ImportResult(val success: Boolean, val installedDirect: Boolean = false)
+
+    /** 判断文件名是否为压缩包。 */
+    fun isArchive(name: String): Boolean =
+        name.endsWith(".zip", ignoreCase = true) ||
+        name.endsWith(".tar.gz", ignoreCase = true) ||
+        name.endsWith(".tgz", ignoreCase = true)
+
+    /**
+     * 统一保存导入的文件：
+     * - 压缩包（zip/tar.gz/tgz）→ market/{importId}/，等待用户手动安装
+     * - 非压缩包（yaml/txt/bin 等）→ 直接放入 rime/
+     * 所有导入路径（文件选择器、无线导入、URL 下载等）最终都汇聚于此。
+     */
+    suspend fun saveImportedFile(
+        context: Context,
+        displayName: String,
+        inputStream: java.io.InputStream,
+        autoEnable: Boolean = true,
+    ): ImportResult = withContext(Dispatchers.IO) {
+        if (isArchive(displayName)) {
+            // 压缩包：保存到 market/ 等待用户手动安装
             val importId = generateImportId()
             val pkgDir = getMarketDir(context, importId)
             try {
-                val displayName = getFileName(context, uri) ?: run {
-                    pkgDir.deleteRecursively(); return@withContext false
-                }
                 pkgDir.mkdirs()
                 val archiveFile = File(pkgDir, displayName)
-
-                val inputStream = when (uri.scheme) {
-                    "file" -> java.io.FileInputStream(uri.path!!)
-                    else -> context.contentResolver.openInputStream(uri)
-                }
-                inputStream?.use { input ->
+                inputStream.use { input ->
                     archiveFile.outputStream().use { output -> input.copyTo(output) }
-                } ?: run {
-                    pkgDir.deleteRecursively()
-                    return@withContext false
                 }
-
                 Log.i(TAG, "Imported $displayName -> $importId (not installed yet)")
-                true
+                ImportResult(true)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to import schema file", e)
+                Log.e(TAG, "Failed to import archive $displayName", e)
                 try { if (pkgDir.exists()) pkgDir.deleteRecursively() } catch (_: Exception) {}
-                false
+                ImportResult(false)
             }
+        } else {
+            // 非压缩包：直接放入 rime/ 目录，不经过 market
+            val rimeDir = getRimeDir(context)
+            try {
+                rimeDir.mkdirs()
+                val target = File(rimeDir, displayName)
+                inputStream.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                // 如果是 .schema.yaml 文件，自动启用
+                if (autoEnable && displayName.endsWith(".schema.yaml")) {
+                    val schemaId = displayName.removeSuffix(".schema.yaml")
+                    val enabled = getEnabledSchemas(context).toMutableList()
+                    if (schemaId !in enabled) {
+                        enabled.add(schemaId)
+                        setEnabledSchemas(context, enabled)
+                    }
+                }
+                Log.i(TAG, "Imported $displayName -> rime/ (direct)")
+                ImportResult(true, installedDirect = true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to import $displayName directly", e)
+                ImportResult(false)
+            }
+        }
+    }
+
+    suspend fun importSchemaFile(context: Context, uri: Uri): ImportResult {
+        return withContext(Dispatchers.IO) {
+            val displayName = getFileName(context, uri) ?: return@withContext ImportResult(false)
+
+            Log.d(TAG, "importSchemaFile: displayName=$displayName, isArchive=${isArchive(displayName)}")
+
+            val inputStream = when (uri.scheme) {
+                "file" -> java.io.FileInputStream(uri.path!!)
+                else -> context.contentResolver.openInputStream(uri)
+            } ?: return@withContext ImportResult(false)
+
+            saveImportedFile(context, displayName, inputStream)
         }
     }
 
@@ -954,9 +1002,8 @@ object SchemaManager {
      *                       为空/空白时保持原有行为（不校验）。
      */
     /**
-     * 从 URL 下载压缩包到 market 目录（保留压缩包），然后解压到 rime 目录。
-     * @param archiveName 压缩包在 market 目录中保存的文件名，如 "my_scheme.zip"。
-     *                    为空时从 URL 末段自动推断。
+     * 从 URL 下载文件（不限格式），通过 [saveImportedFile] 统一存入 rime/ 或 market/。
+     * @param archiveName 文件名，为空时从 URL 末段自动推断。
      */
     suspend fun importFromUrl(
         context: Context,
@@ -966,65 +1013,55 @@ object SchemaManager {
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val isZip = url.endsWith(".zip", ignoreCase = true)
-            val isTarGz = url.endsWith(".tar.gz", ignoreCase = true) || url.endsWith(".tgz", ignoreCase = true)
-            if (!isZip && !isTarGz) {
-                Log.e(TAG, "Unsupported format: $url")
-                return@withContext false
-            }
+            val fileName = archiveName ?: url.substringAfterLast("/").takeIf { it.isNotBlank() }
+                ?: "download"
+            val tmpFile = File.createTempFile("import_", ".tmp", context.cacheDir)
 
-            val ext = when {
-                isZip -> ".zip"
-                url.endsWith(".tgz", ignoreCase = true) -> ".tgz"
-                else -> ".tar.gz"
-            }
-            val importId = generateImportId()
-            val pkgDir = getMarketDir(context, importId)
-            pkgDir.mkdirs()
-            val archiveFile = File(pkgDir, archiveName ?: (url.substringAfterLast("/").takeIf { it.isNotBlank() } ?: "download$ext"))
-
-            val client = OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(120, TimeUnit.SECONDS)
-                .followRedirects(true)
-                .build()
-            client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Download failed: ${response.code} $url")
-                    pkgDir.deleteRecursively()
-                    return@withContext false
-                }
-                val body = response.body ?: return@withContext false
-
-                val totalBytes = body.contentLength()
-                var downloadedBytes = 0L
-                val md = MessageDigest.getInstance("SHA-256")
-                body.byteStream().use { input ->
-                    FileOutputStream(archiveFile).use { output ->
-                        val buf = ByteArray(8192)
-                        var n = input.read(buf)
-                        while (n >= 0) {
-                            output.write(buf, 0, n)
-                            md.update(buf, 0, n)
-                            downloadedBytes += n
-                            if (totalBytes > 0) {
-                                onProgress(downloadedBytes, totalBytes)
-                            }
-                            n = input.read(buf)
-                        }
-                    }
-                }
-                if (!expectedSha256.isNullOrBlank()) {
-                    val actual = md.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-                    if (!actual.equals(expectedSha256.trim(), ignoreCase = true)) {
-                        Log.e(TAG, "sha256 mismatch for $url: expected=${expectedSha256.trim()} actual=$actual")
-                        pkgDir.deleteRecursively()
+            try {
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(30, TimeUnit.SECONDS)
+                    .readTimeout(120, TimeUnit.SECONDS)
+                    .followRedirects(true)
+                    .build()
+                val sha256Ok = client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        Log.e(TAG, "Download failed: ${response.code} $url")
                         return@withContext false
                     }
+                    val body = response.body ?: return@withContext false
+                    val totalBytes = body.contentLength()
+                    var downloadedBytes = 0L
+                    val md = MessageDigest.getInstance("SHA-256")
+                    body.byteStream().use { input ->
+                        FileOutputStream(tmpFile).use { output ->
+                            val buf = ByteArray(8192)
+                            var n = input.read(buf)
+                            while (n >= 0) {
+                                output.write(buf, 0, n)
+                                md.update(buf, 0, n)
+                                downloadedBytes += n
+                                if (totalBytes > 0) onProgress(downloadedBytes, totalBytes)
+                                n = input.read(buf)
+                            }
+                        }
+                    }
+                    if (!expectedSha256.isNullOrBlank()) {
+                        val actual = md.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                        if (!actual.equals(expectedSha256.trim(), ignoreCase = true)) {
+                            Log.e(TAG, "sha256 mismatch for $url")
+                            return@withContext false
+                        }
+                    }
+                    true
                 }
+                if (!sha256Ok) return@withContext false
 
-                Log.i(TAG, "Downloaded $url -> $importId (not installed yet)")
-                true
+                // 通过统一函数保存
+                val result = saveImportedFile(context, fileName, tmpFile.inputStream())
+                Log.i(TAG, "Imported from url $url -> ${if (result.installedDirect) "rime/" else "market/"} ($fileName)")
+                result.success
+            } finally {
+                tmpFile.delete()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to import from URL: $url", e)

@@ -137,29 +137,18 @@ class WirelessImportHelper(private val context: Context) {
                     name.endsWith(".tar.gz", ignoreCase = true) ||
                     name.endsWith(".tgz", ignoreCase = true) ||
                     name.endsWith(".yaml") || name.endsWith(".schema.yaml") || name.endsWith(".dict.yaml") -> {
-                        // 保存到 market/{importId}/，不直接解压到 rime/
-                        val importId = SchemaManager.generateImportId()
-                        val pkgDir = if (name.endsWith(".yaml") || name.endsWith(".schema.yaml") || name.endsWith(".dict.yaml"))
-                            SchemaManager.getMarketDir(context, importId)
-                        else
-                            SchemaManager.getMarketDir(context, importId)
-                        pkgDir.mkdirs()
-                        val targetFile = File(pkgDir, name)
-
+                        // 先读到内存再调用统一 saveImportedFile（因 raf 需 seek 回内容起始）
                         raf.seek(contentStart)
-                        targetFile.outputStream().use { out ->
-                            val buf = ByteArray(8192)
-                            var remaining = contentLen
-                            while (remaining > 0) {
-                                val toRead = minOf(buf.size.toLong(), remaining).toInt()
-                                raf.readFully(buf, 0, toRead)
-                                out.write(buf, 0, toRead)
-                                remaining -= toRead
-                            }
-                        }
-
-                        saved = true
-                        _uploadResults.trySend(UploadResult(fileName = name, success = true))
+                        val buf = ByteArray(contentLen.toInt())
+                        raf.readFully(buf)
+                        val result = SchemaManager.saveImportedFile(
+                            context, name, buf.inputStream(), autoEnable = false
+                        )
+                        saved = result.success
+                        _uploadResults.trySend(
+                            if (result.success) UploadResult(fileName = name, success = true)
+                            else UploadResult(fileName = name, success = false, error = "保存失败")
+                        )
                     }
                     else -> {
                         _uploadResults.trySend(UploadResult(fileName = name, success = false, error = "不支持的文件类型"))
@@ -296,14 +285,14 @@ button:disabled{background:#c7c7cc;cursor:default}
 <body>
 <div class=card>
 <h1>导入输入方案</h1>
-<p>将 .schema.yaml / .dict.yaml 拖拽到下方，或点击选择</p>
+<p>将方案压缩包或者 xime.custom.yaml 拖拽到下方，或点击选择</p>
 <div class=drop-zone id=dz onclick="document.getElementById('fi').click()">
 <div class=drop-zone-icon>&#128196;</div>
 <div class=drop-zone-text>拖拽文件到此处</div>
-<div class=drop-zone-hint>支持 .schema.yaml / .dict.yaml / .zip / .tar.gz</div>
+<div class=drop-zone-hint>支持 xime.custom.yaml / .zip / .tar.gz</div>
 <div style='color:#8e8e93;font-size:12px;margin-top:12px;padding:10px;background:#f5f5f7;border-radius:8px;line-height:1.5'>💡 多文件或复杂目录结构，请打包为 .zip 或 .tar.gz 上传</div>
 </div>
-<input type=file id=fi accept='.yaml,.zip,.tar.gz,.tgz' multiple style='display:none'>
+<input type=file id=fi accept='.yaml,.zip,.tar.gz,.tgz,.gram' multiple style='display:none'>
 <div id=fl></div>
 <button id=ub disabled onclick=up()>上传</button>
 <div id=sm></div>
