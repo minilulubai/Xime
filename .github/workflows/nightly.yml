@@ -69,7 +69,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APKs
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          DATE=$(date +'%Y%m%d')
+          COMMIT=$(git rev-parse --short HEAD)
+          ./gradlew assembleDebug \
+            -PnightlyVersionCode=$DATE \
+            -PnightlyVersionName="2.5.0-nightly-$DATE-$COMMIT" \
+            --no-daemon
 
       - name: Get build info
         id: info
