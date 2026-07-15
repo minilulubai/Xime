@@ -308,8 +308,8 @@ android {
         applicationId = "com.kingzcheung.xime"
         minSdk = 28
         targetSdk = 35
-        versionCode = project.findProperty("nightlyVersionCode")?.toString()?.toIntOrNull() ?: 55
-        versionName = project.findProperty("nightlyVersionName")?.toString() ?: "2.5.0-beta12"
+        versionCode = project.findProperty("nightlyVersionCode")?.toString()?.toIntOrNull() ?: 56
+        versionName = project.findProperty("nightlyVersionName")?.toString() ?: "2.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -394,7 +394,7 @@ android {
         checkDependencies = true
     }
     
-    // 分架构打�?
+    // 分架构打包
     splits {
         abi {
             isEnable = true
