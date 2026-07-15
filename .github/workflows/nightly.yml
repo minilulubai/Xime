@@ -9,7 +9,32 @@ permissions:
   contents: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for new commits since last nightly
+        id: check
+        run: |
+          LAST_COMMIT=$(gh release view nightly --json targetCommitish --jq '.targetCommitish' 2>/dev/null || echo "")
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+
+          if [ -n "$LAST_COMMIT" ] && [ "$LAST_COMMIT" = "$CURRENT_COMMIT" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   nightly:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -68,14 +93,26 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APKs
+      - name: Build Nightly APKs (Unsigned)
         run: |
           DATE=$(date +'%Y%m%d')
           COMMIT=$(git rev-parse --short HEAD)
-          ./gradlew assembleDebug \
+          ./gradlew assembleRelease \
             -PnightlyVersionCode=$DATE \
             -PnightlyVersionName="2.5.0-nightly-$DATE-$COMMIT" \
             --no-daemon
+
+      - name: Sign Main App APKs
+        uses: r0adkll/sign-android-release@v1
+        id: sign_main_app
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Get build info
         id: info
@@ -93,9 +130,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          APKS=$(find app/build/outputs/apk/debug -name "*.apk" -type f | tr '\n' ' ')
-          PLUGIN_APKS=$(find plugins -path "*/build/outputs/apk/debug/*.apk" -type f 2>/dev/null | tr '\n' ' ')
-          ALL_APKS="$APKS $PLUGIN_APKS"
+          APKS=$(find app/build/outputs/apk/release -name "*-signed.apk" -type f | sort | tr '\n' ' ')
+          PLUGIN_APKS=$(find plugins -path "*/build/outputs/apk/release/*-signed.apk" -type f 2>/dev/null | sort | tr '\n' ' ')
 
           if [ -z "$APKS" ]; then
             echo "::error::No main APKs found!"
@@ -112,4 +148,4 @@ jobs:
 
             ⚠️ 自动每日构建，非稳定版本。" \
             --prerelease \
-            $ALL_APKS
+            $APKS $PLUGIN_APKS
