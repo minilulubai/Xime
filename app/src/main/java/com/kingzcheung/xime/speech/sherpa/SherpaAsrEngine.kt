@@ -165,9 +165,11 @@ class SherpaAsrEngine(private val context: Context) {
         
         try {
             val config = createConfig(modelDir, modelInfo)
+            val t0 = System.nanoTime()
             recognizer = OnlineRecognizer(config = config)
-            FileLogger.i(TAG, "Local ASR model initialized successfully: ${modelInfo.name}")
-            Log.d(TAG, "Recognizer initialized from ${modelDir.absolutePath}")
+            val tMs = (System.nanoTime() - t0) / 1_000_000
+            FileLogger.i(TAG, "Local ASR model initialized successfully: ${modelInfo.name} (${tMs}ms)")
+            Log.d(TAG, "Recognizer initialized from ${modelDir.absolutePath} in ${tMs}ms")
             ModelRuntime.markLoaded("asr")
             return true
         } catch (e: Exception) {
