@@ -74,6 +74,15 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativeInitiali
         return JNI_FALSE;
     }
 
+    status = api->DisableCpuMemArena(session_options);
+    if (status) {
+        LOGE("Failed to disable CPU mem arena: %s", api->GetErrorMessage(status));
+        api->ReleaseStatus(status);
+        api->ReleaseSessionOptions(session_options);
+        env->ReleaseStringUTFChars(model_path, modelPathStr);
+        return JNI_FALSE;
+    }
+
     status = api->CreateSession(ort_env, modelPathStr, session_options, &g_punc_session);
     if (status) {
         LOGE("Failed to create session: %s", api->GetErrorMessage(status));

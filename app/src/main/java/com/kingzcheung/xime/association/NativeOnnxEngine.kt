@@ -115,10 +115,16 @@ object NativeOnnxEngine {
         return nativeIsInitialized()
     }
 
+    fun releaseSharedEnv() {
+        if (!nativeLoaded) return
+        nativeReleaseSharedEnv()
+    }
+
     private external fun nativeInitVocab(keys: Array<String>, values: IntArray)
     private external fun nativeEncode(text: String): LongArray?
     private external fun nativeInitialize(modelPath: String): Boolean
     private external fun nativePredict(inputIds: LongArray, topK: Int): Array<String>?
     private external fun nativeRelease()
     private external fun nativeIsInitialized(): Boolean
+    private external fun nativeReleaseSharedEnv()
 }

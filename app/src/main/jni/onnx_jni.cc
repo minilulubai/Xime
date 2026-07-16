@@ -160,6 +160,15 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeInitialize(
         return JNI_FALSE;
     }
 
+    status = api->DisableCpuMemArena(session_options);
+    if (status) {
+        LOGE("Failed to disable CPU mem arena: %s", api->GetErrorMessage(status));
+        api->ReleaseStatus(status);
+        api->ReleaseSessionOptions(session_options);
+        env->ReleaseStringUTFChars(model_path, modelPathStr);
+        return JNI_FALSE;
+    }
+
     status = api->CreateSession(ort_env, modelPathStr, session_options, &g_session);
     api->ReleaseSessionOptions(session_options);
     env->ReleaseStringUTFChars(model_path, modelPathStr);
@@ -351,4 +360,11 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeIsInitialized(
     JNIEnv* env, jobject thiz) {
     std::lock_guard<std::mutex> lock(g_onnx_mutex);
     return g_session ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeReleaseSharedEnv(
+    JNIEnv* env, jobject thiz) {
+    OnnxReleaseSharedEnv();
 }

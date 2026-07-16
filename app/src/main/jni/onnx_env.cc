@@ -32,3 +32,11 @@ OrtEnv* OnnxGetSharedEnv() {
     });
     return g_shared_env;
 }
+
+void OnnxReleaseSharedEnv() {
+    const OrtApi* api = OnnxGetApi();
+    if (api && g_shared_env) {
+        api->ReleaseEnv(g_shared_env);
+        g_shared_env = nullptr;
+    }
+}
