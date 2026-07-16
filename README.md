@@ -175,9 +175,9 @@ git submodule update --init --recursive
 ## 致谢
 
 - [Rime](https://rime.im/) - 中州韵输入法引擎
-- [Trime](https://github.com/osfans/trime) - 同文输入法，部分实现参考
-- [Linux Do](https://linux.do) - 中文开发社区
-
+- [Trime](https://github.com/osfans/trime) - 同文输入法，配置参考
+- [fcitx5-android](https://github.com/fcitx5-android/fcitx5-android) - 键盘布局参考
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) - 本地语音转文本模型支持
 ## Star History
 
 <a href="https://www.star-history.com/?repos=ximeiorg/Xime&type=date&legend=top-left">
