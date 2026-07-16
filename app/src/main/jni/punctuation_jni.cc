@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <onnxruntime_c_api.h>
+#include "onnx_env.h"
 #include <string>
 #include <vector>
 #include <cstring>
@@ -13,21 +14,9 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
-static OrtEnv* g_punc_env = nullptr;
 static OrtSession* g_punc_session = nullptr;
 static OrtAllocator* g_punc_allocator = nullptr;
 static std::mutex g_punc_mutex;
-
-static const OrtApi* GetPuncApi() {
-    static const OrtApi* api = nullptr;
-    if (!api) {
-        api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
-        if (!api) {
-            LOGE("Failed to get ONNX Runtime API");
-        }
-    }
-    return api;
-}
 
 extern "C"
 JNIEXPORT jboolean JNICALL
@@ -36,7 +25,7 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativeInitiali
 
     std::lock_guard<std::mutex> lock(g_punc_mutex);
 
-    const OrtApi* api = GetPuncApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api) {
         LOGE("ONNX Runtime API not available");
         return JNI_FALSE;
@@ -52,14 +41,11 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativeInitiali
 
     OrtStatus* status = nullptr;
 
-    if (!g_punc_env) {
-        status = api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "punctuation", &g_punc_env);
-        if (status) {
-            LOGE("Failed to create OrtEnv: %s", api->GetErrorMessage(status));
-            api->ReleaseStatus(status);
-            env->ReleaseStringUTFChars(model_path, modelPathStr);
-            return JNI_FALSE;
-        }
+    OrtEnv* ort_env = OnnxGetSharedEnv();
+    if (!ort_env) {
+        LOGE("Failed to get shared ONNX Runtime environment");
+        env->ReleaseStringUTFChars(model_path, modelPathStr);
+        return JNI_FALSE;
     }
 
     status = api->GetAllocatorWithDefaultOptions(&g_punc_allocator);
@@ -88,7 +74,7 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativeInitiali
         return JNI_FALSE;
     }
 
-    status = api->CreateSession(g_punc_env, modelPathStr, session_options, &g_punc_session);
+    status = api->CreateSession(ort_env, modelPathStr, session_options, &g_punc_session);
     if (status) {
         LOGE("Failed to create session: %s", api->GetErrorMessage(status));
         api->ReleaseStatus(status);
@@ -111,7 +97,7 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativePredict(
 
     std::lock_guard<std::mutex> lock(g_punc_mutex);
 
-    const OrtApi* api = GetPuncApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api || !g_punc_session) {
         LOGE("Punctuation ONNX Runtime not initialized");
         return env->NewStringUTF("");
@@ -124,7 +110,6 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativePredict(
 
     jint* input_data = env->GetIntArrayElements(input_ids, nullptr);
 
-    // Debug: print input IDs
     LOGD("Punctuation input IDs (%d tokens):", input_len);
     for (jsize i = 0; i < input_len && i < 20; i++) {
         LOGD("  [%d]: %d", i, input_data[i]);
@@ -168,8 +153,7 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativePredict(
 
     const char* input_names[] = {"input_ids", "attention_mask"};
     const char* output_names[] = {"logits"};
-    
-    // Create attention mask (all ones)
+
     std::vector<int64_t> attention_mask(input_len, 1);
     OrtValue* attention_mask_tensor = nullptr;
     status = api->CreateTensorWithDataAsOrtValue(
@@ -181,9 +165,9 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativePredict(
         ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64,
         &attention_mask_tensor
     );
-    
+
     api->ReleaseMemoryInfo(memory_info);
-    
+
     if (status) {
         LOGE("Failed to create attention_mask tensor: %s", api->GetErrorMessage(status));
         api->ReleaseStatus(status);
@@ -252,15 +236,13 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativePredict(
     int64_t seq_len = output_dims[1];
     int64_t num_labels = output_dims[2];
 
-    // Debug: print all logits for all positions
     LOGD("Punctuation output shape: batch=%ld, seq_len=%ld, num_labels=%ld", 
          (long)output_dims[0], (long)seq_len, (long)num_labels);
 
-    // Build result string with all predicted labels
     std::string result;
     for (int64_t pos = 0; pos < seq_len; pos++) {
         float* pos_logits = output_data + pos * num_labels;
-        
+
         int best_label = 0;
         float best_score = pos_logits[0];
         for (int64_t i = 1; i < num_labels; i++) {
@@ -269,12 +251,10 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativePredict(
                 best_label = static_cast<int>(i);
             }
         }
-        
-        // Append label for this position
+
         if (pos > 0) result += ",";
         result += std::to_string(best_label);
-        
-        // Debug first and last few positions
+
         if (pos < 3 || pos >= seq_len - 3) {
             LOGD("Position %ld: label=%d, score=%f", (long)pos, best_label, best_score);
         }
@@ -294,18 +274,12 @@ Java_com_kingzcheung_xime_speech_punctuation_PunctuationInference_nativeRelease(
 
     std::lock_guard<std::mutex> lock(g_punc_mutex);
 
-    const OrtApi* api = GetPuncApi();
+    const OrtApi* api = OnnxGetApi();
 
     if (g_punc_session) {
         api->ReleaseSession(g_punc_session);
         g_punc_session = nullptr;
         LOGD("Punctuation session released");
-    }
-
-    if (g_punc_env) {
-        api->ReleaseEnv(g_punc_env);
-        g_punc_env = nullptr;
-        LOGD("Punctuation env released");
     }
 }
 

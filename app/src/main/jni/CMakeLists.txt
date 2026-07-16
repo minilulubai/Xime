@@ -143,6 +143,20 @@ set_target_properties(onnxruntime PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${ONNXRUNTIME_DIR}/include"
 )
 
+add_library(onnx_env SHARED
+    onnx_env.cc
+    onnx_env.h
+)
+
+target_include_directories(onnx_env PRIVATE
+    ${ONNXRUNTIME_DIR}/include
+)
+
+target_link_libraries(onnx_env
+    onnxruntime
+    log
+)
+
 add_library(onnx_jni SHARED
     onnx_jni.cc
 )
@@ -152,6 +166,7 @@ target_include_directories(onnx_jni PRIVATE
 )
 
 target_link_libraries(onnx_jni
+    onnx_env
     onnxruntime
     log
 )
@@ -168,6 +183,7 @@ target_include_directories(punctuation_jni PRIVATE
 )
 
 target_link_libraries(punctuation_jni
+    onnx_env
     onnxruntime
     log
 )
@@ -184,6 +200,7 @@ target_include_directories(handwriting_jni PRIVATE
 )
 
 target_link_libraries(handwriting_jni
+    onnx_env
     onnxruntime
     log
 )
