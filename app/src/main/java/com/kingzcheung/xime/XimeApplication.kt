@@ -13,6 +13,7 @@ import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.settings.KeysConfigHelper
+import com.kingzcheung.xime.ui.keyboard.AppFonts
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,7 @@ class XimeApplication : Application(), ImageLoaderFactory {
         super.onCreate()
 
         FileLogger.init(this)
+        AppFonts.initialize(this)
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {

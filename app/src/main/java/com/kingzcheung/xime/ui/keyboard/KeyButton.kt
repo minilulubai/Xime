@@ -40,10 +40,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -423,8 +421,7 @@ fun SwipeableKeyButton(
     }
     val keyCornerRadius = LocalKeyCornerRadius.current
     val keyClipShape = remember(keyCornerRadius) { RoundedCornerShape(keyCornerRadius) }
-    val context = LocalContext.current
-    val chaiPuaFontFamily = remember { FontFamily(Font("ChaiPUA-0.2.7-snow.ttf", context.assets)) }
+    val chaiPuaFontFamily = AppFonts.chaiPuaFontFamily
 
     Box(
         modifier = modifier
