@@ -3,6 +3,7 @@ package com.kingzcheung.xime.model
 import android.content.Context
 import com.kingzcheung.xime.util.FileLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -19,7 +20,8 @@ object ModelDownloader {
 
     private const val TAG = "ModelDownloader"
     private const val CONNECT_TIMEOUT = 30L
-    private const val READ_TIMEOUT = 120L
+    private const val READ_TIMEOUT = 300L
+    private const val MAX_RETRIES = 3
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
@@ -114,6 +116,48 @@ object ModelDownloader {
         FileLogger.i(TAG, "Downloaded ${targetFile.name}: $downloadedBytes bytes")
     }
 
+    private suspend fun downloadArchive(
+        url: String,
+        tmpFile: File,
+        onProgress: (ModelDownloadState) -> Unit
+    ) {
+        val request = Request.Builder().url(url).build()
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) {
+            throw IOException("HTTP ${response.code}")
+        }
+
+        val body = response.body ?: throw IOException("Response body is null")
+        val totalBytes = body.contentLength()
+        var downloadedBytes = 0L
+
+        tmpFile.parentFile?.mkdirs()
+        body.byteStream().use { input ->
+            FileOutputStream(tmpFile).use { output ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                    downloadedBytes += bytesRead
+                    if (totalBytes > 0) {
+                        val progress = downloadedBytes.toFloat() / totalBytes.toFloat()
+                        onProgress(ModelDownloadState.Downloading(progress, downloadedBytes, totalBytes))
+                    }
+                }
+            }
+        }
+
+        if (totalBytes > 0 && downloadedBytes != totalBytes) {
+            throw IOException("Download incomplete: $downloadedBytes/$totalBytes bytes")
+        }
+        if (downloadedBytes == 0L) {
+            throw IOException("Downloaded file is empty")
+        }
+
+        FileLogger.i(TAG, "Archive downloaded: $downloadedBytes bytes")
+    }
+
     private suspend fun downloadAndExtractArchive(
         context: Context,
         modelInfo: ModelInfo,
@@ -123,52 +167,27 @@ object ModelDownloader {
         val archiveUrl = modelInfo.archiveUrl ?: return
         val tmpFile = File(context.cacheDir, "${modelInfo.id}.tar.bz2")
 
-        try {
-            onProgress(ModelDownloadState.Downloading(0f, 0, -1))
+        for (attempt in 1..MAX_RETRIES) {
+            try {
+                if (attempt > 1) {
+                    tmpFile.delete()
+                    onProgress(ModelDownloadState.Downloading(0f, 0, -1))
+                }
 
-            val request = Request.Builder().url(archiveUrl).build()
-            val response = client.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                throw IOException("HTTP ${response.code}")
-            }
-
-            val body = response.body ?: throw IOException("Response body is null")
-            val totalBytes = body.contentLength()
-            var downloadedBytes = 0L
-
-            tmpFile.parentFile?.mkdirs()
-            body.byteStream().use { input ->
-                FileOutputStream(tmpFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        downloadedBytes += bytesRead
-                        if (totalBytes > 0) {
-                            val progress = (downloadedBytes.toFloat() / totalBytes.toFloat()) * 0.85f
-                            onProgress(ModelDownloadState.Downloading(progress, downloadedBytes, totalBytes))
-                        }
-                    }
+                downloadArchive(archiveUrl, tmpFile, onProgress)
+                extractTarBz2(tmpFile, targetDir)
+                tmpFile.delete()
+                return
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "Attempt $attempt/$MAX_RETRIES failed: ${e.message}")
+                tmpFile.delete()
+                if (attempt < MAX_RETRIES) {
+                    val delayMs = 1000L * (1L shl (attempt - 1))
+                    delay(delayMs)
+                } else {
+                    throw e
                 }
             }
-
-            if (totalBytes > 0 && downloadedBytes != totalBytes) {
-                throw IOException("Download incomplete: $downloadedBytes/$totalBytes bytes")
-            }
-
-            if (!tmpFile.exists() || tmpFile.length() == 0L) {
-                throw IOException("Archive file is missing or empty")
-            }
-
-            onProgress(ModelDownloadState.Downloading(0.85f, downloadedBytes, totalBytes))
-
-            extractTarBz2(tmpFile, targetDir)
-
-            tmpFile.delete()
-        } catch (e: Exception) {
-            tmpFile.delete()
-            throw e
         }
     }
 

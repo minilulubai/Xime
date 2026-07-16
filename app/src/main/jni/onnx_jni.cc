@@ -1,30 +1,107 @@
 #include <jni.h>
 #include <android/log.h>
 #include <onnxruntime_c_api.h>
+#include "onnx_env.h"
 #include <string>
 #include <vector>
 #include <cstring>
 #include <algorithm>
 #include <mutex>
+#include <unordered_map>
 #define LOG_TAG "OnnxJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
-static OrtEnv* g_env = nullptr;
 static OrtSession* g_session = nullptr;
 static OrtAllocator* g_allocator = nullptr;
 static std::mutex g_onnx_mutex;
 
-static const OrtApi* GetApi() {
-    static const OrtApi* api = nullptr;
-    if (!api) {
-        api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
-        if (!api) {
-            LOGE("Failed to get ONNX Runtime API");
+static std::unordered_map<std::string, int64_t> g_vocab;
+static std::vector<std::string> g_id2word;
+static int64_t g_bos_id = 1;
+static int64_t g_unk_id = 3;
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeInitVocab(
+    JNIEnv* env, jobject thiz, jobjectArray keys, jintArray values) {
+
+    std::lock_guard<std::mutex> lock(g_onnx_mutex);
+
+    jsize len = env->GetArrayLength(keys);
+    jint* val_arr = env->GetIntArrayElements(values, nullptr);
+
+    g_vocab.clear();
+    g_vocab.reserve(len);
+
+    int64_t max_id = 0;
+    for (jsize i = 0; i < len; i++) {
+        jstring jkey = static_cast<jstring>(env->GetObjectArrayElement(keys, i));
+        const char* key_str = env->GetStringUTFChars(jkey, nullptr);
+        int64_t id = val_arr[i];
+        g_vocab[key_str] = id;
+        if (id > max_id) max_id = id;
+        env->ReleaseStringUTFChars(jkey, key_str);
+        env->DeleteLocalRef(jkey);
+    }
+
+    g_id2word.assign(max_id + 1, "");
+    for (const auto& pair : g_vocab) {
+        int64_t id = pair.second;
+        if (id >= 0 && static_cast<size_t>(id) < g_id2word.size()) {
+            g_id2word[id] = pair.first;
         }
     }
-    return api;
+
+    g_bos_id = g_vocab.count("[BOS]") ? g_vocab["[BOS]"] : 1;
+    g_unk_id = g_vocab.count("[UNK]") ? g_vocab["[UNK]"] : 3;
+
+    LOGI("Vocab loaded: %zu tokens, max_id=%lld", g_vocab.size(), (long long)max_id);
+
+    env->ReleaseIntArrayElements(values, val_arr, JNI_ABORT);
+}
+
+extern "C"
+JNIEXPORT jlongArray JNICALL
+Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeEncode(
+    JNIEnv* env, jobject thiz, jstring text) {
+
+    std::lock_guard<std::mutex> lock(g_onnx_mutex);
+
+    const char* utf8_text = env->GetStringUTFChars(text, nullptr);
+    jsize utf8_len = env->GetStringUTFLength(text);
+
+    std::vector<int64_t> ids;
+    ids.push_back(g_bos_id);
+
+    const char* p = utf8_text;
+    const char* end = utf8_text + utf8_len;
+    while (p < end) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        int char_len;
+        if ((c & 0x80) == 0) char_len = 1;
+        else if ((c & 0xE0) == 0xC0) char_len = 2;
+        else if ((c & 0xF0) == 0xE0) char_len = 3;
+        else if ((c & 0xF8) == 0xF0) char_len = 4;
+        else {
+            ids.push_back(g_unk_id);
+            p++;
+            continue;
+        }
+        if (p + char_len > end) char_len = static_cast<int>(end - p);
+
+        std::string ch(p, char_len);
+        auto it = g_vocab.find(ch);
+        ids.push_back(it != g_vocab.end() ? it->second : g_unk_id);
+        p += char_len;
+    }
+
+    env->ReleaseStringUTFChars(text, utf8_text);
+
+    jlongArray result = env->NewLongArray(ids.size());
+    env->SetLongArrayRegion(result, 0, ids.size(), ids.data());
+    return result;
 }
 
 extern "C"
@@ -34,7 +111,7 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeInitialize(
 
     std::lock_guard<std::mutex> lock(g_onnx_mutex);
 
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api) {
         LOGE("ONNX Runtime API not available");
         return JNI_FALSE;
@@ -48,15 +125,14 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeInitialize(
     const char* modelPathStr = env->GetStringUTFChars(model_path, nullptr);
     LOGI("Initializing ONNX Runtime with model: %s", modelPathStr);
 
-    OrtStatus* status = nullptr;
-
-    status = api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "onnx_prediction", &g_env);
-    if (status) {
-        LOGE("Failed to create OrtEnv: %s", api->GetErrorMessage(status));
-        api->ReleaseStatus(status);
+    OrtEnv* ort_env = OnnxGetSharedEnv();
+    if (!ort_env) {
+        LOGE("Failed to get shared ONNX Runtime environment");
         env->ReleaseStringUTFChars(model_path, modelPathStr);
         return JNI_FALSE;
     }
+
+    OrtStatus* status = nullptr;
 
     status = api->GetAllocatorWithDefaultOptions(&g_allocator);
     if (status) {
@@ -84,17 +160,24 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeInitialize(
         return JNI_FALSE;
     }
 
-    status = api->CreateSession(g_env, modelPathStr, session_options, &g_session);
+    status = api->DisableCpuMemArena(session_options);
     if (status) {
-        LOGE("Failed to create session: %s", api->GetErrorMessage(status));
+        LOGE("Failed to disable CPU mem arena: %s", api->GetErrorMessage(status));
         api->ReleaseStatus(status);
         api->ReleaseSessionOptions(session_options);
         env->ReleaseStringUTFChars(model_path, modelPathStr);
         return JNI_FALSE;
     }
 
+    status = api->CreateSession(ort_env, modelPathStr, session_options, &g_session);
     api->ReleaseSessionOptions(session_options);
     env->ReleaseStringUTFChars(model_path, modelPathStr);
+
+    if (status) {
+        LOGE("Failed to create session: %s", api->GetErrorMessage(status));
+        api->ReleaseStatus(status);
+        return JNI_FALSE;
+    }
 
     LOGI("ONNX Runtime initialized successfully");
     return JNI_TRUE;
@@ -107,7 +190,7 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativePredict(
 
     std::lock_guard<std::mutex> lock(g_onnx_mutex);
 
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api || !g_session) {
         LOGE("ONNX Runtime not initialized");
         return nullptr;
@@ -220,23 +303,38 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativePredict(
     scores.resize(std::min(static_cast<size_t>(top_k), scores.size()));
 
     jclass string_class = env->FindClass("java/lang/String");
-    jobjectArray result = env->NewObjectArray(scores.size() * 2, string_class, nullptr);
 
+    size_t valid_count = 0;
     for (size_t i = 0; i < scores.size(); i++) {
-        char idx_str[32];
-        snprintf(idx_str, sizeof(idx_str), "%d", scores[i].first);
-        jstring j_idx = env->NewStringUTF(idx_str);
-        env->SetObjectArrayElement(result, i * 2, j_idx);
+        int id = scores[i].first;
+        if (id >= 0 && static_cast<size_t>(id) < g_id2word.size() && !g_id2word[id].empty()) {
+            valid_count++;
+        }
+    }
+
+    jobjectArray result = env->NewObjectArray(valid_count * 2, string_class, nullptr);
+
+    size_t out_idx = 0;
+    for (size_t i = 0; i < scores.size(); i++) {
+        int id = scores[i].first;
+        if (!(id >= 0 && static_cast<size_t>(id) < g_id2word.size() && !g_id2word[id].empty())) continue;
+
+        jstring j_word = env->NewStringUTF(g_id2word[id].c_str());
+        env->SetObjectArrayElement(result, out_idx * 2, j_word);
+        env->DeleteLocalRef(j_word);
 
         char score_str[32];
         snprintf(score_str, sizeof(score_str), "%f", scores[i].second);
         jstring j_score = env->NewStringUTF(score_str);
-        env->SetObjectArrayElement(result, i * 2 + 1, j_score);
+        env->SetObjectArrayElement(result, out_idx * 2 + 1, j_score);
+        env->DeleteLocalRef(j_score);
+
+        out_idx++;
     }
 
     api->ReleaseValue(output_tensor);
 
-    LOGD("Predicted %zu candidates", scores.size());
+    LOGD("Predicted %zu candidates", valid_count);
     return result;
 }
 
@@ -247,18 +345,12 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeRelease(
 
     std::lock_guard<std::mutex> lock(g_onnx_mutex);
 
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
 
     if (g_session) {
         api->ReleaseSession(g_session);
         g_session = nullptr;
         LOGD("Session released");
-    }
-
-    if (g_env) {
-        api->ReleaseEnv(g_env);
-        g_env = nullptr;
-        LOGD("Env released");
     }
 }
 
@@ -268,4 +360,11 @@ Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeIsInitialized(
     JNIEnv* env, jobject thiz) {
     std::lock_guard<std::mutex> lock(g_onnx_mutex);
     return g_session ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_kingzcheung_xime_association_NativeOnnxEngine_nativeReleaseSharedEnv(
+    JNIEnv* env, jobject thiz) {
+    OnnxReleaseSharedEnv();
 }

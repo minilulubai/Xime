@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <onnxruntime_c_api.h>
+#include "onnx_env.h"
 #include <string>
 #include <vector>
 #include <cstring>
@@ -13,7 +14,6 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
-static OrtEnv* g_hw_env = nullptr;
 static OrtSession* g_hw_session = nullptr;
 static OrtAllocator* g_hw_allocator = nullptr;
 static std::mutex g_hw_mutex;
@@ -25,19 +25,8 @@ static char g_hw_output_name[256] = {0};
 static constexpr int FIXED_LEN = 200;
 static constexpr int FEAT_DIM = 5;
 
-static const OrtApi* GetApi() {
-    static const OrtApi* api = nullptr;
-    if (!api) {
-        api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
-        if (!api) {
-            LOGE("Failed to get ONNX Runtime API");
-        }
-    }
-    return api;
-}
-
 static void QueryIONames() {
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api || !g_hw_session) return;
 
     OrtStatus* status = nullptr;
@@ -126,7 +115,7 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativeInitialize(
 
     std::lock_guard<std::mutex> lock(g_hw_mutex);
 
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api) {
         LOGE("ONNX Runtime API not available");
         return JNI_FALSE;
@@ -142,14 +131,11 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativeInitialize(
 
     OrtStatus* status = nullptr;
 
-    if (!g_hw_env) {
-        status = api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "handwriting", &g_hw_env);
-        if (status) {
-            LOGE("Failed to create OrtEnv: %s", api->GetErrorMessage(status));
-            api->ReleaseStatus(status);
-            env->ReleaseStringUTFChars(model_path, modelPathStr);
-            return JNI_FALSE;
-        }
+    OrtEnv* ort_env = OnnxGetSharedEnv();
+    if (!ort_env) {
+        LOGE("Failed to get shared ONNX Runtime environment");
+        env->ReleaseStringUTFChars(model_path, modelPathStr);
+        return JNI_FALSE;
     }
 
     status = api->GetAllocatorWithDefaultOptions(&g_hw_allocator);
@@ -178,7 +164,16 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativeInitialize(
         return JNI_FALSE;
     }
 
-    status = api->CreateSession(g_hw_env, modelPathStr, session_options, &g_hw_session);
+    status = api->DisableCpuMemArena(session_options);
+    if (status) {
+        LOGE("Failed to disable CPU mem arena: %s", api->GetErrorMessage(status));
+        api->ReleaseStatus(status);
+        api->ReleaseSessionOptions(session_options);
+        env->ReleaseStringUTFChars(model_path, modelPathStr);
+        return JNI_FALSE;
+    }
+
+    status = api->CreateSession(ort_env, modelPathStr, session_options, &g_hw_session);
     api->ReleaseSessionOptions(session_options);
     env->ReleaseStringUTFChars(model_path, modelPathStr);
 
@@ -208,7 +203,7 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
 
     std::lock_guard<std::mutex> lock(g_hw_mutex);
 
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
     if (!api || !g_hw_session) {
         LOGE("Handwriting ONNX Runtime not initialized");
         return nullptr;
@@ -216,14 +211,12 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
 
     if (top_k <= 0) top_k = 10;
 
-    // ── Get input data ──
     jsize stroke_len = env->GetArrayLength(stroke_data);
     jfloat* stroke_elems = env->GetFloatArrayElements(stroke_data, nullptr);
 
     jsize mask_len = env->GetArrayLength(mask_data);
     jbyte* mask_elems = env->GetByteArrayElements(mask_data, nullptr);
 
-    // ── Input shapes ──
     int64_t input_shape[3] = {1, FIXED_LEN, FEAT_DIM};
     int64_t mask_shape[2] = {1, FIXED_LEN};
 
@@ -237,7 +230,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         return nullptr;
     }
 
-    // ── Create input tensor (float32, shape [1, 200, 5]) ──
     OrtValue* input_tensor = nullptr;
     status = api->CreateTensorWithDataAsOrtValue(
         memory_info,
@@ -256,9 +248,7 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         return nullptr;
     }
 
-    // ── Create mask tensor (bool, shape [1, 200]) ──
     OrtValue* mask_tensor = nullptr;
-    // bool in ONNX is 1 byte per element, same as jbyte
     status = api->CreateTensorWithDataAsOrtValue(
         memory_info,
         mask_elems,
@@ -278,7 +268,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         return nullptr;
     }
 
-    // ── Run inference ──
     const char* input_names[] = {g_hw_input_name, g_hw_mask_name};
     const char* output_names[] = {g_hw_output_name};
     const OrtValue* input_tensors[] = {input_tensor, mask_tensor};
@@ -298,7 +287,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         return nullptr;
     }
 
-    // ── Get output shape ──
     OrtTensorTypeAndShapeInfo* output_info = nullptr;
     status = api->GetTensorTypeAndShape(output_tensor, &output_info);
     if (status) {
@@ -328,7 +316,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
 
     int64_t num_classes = output_dims[dims_count - 1];
 
-    // ── Get output data ──
     float* logits = nullptr;
     status = api->GetTensorMutableData(output_tensor, (void**)&logits);
     if (status) {
@@ -338,7 +325,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         return nullptr;
     }
 
-    // ── Softmax ──
     float max_logit = logits[0];
     for (int64_t i = 1; i < num_classes; i++) {
         if (logits[i] > max_logit) max_logit = logits[i];
@@ -354,7 +340,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         probs[i] /= sum_exp;
     }
 
-    // ── Top-K ──
     std::vector<std::pair<int, float>> scores;
     scores.reserve(num_classes);
     for (int64_t i = 0; i < num_classes; i++) {
@@ -366,7 +351,6 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
 
     int64_t k = std::min((int64_t)top_k, num_classes);
 
-    // ── Build result array ──
     jclass string_class = env->FindClass("java/lang/String");
     jobjectArray result = env->NewObjectArray(k * 2, string_class, nullptr);
 
@@ -375,11 +359,13 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativePredict(
         snprintf(idx_str, sizeof(idx_str), "%d", scores[i].first);
         jstring j_idx = env->NewStringUTF(idx_str);
         env->SetObjectArrayElement(result, i * 2, j_idx);
+        env->DeleteLocalRef(j_idx);
 
         char score_str[32];
         snprintf(score_str, sizeof(score_str), "%f", scores[i].second);
         jstring j_score = env->NewStringUTF(score_str);
         env->SetObjectArrayElement(result, i * 2 + 1, j_score);
+        env->DeleteLocalRef(j_score);
     }
 
     api->ReleaseValue(output_tensor);
@@ -395,18 +381,12 @@ Java_com_kingzcheung_xime_handwriting_HandwritingNativeEngine_nativeRelease(
 
     std::lock_guard<std::mutex> lock(g_hw_mutex);
 
-    const OrtApi* api = GetApi();
+    const OrtApi* api = OnnxGetApi();
 
     if (g_hw_session) {
         api->ReleaseSession(g_hw_session);
         g_hw_session = nullptr;
         LOGD("Handwriting session released");
-    }
-
-    if (g_hw_env) {
-        api->ReleaseEnv(g_hw_env);
-        g_hw_env = nullptr;
-        LOGD("Handwriting env released");
     }
 
     g_hw_input_name[0] = '\0';

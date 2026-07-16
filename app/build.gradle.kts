@@ -447,14 +447,11 @@ dependencies {
     // SavedState
     implementation(libs.androidx.savedstate)
     
-    // Coil (Image Loading with SVG support)
+    // Coil (Image Loading)
     implementation(libs.coil)
-    implementation(libs.coil.svg)
     
     // OkHttp for WebSocket and model download
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
-    
     // Apache Commons Compress for tar.bz2 extraction
     implementation("org.apache.commons:commons-compress:1.26.0")
     

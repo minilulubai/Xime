@@ -16,8 +16,6 @@ class OnnxPredictionIntegrationTest {
 
     private lateinit var context: Context
     private var hasModel = false
-    private var vocab: Map<String, Int> = emptyMap()
-    private var id2word: Map<Int, String> = emptyMap()
 
     @Before
     fun setup() {
@@ -33,13 +31,13 @@ class OnnxPredictionIntegrationTest {
                 vocabJson.has("vocab") -> vocabJson.getJSONObject("vocab")
                 else -> vocabJson
             }
-            vocab = vocabMap.keys().asSequence().associateWith { vocabMap.getInt(it) }
-            id2word = vocab.entries.associate { it.value to it.key }
+            val vocab = vocabMap.keys().asSequence().associateWith { vocabMap.getInt(it) }
             println("Vocabulary loaded: ${vocab.size} words")
             println("filesDir: ${context.filesDir.absolutePath}")
             println("model size: ${modelFile.length()} bytes")
 
             NativeOnnxEngine.initialize(context, modelFile.absolutePath)
+            NativeOnnxEngine.initVocab(vocab)
         } else {
             println("Model files not found in ${context.filesDir.absolutePath}")
         }
@@ -57,27 +55,14 @@ class OnnxPredictionIntegrationTest {
         if (!hasModel) return@runBlocking
 
         val inputText = "今天天气"
-        val inputIds = inputText.map { vocab[it.toString()] ?: 3 }
+        val candidates = NativeOnnxEngine.predict(inputText, 20)
+
         println("Input: '$inputText'")
-        println("Input tokens: $inputIds")
-        println("Input token lookup: ${inputIds.map { id -> id2word[id] ?: "UNK" }}")
-
-        val inputIdsLong = inputIds.map { it.toLong() }.toLongArray()
-        val scores = NativeOnnxEngine.predict(inputIdsLong, 20)
-
-        println("Native results (id -> score):")
-        scores.forEachIndexed { i, (id, score) ->
-            val word = id2word[id] ?: "UNK(id=$id)"
-            println("  Top ${i+1}: id=$id word='$word' score=$score")
+        candidates.forEachIndexed { i, candidate ->
+            println("  Top ${i+1}: word='${candidate.text}' score=${candidate.score}")
         }
 
-        println("\n--- Verification ---")
-        println("vocab['晴']=${vocab["晴"]}, vocab['预']=${vocab["预"]}, vocab['好']=${vocab["好"]}")
-        println("id 308 -> '${id2word[308]}'")
-        println("id 81 -> '${id2word[81]}'")
-        println("id 9 -> '${id2word[9]}'")
-
-        org.junit.Assert.assertTrue("Should have prediction results", scores.isNotEmpty())
+        org.junit.Assert.assertTrue("Should have prediction results", candidates.isNotEmpty())
     }
 
     @Test
@@ -85,16 +70,13 @@ class OnnxPredictionIntegrationTest {
         if (!hasModel) return@runBlocking
 
         val inputText = "今天"
-        val inputIds = inputText.map { vocab[it.toString()] ?: 3 }
-        val inputIdsLong = inputIds.map { it.toLong() }.toLongArray()
-        val scores = NativeOnnxEngine.predict(inputIdsLong, 20)
+        val candidates = NativeOnnxEngine.predict(inputText, 20)
 
         println("Input: '$inputText'")
-        scores.forEachIndexed { i, (id, score) ->
-            val word = id2word[id] ?: "UNK(id=$id)"
-            println("  Top ${i+1}: id=$id word='$word' score=$score")
+        candidates.forEachIndexed { i, candidate ->
+            println("  Top ${i+1}: word='${candidate.text}' score=${candidate.score}")
         }
 
-        org.junit.Assert.assertTrue("Should have prediction results", scores.isNotEmpty())
+        org.junit.Assert.assertTrue("Should have prediction results", candidates.isNotEmpty())
     }
 }

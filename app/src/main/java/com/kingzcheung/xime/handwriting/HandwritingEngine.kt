@@ -251,6 +251,7 @@ object HandwritingEngine {
     }
 
     fun release() {
+        if (!initialized) return
         HandwritingNativeEngine.release()
         initialized = false
         chars = emptyList()

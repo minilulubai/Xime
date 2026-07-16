@@ -69,7 +69,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -1647,10 +1646,7 @@ fun SwipeableKeyButtonLandscape(
     val currentOnSwipeStateChange by rememberUpdatedState(onSwipeStateChange)
     val scope = rememberCoroutineScope()
     val view = LocalView.current
-    val context = LocalContext.current
-    val chaiPuaFontFamily = remember {
-        FontFamily(Font("ChaiPUA-0.2.7-snow.ttf", context.assets))
-    }
+    val chaiPuaFontFamily = AppFonts.chaiPuaFontFamily
 
     val density = LocalDensity.current
     val swipeUpThreshold = with(density) { (-15).dp.toPx() }

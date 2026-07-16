@@ -1,34 +1,32 @@
 package com.kingzcheung.xime.association
 
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import com.kingzcheung.xime.util.FileLogger
 import java.io.File
-import java.util.zip.ZipFile
 
 object NativeOnnxEngine {
     private const val TAG = "NativeOnnxEngine"
     private var nativeLoaded = false
-    
+
     fun loadNativeLibrary(context: Context): Boolean {
-        val libsToLoad = listOf("libonnxruntime.so", "libonnx_jni.so")
-        
+        val libsToLoad = listOf("libonnxruntime.so", "libonnx_env.so", "libonnx_jni.so")
+
         for (libName in libsToLoad) {
             if (!loadSingleLibrary(context, libName)) {
                 FileLogger.e(TAG, "Failed to load $libName")
                 return false
             }
         }
-        
+
         nativeLoaded = true
         FileLogger.i(TAG, "All native libraries loaded successfully")
         return true
     }
-    
+
     private fun loadSingleLibrary(context: Context, libName: String): Boolean {
         val simpleName = libName.removePrefix("lib").removeSuffix(".so")
-        
+
         try {
             System.loadLibrary(simpleName)
             FileLogger.d(TAG, "Loaded $libName via System.loadLibrary")
@@ -40,7 +38,7 @@ object NativeOnnxEngine {
             }
             FileLogger.d(TAG, "System.loadLibrary failed for $libName, trying alternative methods...")
         }
-        
+
         val nativeLibDir = context.applicationInfo?.nativeLibraryDir
         if (nativeLibDir != null) {
             val libFile = File(nativeLibDir, libName)
@@ -60,10 +58,16 @@ object NativeOnnxEngine {
                 }
             }
         }
-        
+
         return false
     }
-    
+
+    fun initVocab(vocab: Map<String, Int>) {
+        val keys = vocab.keys.toTypedArray()
+        val values = vocab.values.toIntArray()
+        nativeInitVocab(keys, values)
+    }
+
     fun initialize(context: Context, modelPath: String): Boolean {
         try {
             nativeInitialize(modelPath)
@@ -72,12 +76,12 @@ object NativeOnnxEngine {
         } catch (e: UnsatisfiedLinkError) {
             FileLogger.d(TAG, "Native method not available, loading libraries...")
         }
-        
+
         if (!loadNativeLibrary(context)) {
             FileLogger.e(TAG, "Native libraries not loaded")
             return false
         }
-        
+
         return try {
             nativeInitialize(modelPath)
         } catch (e: UnsatisfiedLinkError) {
@@ -89,32 +93,38 @@ object NativeOnnxEngine {
             false
         }
     }
-    
-    fun predict(inputIds: LongArray, topK: Int): Array<Pair<Int, Float>> {
-        val result = nativePredict(inputIds, topK)
-        if (result == null) {
-            return emptyArray()
-        }
-        
-        val pairs = mutableListOf<Pair<Int, Float>>()
+
+    fun predict(inputText: String, topK: Int = 20): List<AssociationCandidate> {
+        val inputIds = nativeEncode(inputText) ?: return emptyList()
+        val result = nativePredict(inputIds, topK) ?: return emptyList()
+
+        val candidates = mutableListOf<AssociationCandidate>()
         for (i in result.indices step 2) {
-            val idx = result[i].toIntOrNull() ?: continue
+            val word = result[i]
             val score = result[i + 1].toFloatOrNull() ?: continue
-            pairs.add(Pair(idx, score))
+            candidates.add(AssociationCandidate(word, score))
         }
-        return pairs.toTypedArray()
+        return candidates
     }
-    
+
     fun release() {
         nativeRelease()
     }
-    
+
     fun isInitialized(): Boolean {
         return nativeIsInitialized()
     }
-    
+
+    fun releaseSharedEnv() {
+        if (!nativeLoaded) return
+        nativeReleaseSharedEnv()
+    }
+
+    private external fun nativeInitVocab(keys: Array<String>, values: IntArray)
+    private external fun nativeEncode(text: String): LongArray?
     private external fun nativeInitialize(modelPath: String): Boolean
     private external fun nativePredict(inputIds: LongArray, topK: Int): Array<String>?
     private external fun nativeRelease()
     private external fun nativeIsInitialized(): Boolean
+    private external fun nativeReleaseSharedEnv()
 }

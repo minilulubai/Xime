@@ -13,9 +13,7 @@ import java.io.File
 
 object OnnxAssociationEngine {
     private const val TAG = "OnnxAssociationEngine"
-    
-    private var vocab: Map<String, Int> = emptyMap()
-    private var id2word: Map<Int, String> = emptyMap()
+
     private var isInitialized = false
     private var warmupStarted = false
     private val warmupScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -35,9 +33,9 @@ object OnnxAssociationEngine {
 
         try {
             val modelDir = context.filesDir
-            
+
             modelDir.mkdirs()
-            
+
             val filesToCheck = listOf("vocab.json", "model_int8_dynamic.onnx")
             for (fileName in filesToCheck) {
                 val file = File(modelDir, fileName)
@@ -63,24 +61,25 @@ object OnnxAssociationEngine {
                     vocabJson
                 }
             }
-            vocab = vocabMap.keys().asSequence().associateWith { vocabMap.getInt(it) }
-            id2word = vocab.entries.associate { it.value to it.key }
+            val vocab = vocabMap.keys().asSequence().associateWith { vocabMap.getInt(it) }
             FileLogger.i(TAG, "Vocabulary loaded: ${vocab.size} words")
-
 
             val modelFile = File(modelDir, "model_int8_dynamic.onnx")
             FileLogger.d(TAG, "Using model: ${modelFile.name} (${modelFile.length()} bytes)")
 
             val success = NativeOnnxEngine.initialize(context, modelFile.absolutePath)
-            if (success) {
-                isInitialized = true
-                FileLogger.i(TAG, "ONNX Runtime initialized successfully")
-                ModelRuntime.markLoaded("predictive_text")
-                return true
-            } else {
+            if (!success) {
                 FileLogger.e(TAG, "Failed to initialize ONNX Runtime - NativeOnnxEngine.initialize returned false")
                 return false
             }
+
+            NativeOnnxEngine.initVocab(vocab)
+            FileLogger.d(TAG, "Vocabulary transferred to native layer")
+
+            isInitialized = true
+            FileLogger.i(TAG, "ONNX Runtime initialized successfully")
+            ModelRuntime.markLoaded("predictive_text")
+            return true
         } catch (e: Exception) {
             FileLogger.e(TAG, "Failed to initialize ONNX Runtime: ${e.message}", e)
             return false
@@ -94,48 +93,19 @@ object OnnxAssociationEngine {
         }
 
         try {
-            val inputIds = encodeText(inputText)
-            if (inputIds.isEmpty()) {
-                return@withContext emptyList()
-            }
-
-            val inputIdsLong = inputIds.map { it.toLong() }.toLongArray()
-            val scores = NativeOnnxEngine.predict(inputIdsLong, topK)
-
-            val candidates = scores.mapNotNull { (id, score) ->
-                id2word[id]?.let { word ->
-                    AssociationCandidate(word, score)
-                }
-            }
-
-            candidates
-
+            NativeOnnxEngine.predict(inputText, topK)
         } catch (e: Exception) {
             FileLogger.e(TAG, "Prediction failed: ${e.message}", e)
             emptyList()
         }
     }
 
-    private fun encodeText(text: String): List<Int> {
-        val ids = mutableListOf<Int>()
-        ids.add(vocab["[BOS]"] ?: 1)
-        var i = 0
-        while (i < text.length) {
-            val char = text[i].toString()
-            val id = vocab[char] ?: 3
-            ids.add(id)
-            i++
-        }
-        return ids
-    }
-
     fun startWarmup() {
         if (!isInitialized || warmupStarted) return
         warmupStarted = true
         warmupScope.launch {
-            val dummyIds = longArrayOf(1L, 9L)
             try {
-                NativeOnnxEngine.predict(dummyIds, 5)
+                NativeOnnxEngine.predict("，", 5)
             } catch (e: Exception) {
                 FileLogger.w(TAG, "Warmup prediction failed (non-fatal): ${e.message}")
             }

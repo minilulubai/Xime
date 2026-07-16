@@ -98,9 +98,7 @@ fun rememberSwipeBubbleDrawData(
     } else keyBackgroundColor).toArgb()
     val textColor = (if (swipeState.isDanger) Color.White else keyTextColor).toArgb()
 
-    val chaiTypeface = remember {
-        Typeface.createFromAsset(context.assets, "ChaiPUA-0.2.7-snow.ttf")
-    }
+    val chaiTypeface = AppFonts.chaiPuaTypeface
 
     val textPaint = remember {
         Paint().apply {

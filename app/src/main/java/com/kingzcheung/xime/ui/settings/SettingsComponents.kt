@@ -86,7 +86,7 @@ fun SettingsItem(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -143,7 +143,7 @@ fun SettingsToggleItem(
             modifier = Modifier
                 .size(40.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
+                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(

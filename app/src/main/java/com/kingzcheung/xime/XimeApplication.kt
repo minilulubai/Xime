@@ -2,6 +2,10 @@ package com.kingzcheung.xime
 
 import android.app.Application
 import android.util.Log
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.kingzcheung.xime.plugin.ExtensionManager
 import com.kingzcheung.xime.util.FileLogger
 import com.kingzcheung.xime.plugin.core.runtime.PluginManager
@@ -9,13 +13,30 @@ import com.kingzcheung.xime.rime.RimeConfigHelper
 import com.kingzcheung.xime.model.ModelRuntime
 import com.kingzcheung.xime.rime.RimeEngine
 import com.kingzcheung.xime.settings.KeysConfigHelper
+import com.kingzcheung.xime.ui.keyboard.AppFonts
 import com.kingzcheung.xime.settings.SettingsPreferences
 import com.kingzcheung.xime.ui.theme.KeyboardThemes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class XimeApplication : Application() {
+class XimeApplication : Application(), ImageLoaderFactory {
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizeBytes(16 * 1024 * 1024)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("coil_cache"))
+                    .maxSizeBytes(32L * 1024 * 1024)
+                    .build()
+            }
+            .build()
+    }
     
     companion object {
         private const val TAG = "XimeApplication"
@@ -28,6 +49,7 @@ class XimeApplication : Application() {
         super.onCreate()
 
         FileLogger.init(this)
+        AppFonts.initialize(this)
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {

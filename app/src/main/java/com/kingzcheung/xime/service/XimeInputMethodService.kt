@@ -943,12 +943,24 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                     onPageUp = { pageUp() },
                                     onCursorMove = { direction ->
                                         val ic = currentInputConnection
-                                        if (ic != null) {
-                                            val count = abs(direction)
-                                            val keyCode = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
-                                            for (i in 1..count) {
-                                                ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-                                                ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+                                        if (ic != null && direction != 0) {
+                                            var movedBySelection = false
+                                            try {
+                                                val req = android.view.inputmethod.ExtractedTextRequest()
+                                                val extracted = ic.getExtractedText(req, 0)
+                                                if (extracted != null && extracted.selectionStart >= 0) {
+                                                    val newPos = (extracted.selectionStart + direction)
+                                                        .coerceIn(0, extracted.text?.length ?: 0)
+                                                    ic.setSelection(newPos, newPos)
+                                                    movedBySelection = true
+                                                }
+                                            } catch (_: Exception) {}
+                                            if (!movedBySelection) {
+                                                val keyCode = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+                                                repeat(abs(direction)) {
+                                                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                                                    ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+                                                }
                                             }
                                         }
                                     },
@@ -1535,8 +1547,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         _viewModelStore.clear()
         feedbackManager.release()
         rimeEngine.destroy()
+        AssociationManager.release()
         voiceRecognitionHandler.release()
+        com.kingzcheung.xime.handwriting.HandwritingEngine.release()
         ExtensionManager.release()
+        com.kingzcheung.xime.association.NativeOnnxEngine.releaseSharedEnv()
         serviceScope.cancel()
         keyProcessingDispatcher.close()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
