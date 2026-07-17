@@ -309,7 +309,7 @@ android {
         minSdk = 28
         targetSdk = 35
         versionCode = project.findProperty("nightlyVersionCode")?.toString()?.toIntOrNull() ?: 56
-        versionName = project.findProperty("nightlyVersionName")?.toString() ?: "2.5.1"
+        versionName = project.findProperty("nightlyVersionName")?.toString() ?: "2.6.0-beta1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

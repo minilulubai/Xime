@@ -69,6 +69,10 @@ data class KeyboardUiState(
     val t9ResetSignal: Long = 0L,
     val t9RightCandidateSelectedCount: Long = 0L,
     val t9SelectedCandidatePinyin: String = "",
+    val showQuickSendForm: Boolean = false,
+    val quickSendFormFocused: Boolean = false,
+    val quickSendEditingItemId: Long? = null,
+    val quickSendEditingItemText: String = "",
 )
 
 class KeyboardViewModel(application: Application) : AndroidViewModel(application) {
@@ -488,6 +492,10 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     fun addQuickSendText(text: String) {
         clipboardManager.addQuickSendItem(text)
+    }
+
+    fun updateQuickSendItem(id: Long, text: String) {
+        clipboardManager.updateQuickSendItem(id, text)
     }
 
     fun removeQuickSendItem(id: Long) {

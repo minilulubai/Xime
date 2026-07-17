@@ -97,9 +97,11 @@ jobs:
         run: |
           DATE=$(date +'%Y%m%d')
           COMMIT=$(git rev-parse --short HEAD)
+          BASE_VERSION=$(grep -oP 'versionName.*\?:\s*"\K[\d.]+' app/build.gradle.kts)
+          echo "Base version: $BASE_VERSION"
           ./gradlew assembleRelease \
             -PnightlyVersionCode=$DATE \
-            -PnightlyVersionName="2.5.0-nightly-$DATE-$COMMIT" \
+            -PnightlyVersionName="${BASE_VERSION}-nightly-$DATE-$COMMIT" \
             --no-daemon
 
       - name: Sign Main App APKs

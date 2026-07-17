@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.xime.clipboard.ClipboardItem
 import com.kingzcheung.xime.viewmodel.KeyboardViewModel
@@ -71,7 +73,9 @@ fun ClipboardView(
     onBack: (() -> Unit)? = null,
     onClipboardTabChange: ((Int) -> Unit)? = null,
     bottomPaddingDp: Int = 0,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onQuickSendAddClick: (() -> Unit)? = null,
+    onQuickSendEditItem: ((Long, String) -> Unit)? = null,
 ) {
     val itemBgColor = MaterialTheme.colorScheme.surfaceContainerLow
     val textColor = MaterialTheme.colorScheme.onSurface
@@ -157,6 +161,26 @@ fun ClipboardView(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            if (selectedTab == 1 && onQuickSendAddClick != null) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkTheme) Color(0xFF374151) else Color(0xFFF3F4F6))
+                        .clickable(onClick = onQuickSendAddClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "添加快捷发送",
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         val pagerState = rememberPagerState(
@@ -200,7 +224,9 @@ fun ClipboardView(
                     subTextColor = subTextColor,
                     accentColor = accentColor,
                     viewModel = viewModel,
-                    onSelect = onSelectItem
+                    onSelect = onSelectItem,
+                    onQuickSendAddClick = onQuickSendAddClick,
+                    onQuickSendEditItem = onQuickSendEditItem,
                 )
             }
         }
