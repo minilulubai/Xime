@@ -17,18 +17,17 @@ use_preset_vocabulary: false
 ...
 """
 
-    private fun packName(schemaId: String): String = when {
-        schemaId == "pinyin_simp" || schemaId == "t9_pinyin" -> "user_simp_pinyin"
-        schemaId == "wubi86" -> "user_simp_wubi"
-        else -> "user_simp_pinyin"
+    private fun packName(rimeDir: File, schemaId: String): String {
+        val dictName = schemaDictionaryName(rimeDir, schemaId)
+        return "user_$dictName"
     }
 
-    private fun packFileName(schemaId: String) = "${packName(schemaId)}.dict.yaml"
+    private fun packHeader(rimeDir: File, schemaId: String) = DEFAULT_HEADER.format(packName(rimeDir, schemaId))
 
-    private fun packHeader(schemaId: String) = DEFAULT_HEADER.format(packName(schemaId))
-
-    fun getPackFile(context: Context, schemaId: String): File =
-        File(SchemaManager.getRimeDir(context), packFileName(schemaId))
+    fun getPackFile(context: Context, schemaId: String): File {
+        val rimeDir = SchemaManager.getRimeDir(context)
+        return File(rimeDir, "${packName(rimeDir, schemaId)}.dict.yaml")
+    }
 
     fun getCustomPhraseFile(context: Context, schemaId: String? = null): File {
         val rimeDir = SchemaManager.getRimeDir(context)
@@ -59,16 +58,7 @@ use_preset_vocabulary: false
         return CUSTOM_PHRASE_FILE.removeSuffix(".txt")
     }
 
-    fun ensureAllPackFilesExist(context: Context) {
-        for (sid in listOf("pinyin_simp", "t9_pinyin", "wubi86")) {
-            val file = getPackFile(context, sid)
-            if (!file.exists()) {
-                file.parentFile?.mkdirs()
-                file.writeText(packHeader(sid), Charsets.UTF_8)
-            }
-        }
-    }
-
+    
     fun ensureCustomPhraseFileExists(context: Context, schemaId: String? = null) {
         val file = getCustomPhraseFile(context, schemaId)
         if (!file.exists()) {
@@ -122,8 +112,19 @@ use_preset_vocabulary: false
     private suspend fun ensureSchemaPackInner(rimeDir: java.io.File, context: Context, schemaId: String) {
         val schemaFile = java.io.File(rimeDir, "${schemaId}.schema.yaml")
         if (!schemaFile.exists()) return
-        if (hasReverseLookupTranslator(schemaFile)) {
-            // reverse_lookup 方案不替换词典，只加 custom_phrase
+        // 确保个人词库空白文件存在，供 applyPackConfig / applyMergedDictConfig 引用
+        val packFile = getPackFile(context, schemaId)
+        if (!packFile.exists()) {
+            val legacy = legacyPackFile(rimeDir, schemaId)
+            if (legacy != null) {
+                legacy.renameTo(packFile)
+            } else {
+                packFile.parentFile?.mkdirs()
+                packFile.writeText(packHeader(rimeDir, schemaId), Charsets.UTF_8)
+            }
+        }
+        if (hasReverseLookupTranslator(schemaFile) && !hasTableTranslator(schemaFile)) {
+            // 纯反查方案（如反查拼音），无主翻译器，不需要个人词库
         } else if (hasSpellerAlgebra(schemaFile)) {
             applyPackConfig(rimeDir, schemaId)
         } else {
@@ -149,6 +150,11 @@ use_preset_vocabulary: false
     internal fun hasReverseLookupTranslator(schemaFile: java.io.File): Boolean {
         val text = schemaFile.readText(Charsets.UTF_8)
         return text.contains("reverse_lookup_translator")
+    }
+
+    internal fun hasTableTranslator(schemaFile: java.io.File): Boolean {
+        val text = schemaFile.readText(Charsets.UTF_8)
+        return text.contains("table_translator")
     }
 
     // 为方案添加 custom_phrase 翻译器（独立于主词典音节表）
@@ -197,54 +203,147 @@ use_preset_vocabulary: false
 
     // 方案有固定音节表：translator/packs via .custom.yaml
     internal fun applyPackConfig(rimeDir: java.io.File, schemaId: String) {
-        val pkName = packName(schemaId)
+        val pkName = packName(rimeDir, schemaId)
         val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
+        val entry = "  \"translator/packs\": [\"$pkName\"]\n"
         if (customFile.exists()) {
             val text = customFile.readText(Charsets.UTF_8)
-            if (text.contains(pkName)) return
+            if (text.contains("\"$pkName\"")) return
+            val existing = extractOwnPatchKey(text, "translator/packs")
+            if (existing != null) {
+                // 之前由本代码写入的旧名字 → 替换
+                val cleaned = removePatchKey(text, "translator/packs")
+                customFile.writeText(cleaned, Charsets.UTF_8)
+            } else if (text.contains("translator/packs")) {
+                // 用户手动配置的 translator/packs，不动
+                return
+            }
         }
-        insertUnderPatch(customFile, "  \"translator/packs\": [\"$pkName\"]\n")
+        insertUnderPatch(customFile, entry)
+    }
+
+    /** 从 schema 文件中读取 translator.dictionary 名称，没有则用 schemaId 兜底。 */
+    private fun schemaDictionaryName(rimeDir: File, schemaId: String): String {
+        val schemaFile = File(rimeDir, "${schemaId}.schema.yaml")
+        if (!schemaFile.exists()) return schemaId
+        val regex = Regex("""translator:.*?dictionary:\s*(\S+)""", setOf(RegexOption.DOT_MATCHES_ALL))
+        return regex.find(schemaFile.readText(Charsets.UTF_8))?.groupValues?.get(1) ?: schemaId
     }
 
     // 方案无固定音节表：import_tables 合并词典 + translator/dictionary via .custom.yaml
     internal fun applyMergedDictConfig(rimeDir: java.io.File, schemaId: String) {
-        val pkName = packName(schemaId)
+        val dictName = schemaDictionaryName(rimeDir, schemaId)
+        val pkName = packName(rimeDir, schemaId)
         val mergedId = "${schemaId}_merged"
         val dictFile = java.io.File(rimeDir, "${mergedId}.dict.yaml")
-        if (!dictFile.exists()) {
-            dictFile.writeText("""# Rime dict
+        dictFile.writeText("""# Rime dict
 ---
 name: $mergedId
 version: "1.0"
 sort: original
 import_tables:
-  - $schemaId
+  - $dictName
   - $pkName
 ...
 """, Charsets.UTF_8)
-        }
         val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
+        val entry = "  \"translator/dictionary\": $mergedId\n"
         if (customFile.exists()) {
             val text = customFile.readText(Charsets.UTF_8)
             if (text.contains(mergedId)) return
+            val existing = extractOwnPatchKey(text, "translator/dictionary")
+            if (existing != null) {
+                val cleaned = removePatchKey(text, "translator/dictionary")
+                customFile.writeText(cleaned, Charsets.UTF_8)
+            } else if (text.contains("translator/dictionary")) {
+                return
+            }
         }
-        insertUnderPatch(customFile, "  \"translator/dictionary\": $mergedId\n")
+        insertUnderPatch(customFile, entry)
+    }
+
+    /** 提取 patch 块中本代码之前写入的 key 的值（user_* 或旧版 user_simp_*），没有则返回 null。 */
+    private fun extractOwnPatchKey(text: String, key: String): String? {
+        val regex = Regex("""^[ \t]+"?$key"?\s*:\s*(.+)$""", RegexOption.MULTILINE)
+        return regex.find(text)?.let { m ->
+            val value = m.groupValues[1].trim().removeSurrounding("\"").removeSurrounding("[").removeSurrounding("]").trim()
+            value.takeIf { it.startsWith("user_simp_") || it.startsWith("user_") }
+        }
+    }
+    private fun removePatchKey(text: String, key: String): String {
+        val escapedKey = Regex.escape(key)
+        val regex = Regex("""^[ \t]+"?$escapedKey"?\s*:.*$""", RegexOption.MULTILINE)
+        val removed = text.replace(regex, "")
+        return removed.replace(Regex("\n{3,}"), "\n\n")
     }
 
     // ── 个人词库 ──
 
+    /**
+     * 解析方案实际引用的个人词库文件名。
+     * 优先级：custom.yaml 中的 translator/packs → translator/dictionary（一路追溯到 user_*） → 默认 packName。
+     */
+    fun resolvePersonalDictFile(rimeDir: File, schemaId: String): File {
+        val customFile = File(rimeDir, "${schemaId}.custom.yaml")
+        if (customFile.exists()) {
+            val text = customFile.readText(Charsets.UTF_8)
+            // 1) translator/packs 中最前面的 user_* 或显式声明的名字
+            val packs = Regex(""""?translator/packs"?\s*:\s*\[(.+?)]""", RegexOption.DOT_MATCHES_ALL)
+                .find(text)?.groupValues?.get(1)?.split(',')?.firstOrNull { it.trim().removeSurrounding("\"").startsWith("user_") }
+            if (packs != null) return File(rimeDir, "${packs.trim().removeSurrounding("\"")}.dict.yaml")
+            // 2) translator/dictionary → 如果是 *_merged 则去合并文件中找 import_tables
+            val dict = Regex(""""?translator/dictionary"?\s*:\s*"?(\w+)"?""").find(text)?.groupValues?.get(1)
+            if (dict != null) {
+                if (dict.endsWith("_merged")) {
+                    val mergedFile = File(rimeDir, "$dict.dict.yaml")
+                    if (mergedFile.exists()) {
+                        val pk = Regex("""^[ \t]+-\s+(user_\S+)""", RegexOption.MULTILINE).findAll(mergedFile.readText(Charsets.UTF_8))
+                            .map { it.groupValues[1] }.firstOrNull()
+                        if (pk != null) return File(rimeDir, "$pk.dict.yaml")
+                    }
+                }
+                return File(rimeDir, "$dict.dict.yaml")
+            }
+        }
+        return getPackFile(rimeDir, schemaId)
+    }
+
+    /** 从 Context 获取 rime 目录下的个人词库文件。 */
+    private fun getPackFile(rimeDir: File, schemaId: String): File =
+        File(rimeDir, "${packName(rimeDir, schemaId)}.dict.yaml")
+
+    /** 旧版文件名映射（兼容性），新文件不存在时用于兜底读取。 */
+    private fun legacyPackFile(rimeDir: File, schemaId: String): File? {
+        val oldName = when (schemaId) {
+            "pinyin_simp", "t9_pinyin" -> "user_simp_pinyin"
+            "wubi86", "wubi86_pinyin" -> "user_simp_wubi"
+            else -> return null
+        }
+        val file = File(rimeDir, "$oldName.dict.yaml")
+        return file.takeIf { it.exists() }
+    }
+
     fun loadEntries(context: Context, schemaId: String): List<DictEntry> {
-        val file = getPackFile(context, schemaId)
-        if (!file.exists()) return emptyList()
+        val rimeDir = SchemaManager.getRimeDir(context)
+        val file = resolvePersonalDictFile(rimeDir, schemaId)
+        if (!file.exists()) {
+            val legacy = legacyPackFile(rimeDir, schemaId)
+            if (legacy != null) return try {
+                parsePersonalDictEntries(legacy.readText(Charsets.UTF_8))
+            } catch (_: Exception) { emptyList() }
+            return emptyList()
+        }
         return try {
             parsePersonalDictEntries(file.readText(Charsets.UTF_8))
         } catch (_: Exception) { emptyList() }
     }
 
     fun saveEntries(context: Context, schemaId: String, entries: List<DictEntry>) {
-        val file = getPackFile(context, schemaId)
+        val rimeDir = SchemaManager.getRimeDir(context)
+        val file = resolvePersonalDictFile(rimeDir, schemaId)
         file.parentFile?.mkdirs()
-        val defaultH = packHeader(schemaId)
+        val dictName = file.nameWithoutExtension
+        val defaultH = DEFAULT_HEADER.format(dictName)
         val header = if (file.exists()) extractHeader(file, defaultH) else defaultH
         file.writeText(buildDictText(header, entries), Charsets.UTF_8)
     }

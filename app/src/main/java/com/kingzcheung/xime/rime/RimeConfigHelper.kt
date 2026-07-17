@@ -34,26 +34,15 @@ object RimeConfigHelper {
         copyAssetsToRimeDir(context, rimeDir)
         // F1: assets 会用内置 default.yaml 覆盖，这里把启用方案重新写回 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
-        // 确保个人词库和自定义短语文件存在，并为所有方案打补丁
-        PersonalDictManager.ensureAllPackFilesExist(context)
+        // 为所有启用方案打个人词库补丁
         PersonalDictManager.ensureSchemaPacks(context)
-
-        Log.d(TAG, "Checking for missing schema files...")
-        try {
-            withTimeout(60_000L) {
-                val downloaded = SchemaConfigHelper.downloadMissingSchemas(context)
-                if (downloaded.isNotEmpty()) {
-                    Log.i(TAG, "Downloaded schemas: $downloaded")
-                }
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "Schema download timed out, continuing with existing files")
+        invalidateBuildIfConfigChanged(context)
+        // 配置文件有改动时重新部署，确保 build 目录最新
+        if (!File(rimeDir, "build").exists() || File(rimeDir, "build").list()?.isEmpty() == true) {
+            Log.i(TAG, "Build directory missing or empty, triggering deploy")
+            RimeEngine.getInstance().deploy()
+            storeDeploymentHash(context)
         }
-
-        // 迁移旧版方案到清单系统（创建遗留清单）
-        SchemaManifestManager.migrateLegacySchemas(context)
-        
-        checkAndCleanBuildDir(rimeDir)
         listFilesRecursively(rimeDir, TAG)
         
         return Pair(rimeDir.absolutePath, rimeDir.absolutePath)
@@ -71,9 +60,8 @@ object RimeConfigHelper {
         copyAssetsToRimeDir(context, rimeDir)
         // F1: 同步初始化路径也写回 default.yaml 的 schema_list
         SchemaManager.applyEnabledSchemasToDefaultYaml(context)
-        PersonalDictManager.ensureAllPackFilesExist(context)
         runBlocking { PersonalDictManager.ensureSchemaPacks(context) }
-        checkAndCleanBuildDir(rimeDir)
+        invalidateBuildIfConfigChanged(context)
         listFilesRecursively(rimeDir, TAG)
         
         return Pair(rimeDir.absolutePath, rimeDir.absolutePath)
@@ -155,37 +143,16 @@ object RimeConfigHelper {
         return digest.digest().joinToString("") { String.format("%02x", it) }
     }
 
-    private fun checkAndCleanBuildDir(rimeDir: File) {
+    private fun invalidateBuildIfConfigChanged(context: Context) {
+        val rimeDir = File(context.filesDir, "rime")
         val buildDir = File(rimeDir, "build")
-        val defaultYaml = File(rimeDir, "default.yaml")
-        
-        if (!defaultYaml.exists() || !buildDir.exists()) {
-            Log.d(TAG, "default.yaml or build directory not found, skipping check")
-            return
-        }
-        
-        try {
-            val content = defaultYaml.readText()
-            val schemaListRegex = Regex("""schema:\s*(\S+)""")
-            val schemas = schemaListRegex.findAll(content).map { it.groupValues[1] }.toList()
-            Log.d(TAG, "Schemas in default.yaml: $schemas")
-            
-            for (schema in schemas) {
-                val schemaFile = File(rimeDir, "$schema.schema.yaml")
-                val prismFile = File(buildDir, "$schema.prism.bin")
-                
-                if (schemaFile.exists()) {
-                    if (prismFile.exists()) {
-                        Log.d(TAG, "Schema $schema already deployed")
-                    } else {
-                        Log.d(TAG, "Schema $schema needs deployment (missing prism.bin)")
-                    }
-                } else {
-                    Log.d(TAG, "Schema $schema schema file not found, skipping")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse default.yaml", e)
+        if (!buildDir.exists()) return
+        val currentHash = computeDeploymentHash(context)
+        val storedHash = SettingsPreferences.getDeploymentHash(context)
+        if (!currentHash.isNullOrEmpty() && currentHash != storedHash) {
+            Log.i(TAG, "Config hash changed, clearing build dir for fresh deploy")
+            buildDir.deleteRecursively()
+            buildDir.mkdirs()
         }
     }
     
