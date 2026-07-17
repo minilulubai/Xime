@@ -17,14 +17,17 @@ use_preset_vocabulary: false
 ...
 """
 
-    private fun packName(schemaId: String) = "user_$schemaId"
+    private fun packName(rimeDir: File, schemaId: String): String {
+        val dictName = schemaDictionaryName(rimeDir, schemaId)
+        return "user_$dictName"
+    }
 
-    private fun packFileName(schemaId: String) = "${packName(schemaId)}.dict.yaml"
+    private fun packHeader(rimeDir: File, schemaId: String) = DEFAULT_HEADER.format(packName(rimeDir, schemaId))
 
-    private fun packHeader(schemaId: String) = DEFAULT_HEADER.format(packName(schemaId))
-
-    fun getPackFile(context: Context, schemaId: String): File =
-        File(SchemaManager.getRimeDir(context), packFileName(schemaId))
+    fun getPackFile(context: Context, schemaId: String): File {
+        val rimeDir = SchemaManager.getRimeDir(context)
+        return File(rimeDir, "${packName(rimeDir, schemaId)}.dict.yaml")
+    }
 
     fun getCustomPhraseFile(context: Context, schemaId: String? = null): File {
         val rimeDir = SchemaManager.getRimeDir(context)
@@ -117,7 +120,7 @@ use_preset_vocabulary: false
                 legacy.renameTo(packFile)
             } else {
                 packFile.parentFile?.mkdirs()
-                packFile.writeText(packHeader(schemaId), Charsets.UTF_8)
+                packFile.writeText(packHeader(rimeDir, schemaId), Charsets.UTF_8)
             }
         }
         if (hasReverseLookupTranslator(schemaFile) && !hasTableTranslator(schemaFile)) {
@@ -200,7 +203,7 @@ use_preset_vocabulary: false
 
     // 方案有固定音节表：translator/packs via .custom.yaml
     internal fun applyPackConfig(rimeDir: java.io.File, schemaId: String) {
-        val pkName = packName(schemaId)
+        val pkName = packName(rimeDir, schemaId)
         val customFile = java.io.File(rimeDir, "${schemaId}.custom.yaml")
         val entry = "  \"translator/packs\": [\"$pkName\"]\n"
         if (customFile.exists()) {
@@ -219,9 +222,18 @@ use_preset_vocabulary: false
         insertUnderPatch(customFile, entry)
     }
 
+    /** 从 schema 文件中读取 translator.dictionary 名称，没有则用 schemaId 兜底。 */
+    private fun schemaDictionaryName(rimeDir: File, schemaId: String): String {
+        val schemaFile = File(rimeDir, "${schemaId}.schema.yaml")
+        if (!schemaFile.exists()) return schemaId
+        val regex = Regex("""translator:.*?dictionary:\s*(\S+)""", setOf(RegexOption.DOT_MATCHES_ALL))
+        return regex.find(schemaFile.readText(Charsets.UTF_8))?.groupValues?.get(1) ?: schemaId
+    }
+
     // 方案无固定音节表：import_tables 合并词典 + translator/dictionary via .custom.yaml
     internal fun applyMergedDictConfig(rimeDir: java.io.File, schemaId: String) {
-        val pkName = packName(schemaId)
+        val dictName = schemaDictionaryName(rimeDir, schemaId)
+        val pkName = packName(rimeDir, schemaId)
         val mergedId = "${schemaId}_merged"
         val dictFile = java.io.File(rimeDir, "${mergedId}.dict.yaml")
         dictFile.writeText("""# Rime dict
@@ -230,7 +242,7 @@ name: $mergedId
 version: "1.0"
 sort: original
 import_tables:
-  - $schemaId
+  - $dictName
   - $pkName
 ...
 """, Charsets.UTF_8)
@@ -298,7 +310,7 @@ import_tables:
 
     /** 从 Context 获取 rime 目录下的个人词库文件。 */
     private fun getPackFile(rimeDir: File, schemaId: String): File =
-        File(rimeDir, packFileName(schemaId))
+        File(rimeDir, "${packName(rimeDir, schemaId)}.dict.yaml")
 
     /** 旧版文件名映射（兼容性），新文件不存在时用于兜底读取。 */
     private fun legacyPackFile(rimeDir: File, schemaId: String): File? {

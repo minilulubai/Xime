@@ -612,7 +612,7 @@ speller:
         runBlocking { PersonalDictManager.ensureSchemaPack(context, "pinyin_simp") }
         val text = java.io.File(rimeDir, "pinyin_simp.custom.yaml").readText(Charsets.UTF_8)
         // packs line should appear only once
-        assertEquals(1, text.split("user_simp_pinyin").size - 1)
+        assertEquals(1, text.split("user_pinyin_simp").size - 1)
         assertEquals(1, text.split("table_translator@custom_phrase").size - 1)
     }
 
@@ -624,7 +624,7 @@ speller:
         assertTrue(customFile.exists())
         val text = customFile.readText(Charsets.UTF_8)
         assertTrue(text.contains("translator/packs"))
-        assertTrue(text.contains("user_simp_pinyin"))
+        assertTrue(text.contains("user_pinyin_simp"))
     }
 
     @Test
@@ -634,7 +634,7 @@ speller:
         PersonalDictManager.applyPackConfig(rimeDir, "pinyin_simp")
         val customFile = File(rimeDir, "pinyin_simp.custom.yaml")
         val text = customFile.readText(Charsets.UTF_8)
-        assertEquals(1, text.split("user_simp_pinyin").size - 1)
+        assertEquals(1, text.split("user_pinyin_simp").size - 1)
     }
 
     @Test
@@ -646,7 +646,7 @@ speller:
         val dictText = dictFile.readText(Charsets.UTF_8)
         assertTrue(dictText.contains("import_tables:"))
         assertTrue(dictText.contains("- wubi86"))
-        assertTrue(dictText.contains("- user_simp_wubi"))
+        assertTrue(dictText.contains("- user_wubi86"))
         val customFile = File(rimeDir, "wubi86.custom.yaml")
         assertTrue(customFile.exists())
         val customText = customFile.readText(Charsets.UTF_8)
@@ -692,7 +692,7 @@ patch:
         assertTrue("existing lua translator preserved", text.contains("lua_translator@my_script"))
         assertTrue("new pack config added", text.contains("translator/packs"))
         assertTrue("existing menu/page_size preserved", text.contains("menu/page_size: 6"))
-        assertTrue("pack name present", text.contains("user_simp_pinyin"))
+        assertTrue("pack name present", text.contains("user_pinyin_simp"))
     }
 
     @Test
@@ -817,7 +817,7 @@ speller:
         assertTrue(text.contains("table_translator@custom_phrase"))
         // 确保幂等
         assertEquals("custom_phrase appears once", 1, text.split("table_translator@custom_phrase").size - 1)
-        assertEquals("packs appears once", 1, text.split("user_simp_pinyin").size - 1)
+        assertEquals("packs appears once", 1, text.split("user_flypy").size - 1)
     }
 
     @Test
