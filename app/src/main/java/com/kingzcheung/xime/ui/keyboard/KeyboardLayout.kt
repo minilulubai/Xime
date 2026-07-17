@@ -138,6 +138,7 @@ fun KeyboardLayout(
     val isDarkTheme = uiState.isDarkTheme
     val isSttEnabled = uiState.isSttEnabled
     val isVoiceMode = uiState.isVoiceMode
+    val keyRows = KeysConfigHelper.getKeyRows(isAsciiMode)
     val onKeyPressDown = callbacks.onKeyPressDown
     val onKeyRelease = callbacks.onKeyRelease
     val onVoiceModeChange = callbacks.onVoiceModeChange
@@ -288,8 +289,9 @@ fun KeyboardLayout(
                         }
                     } else {
                         Box(modifier = Modifier.weight(1f)) {
+                            val row0 = keyRows.getOrElse(0) { listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p") }
                             KeyboardRowWithConfig(
-                                keys = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+                                keys = row0,
                                 onKeyPress = onKeyPress,
                                 config = KeyboardRowConfig(
                                     keyBackgroundColor = keyBackgroundColor,
@@ -333,8 +335,10 @@ fun KeyboardLayout(
                         }
                     } else {
                         Box(modifier = Modifier.weight(1f)) {
+                            val row1 = keyRows.getOrElse(1) { listOf("a", "s", "d", "f", "g", "h", "j", "k", "l") }
+                            val row1Padding = if (row1.size > 9) Modifier else Modifier.padding(horizontal = 16.dp)
                             KeyboardRowWithConfig(
-                                keys = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+                                keys = row1,
                                 onKeyPress = onKeyPress,
                                 config = KeyboardRowConfig(
                                     keyBackgroundColor = keyBackgroundColor,
@@ -346,7 +350,7 @@ fun KeyboardLayout(
                                 ),
                                 isShifted = visualIsShifted,
                                 isAsciiMode = isAsciiMode,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = row1Padding,
                                 onSwipeStateChange = { state, bounds ->
                                     processSwipeState(
                                         state,
@@ -402,7 +406,7 @@ fun KeyboardLayout(
                                         .fillMaxHeight()
                                         .background(keyboardBackgroundColor),
                                 ) {
-                                val bottomKeys = listOf("z", "x", "c", "v", "b", "n", "m")
+                                val bottomKeys = keyRows.getOrElse(2) { listOf("z", "x", "c", "v", "b", "n", "m") }
                                 bottomKeys.forEach { key ->
                                     val rawSwipeUpLabel = KeysConfigHelper.getSwipeUpLabel(key, isAsciiMode)
                                     val swipeUpText =
@@ -432,7 +436,11 @@ fun KeyboardLayout(
                                     } else null
 
                                     val rawCommitValue = KeysConfigHelper.getKeyCommitValue(key, isAsciiMode)
-                                    val commitValue = if (visualIsShifted) rawCommitValue.uppercase() else rawCommitValue
+                                    val commitValue = if (visualIsShifted) {
+                                        KeysConfigHelper.getKeyShiftCommitValue(key, isAsciiMode) ?: rawCommitValue.uppercase()
+                                    } else {
+                                        rawCommitValue
+                                    }
                                     val displayText = if (isAsciiMode) {
                                         commitValue
                                     } else {
@@ -964,7 +972,11 @@ fun KeyboardRowWithConfig(
 
             // 键帽显示文本
             val rawCommitValue = KeysConfigHelper.getKeyCommitValue(key, isAsciiMode)
-            val commitValue = if (isShifted) rawCommitValue.uppercase() else rawCommitValue
+            val commitValue = if (isShifted) {
+                KeysConfigHelper.getKeyShiftCommitValue(key, isAsciiMode) ?: rawCommitValue.uppercase()
+            } else {
+                rawCommitValue
+            }
             val displayText = if (isAsciiMode) {
                 commitValue
             } else {
@@ -1986,7 +1998,11 @@ fun CompactKeyboardRowWithConfig(
             } else null
 
             val rawCommitValue = KeysConfigHelper.getKeyCommitValue(key, isAsciiMode)
-            val commitValue = if (isShifted) rawCommitValue.uppercase() else rawCommitValue
+            val commitValue = if (isShifted) {
+                KeysConfigHelper.getKeyShiftCommitValue(key, isAsciiMode) ?: rawCommitValue.uppercase()
+            } else {
+                rawCommitValue
+            }
             val compactDisplayText = if (isAsciiMode) commitValue else KeysConfigHelper.getKeyDisplayLabel(key, isAsciiMode)
             val compactOnClick = remember(key, commitValue, onKeyPress) { { onKeyPress(commitValue) } }
             val compactOnPress: (() -> Unit)? = remember(key, onKeyPressDown) { { onKeyPressDown?.invoke(key); Unit } }
