@@ -170,7 +170,15 @@ fun RimeFileBrowserContent(onBack: () -> Unit) {
                 items(entries, key = { currentDir.absolutePath + "/" + it.name }) { entry ->
                     FileEntryRow(
                         entry = entry,
-                        onView = { viewingFile = entry.file },
+                        onView = {
+                            if (entry.isDirectory) {
+                                currentDir = entry.file
+                            } else if (entry.name.endsWith(".bin") || entry.name.endsWith(".gram")) {
+                                Toast.makeText(context, "不支持打开二进制文件", Toast.LENGTH_SHORT).show()
+                            } else {
+                                viewingFile = entry.file
+                            }
+                        },
                         onDelete = {
                             if (entry.isDirectory) {
                                 showDeleteDialog = entry.file
