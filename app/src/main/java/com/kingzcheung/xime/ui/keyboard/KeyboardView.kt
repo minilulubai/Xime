@@ -10,8 +10,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,11 +33,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kingzcheung.xime.handwriting.HandwritingCandidate
 import com.kingzcheung.xime.keyboard.KeyboardPage
@@ -222,6 +232,31 @@ fun KeyboardView(
                         isCalculatorActive = state.isCalculatorMode,
                     )
                 }
+            }
+
+            if (state.showQuickSendForm) {
+                QuickSendFormArea(
+                    backgroundColor = candidateBarBg,
+                    textColor = keyTextColor,
+                    accentColor = accentColor,
+                    isDarkTheme = state.isDarkTheme,
+                    isFocused = state.quickSendFormFocused,
+                    initialText = state.quickSendEditingItemText,
+                    onClose = { text ->
+                        if (text.isNotBlank()) {
+                            val editingId = state.quickSendEditingItemId
+                            if (editingId != null) {
+                                viewModel.updateQuickSendItem(editingId, text)
+                            } else {
+                                viewModel.addQuickSendText(text)
+                            }
+                        }
+                        callbacks.onHideQuickSendForm?.invoke()
+                    },
+                    onFocusChange = { focused ->
+                        callbacks.onQuickSendFormFocusChange?.invoke(focused)
+                    },
+                )
             }
 
             CandidateBar(
@@ -798,7 +833,15 @@ fun KeyboardView(
                         onBack = { viewModel.closeOverlay() },
                         onClipboardTabChange = { viewModel.pushOverlay(OverlayRoute.Clipboard(it)) },
                         bottomPaddingDp = state.keyboardBottomPaddingDp,
-                        modifier = Modifier.fillMaxWidth().fillMaxHeight()
+                        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                        onQuickSendAddClick = {
+                            viewModel.closeOverlay()
+                            callbacks.onShowQuickSendForm?.invoke()
+                        },
+                        onQuickSendEditItem = { id, text ->
+                            viewModel.closeOverlay()
+                            callbacks.onQuickSendEditItem?.invoke(id, text)
+                        },
                     )
                     is OverlayRoute.ToolbarCustomize -> ToolbarCustomizeView(
                         toolbarButtons = state.toolbarButtons,
@@ -883,5 +926,90 @@ fun KeyboardView(
         }
         }
     }
+    }
+}
+
+private val QUICK_SEND_FORM_HEIGHT = 200
+
+@Composable
+private fun QuickSendFormArea(
+    backgroundColor: Color,
+    textColor: Color,
+    accentColor: Color,
+    isDarkTheme: Boolean,
+    isFocused: Boolean,
+    initialText: String = "",
+    onClose: (text: String) -> Unit,
+    onFocusChange: (Boolean) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(QUICK_SEND_FORM_HEIGHT.dp)
+            .background(backgroundColor)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (isDarkTheme) Color(0xFF374151) else Color(0xFFF3F4F6))
+                .clickable {
+                    val et = com.kingzcheung.xime.service.QuickSendFormEditTextHolder.editText
+                    onClose(et?.text?.toString() ?: "")
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "关闭表单",
+                tint = accentColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(top = 4.dp)
+        ) {
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { context ->
+                    android.widget.EditText(context).apply {
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        setTextColor(textColor.hashCode())
+                        setHintTextColor((textColor.copy(alpha = 0.4f)).hashCode())
+                        hint = "输入快捷发送内容"
+                        textSize = 16f
+                        isSingleLine = false
+                        gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                        setPadding(12, 8, 12, 8)
+
+                        setImeActionLabel("确定", android.view.inputmethod.EditorInfo.IME_ACTION_DONE)
+                        imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_ENTER_ACTION or
+                            android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+                        
+                        onFocusChangeListener = android.view.View.OnFocusChangeListener { _, hasFocus ->
+                            onFocusChange(hasFocus)
+                        }
+                        setOnClickListener {
+                            onFocusChange(true)
+                        }
+                        com.kingzcheung.xime.service.QuickSendFormEditTextHolder.editText = this
+                        if (isFocused) {
+                            post { requestFocus() }
+                        }
+                    }
+                },
+                update = { editText ->
+                    if (initialText.isNotEmpty() && !editText.text.toString().equals(initialText)) {
+                        editText.setText(initialText)
+                        editText.setSelection(initialText.length)
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }

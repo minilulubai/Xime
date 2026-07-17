@@ -168,9 +168,6 @@ class ClipboardManager private constructor(private val context: Context) {
 
     fun release() {
         stopListening()
-        _clipboardItems.value = emptyList()
-        _quickSendItems.value = emptyList()
-        _recentItems.value = emptyList()
     }
     
     fun addItem(text: String) {
@@ -280,6 +277,20 @@ class ClipboardManager private constructor(private val context: Context) {
     }
 
     
+    fun updateQuickSendItem(id: Long, newText: String): Boolean {
+        if (newText.isBlank()) return false
+        val currentItems = _quickSendItems.value.toMutableList()
+        val index = currentItems.indexOfFirst { it.id == id }
+        if (index < 0) return false
+        currentItems[index] = currentItems[index].copy(
+            text = newText,
+            timestamp = System.currentTimeMillis()
+        )
+        _quickSendItems.value = currentItems
+        saveQuickSendItems()
+        return true
+    }
+
     fun addQuickSendItem(text: String) {
         if (text.isBlank()) return
         

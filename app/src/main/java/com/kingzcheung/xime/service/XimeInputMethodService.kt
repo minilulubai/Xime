@@ -14,6 +14,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -102,6 +103,7 @@ import com.kingzcheung.xime.util.FileLogger
 import com.kingzcheung.xime.util.PreeditMergeHelper
 import com.kingzcheung.xime.keyboard.ActionExecutor
 import com.kingzcheung.xime.keyboard.HANDWRITING_SCHEMA_ID
+import com.kingzcheung.xime.keyboard.OverlayRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +118,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
+
+object QuickSendFormEditTextHolder {
+    var editText: android.widget.EditText? = null
+}
 
 class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner, ActionExecutor {
 
@@ -723,6 +729,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 val navBarDp = navBarInsetDp.dp
                 val hasNavBar = navBarDp > 0.dp
 
+                val quickSendFormExtra = if (state.showQuickSendForm) 200 else 0
+
                 XimeTheme(darkTheme = isDarkTheme, themeId = state.themeId) {
                     Box(
                         modifier = Modifier
@@ -730,11 +738,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             .height(
                                 if (state.isCompact || state.isFloatingMode) effectiveScreenH.dp
                                 else if (state.showKeyboardResize) ((screenHeightDp * 7) / 10 + 100).dp
-                                else (keyboardHeight + state.keyboardBottomPaddingDp).dp + (if (hasNavBar) navBarDp else 0.dp)
+                                else (keyboardHeight + state.keyboardBottomPaddingDp + quickSendFormExtra).dp + (if (hasNavBar) navBarDp else 0.dp)
                             )
                     ) {
                         // Sync FrameLayout height with Compose content height
-                        val contentHeight = if (state.showKeyboardResize) state.resizePreviewHeightDp else floatingCardContentHeight
+                        val contentHeight = if (state.showKeyboardResize) state.resizePreviewHeightDp else floatingCardContentHeight + quickSendFormExtra
                         val totalDp = if (state.isCompact || state.isFloatingMode) effectiveScreenH
                             else contentHeight + state.keyboardBottomPaddingDp + navBarInsetDp
                         Log.d(TAG, "HeightSync: mode=${if (state.showKeyboardResize) "resize" else "normal"} height=$contentHeight navBarDp=${navBarDp.value} padding=${state.keyboardBottomPaddingDp} hasNavBar=$hasNavBar totalDp=$totalDp")
@@ -742,7 +750,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             keyboardContainer.updateHeight(totalDp)
                             currentEffectiveKeyboardHeight = if (state.isFloatingMode) keyboardHeight + floatingDragBarHeight + 50 + state.keyboardBottomPaddingDp
                                 else if (state.isCompact) HARDWARE_CANDIDATE_BAR_HEIGHT
-                                else effectiveKeyboardHeight
+                                else effectiveKeyboardHeight + quickSendFormExtra
                         }
                         val kbColors = KeysConfigHelper.getKeyboardColors()
                         val longToColor: (Long) -> androidx.compose.ui.graphics.Color = { if (it == 0L)  { androidx.compose.ui.graphics.Color(0xE61E1E1E) } else { androidx.compose.ui.graphics.Color(0xFF000000 or it) } }
@@ -778,7 +786,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                             modifier = Modifier
 
                                 .fillMaxWidth()
-                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp).dp)
+                                .height(if (state.showKeyboardResize) (state.resizePreviewHeightDp + state.keyboardBottomPaddingDp).dp else (floatingCardContentHeight + state.keyboardBottomPaddingDp + quickSendFormExtra).dp)
                                 .align(if (state.isFloatingMode) androidx.compose.ui.Alignment.BottomCenter else androidx.compose.ui.Alignment.TopStart)
                         ) {
                         CompositionLocalProvider(LocalStretchFactor provides state.stretchFactor) {
@@ -829,6 +837,10 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                 t9ResetSignal = state.t9ResetSignal,
                                 t9RightCandidateSelectedCount = state.t9RightCandidateSelectedCount,
                                 t9SelectedCandidatePinyin = state.t9SelectedCandidatePinyin,
+                                showQuickSendForm = state.showQuickSendForm,
+                                quickSendFormFocused = state.quickSendFormFocused,
+                                quickSendEditingItemId = state.quickSendEditingItemId,
+                                quickSendEditingItemText = state.quickSendEditingItemText,
                             )
                             val view = LocalView.current
                             val callbacks = remember(floatingMinY) {
@@ -1041,6 +1053,46 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                                         postRimeJob {
                                             commitFirstCandidateAndClearT9()
                                         }
+                                    },
+                                    onShowQuickSendForm = {
+                                        val current = uiState.value
+                                        uiState.value = current.copy(
+                                            showQuickSendForm = true,
+                                            quickSendFormFocused = true,
+                                            quickSendEditingItemId = null,
+                                            quickSendEditingItemText = "",
+                                            enterKeyText = "确定",
+                                        )
+                                    },
+                                    onQuickSendEditItem = { id, text ->
+                                        uiState.value = uiState.value.copy(
+                                            showQuickSendForm = true,
+                                            quickSendFormFocused = true,
+                                            quickSendEditingItemId = id,
+                                            quickSendEditingItemText = text,
+                                            enterKeyText = "确定",
+                                        )
+                                        QuickSendFormEditTextHolder.editText?.let { et ->
+                                            et.setText(text)
+                                            et.setSelection(text.length)
+                                        }
+                                    },
+                                    onHideQuickSendForm = {
+                                        uiState.value = uiState.value.copy(
+                                            showQuickSendForm = false,
+                                            quickSendFormFocused = false,
+                                            quickSendEditingItemId = null,
+                                            quickSendEditingItemText = "",
+                                            enterKeyText = "发送",
+                                        )
+                                        QuickSendFormEditTextHolder.editText = null
+                                        keyboardViewModel.showOverlay(OverlayRoute.Clipboard(1))
+                                    },
+                                    onQuickSendFormFocusChange = { focused: Boolean ->
+                                        uiState.value = uiState.value.copy(
+                                            quickSendFormFocused = focused,
+                                            enterKeyText = if (focused) "确定" else "发送",
+                                        )
                                     },
                                 )
                             }
@@ -1802,6 +1854,41 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }
 
     private fun handleKeyPress(key: String, isShifted: Boolean) {
+        if (uiState.value.quickSendFormFocused) {
+            when (key) {
+                "enter" -> {
+                    val editText = QuickSendFormEditTextHolder.editText
+                    val text = editText?.text?.toString() ?: ""
+                    val s = uiState.value
+                    val editingId = s.quickSendEditingItemId
+                    if (text.isNotBlank()) {
+                        if (editingId != null) {
+                            keyboardViewModel.updateQuickSendItem(editingId, text)
+                        } else {
+                            keyboardViewModel.addQuickSendText(text)
+                        }
+                    }
+                    uiState.value = s.copy(showQuickSendForm = false, quickSendFormFocused = false, quickSendEditingItemId = null, quickSendEditingItemText = "")
+                    QuickSendFormEditTextHolder.editText = null
+                    keyboardViewModel.showOverlay(OverlayRoute.Clipboard(1))
+                    return
+                }
+                "delete" -> {
+                    QuickSendFormEditTextHolder.editText?.let { et ->
+                        val start = et.selectionStart.coerceAtLeast(0)
+                        val end = et.selectionEnd.coerceAtLeast(start)
+                        if (start == end && start > 0) {
+                            et.text?.delete(start - 1, start)
+                            try { et.setSelection(start - 1) } catch (_: Exception) {}
+                        } else if (end > start) {
+                            et.text?.delete(start, end)
+                            try { et.setSelection(start) } catch (_: Exception) {}
+                        }
+                    }
+                    return
+                }
+            }
+        }
         val job = serviceScope.launch(keyProcessingDispatcher, start = CoroutineStart.LAZY) {
             val state = uiState.value
             val candState = candidateState.value
@@ -2834,6 +2921,17 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     }
 
     override fun commitText(text: String) {
+        if (uiState.value.quickSendFormFocused) {
+            mainHandler.post {
+                QuickSendFormEditTextHolder.editText?.let { et ->
+                    val start = et.selectionStart.coerceAtLeast(0)
+                    val textLen = text.length
+                    et.text?.replace(start, et.selectionEnd.coerceAtLeast(start), text)
+                    try { et.setSelection(start + textLen) } catch (_: Exception) {}
+                }
+            }
+            return
+        }
         currentInputConnection?.commitText(text, 1)
 
         if (isChineseMode) {

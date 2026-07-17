@@ -61,4 +61,8 @@ data class KeyboardCallbacks(
      * @return 过滤后的 (候选词列表, 注释列表)
      */
     var onFilterT9Candidates: ((List<String>, List<String>) -> Pair<List<String>, List<String>>)? = null,
+    val onShowQuickSendForm: (() -> Unit)? = null,
+    val onHideQuickSendForm: (() -> Unit)? = null,
+    val onQuickSendEditItem: ((Long, String) -> Unit)? = null,
+    val onQuickSendFormFocusChange: ((Boolean) -> Unit)? = null,
 )
