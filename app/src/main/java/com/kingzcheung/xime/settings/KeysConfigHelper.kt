@@ -59,7 +59,6 @@ data class LongPressConfig(
 
 data class KeyGestureConfig(
     val tap: GestureDef? = null,
-    val shift: GestureDef? = null,
     val swipeUp: GestureDef? = null,
     val swipeDown: GestureDef? = null,
     val longPress: LongPressConfig? = null,
@@ -133,7 +132,6 @@ private fun parseKeyboardConfig(raw: com.charleskorn.kaml.YamlMap?): KeyboardCon
 
 private fun parseKeyGestureConfig(map: com.charleskorn.kaml.YamlMap): KeyGestureConfig {
     var tap: GestureDef? = null
-    var shift: GestureDef? = null
     var swipeUp: GestureDef? = null
     var swipeDown: GestureDef? = null
     var longPress: LongPressConfig? = null
@@ -141,13 +139,12 @@ private fun parseKeyGestureConfig(map: com.charleskorn.kaml.YamlMap): KeyGesture
         val name = (kNode as? com.charleskorn.kaml.YamlScalar)?.content ?: continue
         when (name) {
             "tap" -> tap = parseGestureNode(vNode)
-            "shift" -> shift = parseGestureNode(vNode)
             "swipe_up" -> swipeUp = parseGestureNode(vNode)
             "swipe_down" -> swipeDown = parseGestureNode(vNode)
             "long_press" -> longPress = parseLongPress(vNode)
         }
     }
-    return KeyGestureConfig(tap, shift, swipeUp, swipeDown, longPress)
+    return KeyGestureConfig(tap, swipeUp, swipeDown, longPress)
 }
 
 /**
@@ -791,19 +788,6 @@ object KeysConfigHelper {
         val config = if (isAsciiMode) _keyGestureConfigEn.value else _keyGestureConfig.value
         val value = config[key.lowercase()]?.tap?.value
         return value?.takeIf { it.isNotEmpty() } ?: key
-    }
-
-    /** 获取 shift 状态的提交值，无配置时返回 null。 */
-    fun getKeyShiftCommitValue(key: String, isAsciiMode: Boolean = false): String? {
-        val config = if (isAsciiMode) _keyGestureConfigEn.value else _keyGestureConfig.value
-        return config[key.lowercase()]?.shift?.value?.takeIf { it.isNotEmpty() }
-    }
-
-    /** 获取 shift 状态的显示标签，无配置时返回 null。 */
-    fun getKeyShiftLabel(key: String, isAsciiMode: Boolean = false): String? {
-        val config = if (isAsciiMode) _keyGestureConfigEn.value else _keyGestureConfig.value
-        val shift = config[key.lowercase()]?.shift
-        return shift?.label?.takeIf { it.isNotEmpty() } ?: shift?.value?.takeIf { it.isNotEmpty() }
     }
 
     /** 获取某个按键指定手势的显示标签。 */

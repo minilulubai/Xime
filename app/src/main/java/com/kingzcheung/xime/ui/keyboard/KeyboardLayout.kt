@@ -437,7 +437,7 @@ fun KeyboardLayout(
 
                                     val rawCommitValue = KeysConfigHelper.getKeyCommitValue(key, isAsciiMode)
                                     val commitValue = if (visualIsShifted) {
-                                        KeysConfigHelper.getKeyShiftCommitValue(key, isAsciiMode) ?: rawCommitValue.uppercase()
+                                        rawCommitValue.uppercase()
                                     } else {
                                         rawCommitValue
                                     }
@@ -973,7 +973,7 @@ fun KeyboardRowWithConfig(
             // 键帽显示文本
             val rawCommitValue = KeysConfigHelper.getKeyCommitValue(key, isAsciiMode)
             val commitValue = if (isShifted) {
-                KeysConfigHelper.getKeyShiftCommitValue(key, isAsciiMode) ?: rawCommitValue.uppercase()
+                rawCommitValue.uppercase()
             } else {
                 rawCommitValue
             }
@@ -1999,7 +1999,7 @@ fun CompactKeyboardRowWithConfig(
 
             val rawCommitValue = KeysConfigHelper.getKeyCommitValue(key, isAsciiMode)
             val commitValue = if (isShifted) {
-                KeysConfigHelper.getKeyShiftCommitValue(key, isAsciiMode) ?: rawCommitValue.uppercase()
+                rawCommitValue.uppercase()
             } else {
                 rawCommitValue
             }

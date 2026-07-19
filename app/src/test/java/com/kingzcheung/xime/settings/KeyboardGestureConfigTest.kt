@@ -114,7 +114,6 @@ class KeyboardGestureConfigTest {
     fun `部分手势缺失不报错`() {
         val a = parseKeys("""a: { tap: "a" }""".trimIndent())["a"]!!
         assertEquals("a", a.tap!!.label)
-        assertNull(a.shift)
         assertNull(a.swipeUp)
         assertNull(a.swipeDown)
         assertNull(a.longPress)
@@ -415,33 +414,6 @@ class KeyboardGestureConfigTest {
         }
     }
 
-    @Test
-    fun `shift 字符串简写解析`() {
-        val keys = parseKeys("""
-            a: { tap: "a", shift: "A" }
-        """.trimIndent())
-        val kc = keys["a"]!!
-        assertEquals("A", kc.shift!!.label)
-        assertEquals(GestureAction.COMMIT, kc.shift!!.action)
-        assertEquals("A", kc.shift!!.value)
-    }
-
-    @Test
-    fun `shift 对象格式指定 action`() {
-        val keys = parseKeys("""
-            s: { tap: "s", shift: { label: "S", action: "commit" } }
-        """.trimIndent())
-        val kc = keys["s"]!!
-        assertEquals("S", kc.shift!!.label)
-        assertEquals(GestureAction.COMMIT, kc.shift!!.action)
-    }
-
-    @Test
-    fun `shift 缺失不报错`() {
-        val a = parseKeys("""a: { tap: "a" }""".trimIndent())["a"]!!
-        assertNull(a.shift)
-    }
-
     // ── 辅助 ──
 
     private fun parseKeys(yamlFragment: String): Map<String, KeyGestureConfig> {
@@ -460,7 +432,6 @@ class KeyboardGestureConfigTest {
 
     private fun parseKeyGestureConfig(map: com.charleskorn.kaml.YamlMap): KeyGestureConfig {
         var tap: GestureDef? = null
-        var shift: GestureDef? = null
         var swipeUp: GestureDef? = null
         var swipeDown: GestureDef? = null
         var longPress: LongPressConfig? = null
@@ -468,13 +439,12 @@ class KeyboardGestureConfigTest {
             val name = (kNode as com.charleskorn.kaml.YamlScalar).content
             when (name) {
                 "tap" -> tap = parseGestureNode(vNode)
-                "shift" -> shift = parseGestureNode(vNode)
                 "swipe_up" -> swipeUp = parseGestureNode(vNode)
                 "swipe_down" -> swipeDown = parseGestureNode(vNode)
                 "long_press" -> longPress = parseLongPress(vNode)
             }
         }
-        return KeyGestureConfig(tap = tap, shift = shift, swipeUp = swipeUp, swipeDown = swipeDown, longPress = longPress)
+        return KeyGestureConfig(tap = tap, swipeUp = swipeUp, swipeDown = swipeDown, longPress = longPress)
     }
 
     private fun parseLongPress(node: com.charleskorn.kaml.YamlNode): LongPressConfig? {
