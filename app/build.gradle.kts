@@ -308,8 +308,8 @@ android {
         applicationId = "com.kingzcheung.xime"
         minSdk = 28
         targetSdk = 35
-        versionCode = project.findProperty("nightlyVersionCode")?.toString()?.toIntOrNull() ?: 58
-        versionName = project.findProperty("nightlyVersionName")?.toString() ?: "2.5.3"
+        versionCode = 58.let { project.findProperty("nightlyVersionCode")?.toString()?.toIntOrNull() ?: it }
+        versionName = "2.5.3".let { project.findProperty("nightlyVersionName")?.toString() ?: it }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
