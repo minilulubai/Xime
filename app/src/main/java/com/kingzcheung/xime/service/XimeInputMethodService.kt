@@ -2226,7 +2226,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     // 所有按键统一经过 Rime 引擎
                     // 字母键不进入此分支（即使 pendingEnglish 非空），需要继续积累编码
                     if (pendingEnglish.isNotEmpty() && !key.matches(Regex("[a-zA-Z]"))) {
-                        val finalKey = if (isShifted) (shiftedSymbol(key, !state.isAsciiMode) ?: key) else key
+                        val finalKey = key
                         withContext(Dispatchers.Main) {
                             commitText(pendingEnglish + finalKey)
                             candidateState.value = candidateState.value.copy(
@@ -2237,7 +2237,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         Log.d(TAG, "Symbol: committed '$pendingEnglish$finalKey'")
                     } else {
                         val isChinese = !state.isAsciiMode
-                        val char = if (isShifted) (shiftedSymbol(key, isChinese) ?: key.uppercase()) else key
+                        val char = key
                         val keyCode = key.lowercase()[0].code
                         val mask = if (isShifted) KeyEvent.META_SHIFT_ON else 0
                         val isLetter = key.matches(Regex("[a-zA-Z]"))
@@ -2992,58 +2992,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         }
     }
     
-    private fun shiftedSymbol(key: String, chineseMode: Boolean = false): String? {
-        if (chineseMode) {
-            return when (key) {
-                "1" -> "！"
-                "2" -> "@"
-                "3" -> "#"
-                "4" -> "$"
-                "5" -> "%"
-                "6" -> "^"
-                "7" -> "&"
-                "8" -> "*"
-                "9" -> "（"
-                "0" -> "）"
-                "-" -> "——"
-                "=" -> "+"
-                "[" -> "「"
-                "]" -> "」"
-                "\\" -> "、"
-                ";" -> "："
-                "'" -> "\""
-                "," -> "《"
-                "." -> "》"
-                "/" -> "？"
-                "`" -> "～"
-                else -> null
-            }
-        }
-        return when (key) {
-            "`" -> "~"
-            "1" -> "!"
-            "2" -> "@"
-            "3" -> "#"
-            "4" -> "$"
-            "5" -> "%"
-            "6" -> "^"
-            "7" -> "&"
-            "8" -> "*"
-            "9" -> "("
-            "0" -> ")"
-            "-" -> "_"
-            "=" -> "+"
-            "[" -> "{"
-            "]" -> "}"
-            "\\" -> "|"
-            ";" -> ":"
-            "'" -> "\""
-            "," -> "<"
-            "." -> ">"
-            "/" -> "?"
-            else -> null
-        }
-    }
 
     private fun keyCodeToKey(keyCode: Int, isShifted: Boolean): String? {
         return when (keyCode) {
