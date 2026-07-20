@@ -96,6 +96,8 @@ keyboard:
     key_text_color_dark: 0xE8EAED
     candidate_text_color: 0x202124
     candidate_text_color_dark: 0xE8EAED
+    # special_key_bg_color: 0x9fef86      # 特殊按键背景色（亮色），不设置时默认取主题色
+    # special_key_bg_color_dark: 0x4A4A4A # 特殊按键背景色（暗色），不设置时默认取主题色
 
   # ── 按键配置（可选，不设置则使用默认值）──
   # corner_radius:      按键圆角半径（dp，默认 8）
@@ -105,12 +107,22 @@ keyboard:
   # ── 按键阴影（可选，不设置则使用默认值）──
   # enabled:            是否启用阴影
   # elevation:          阴影高度（dp，默认 1）
+  # shape_radius:       按键圆角半径（dp，默认 8）
   shadow:
     enabled: true
     elevation: 1
 
   # ── 中文键盘 ──
   qwerty:
+    # ── 按键布局模式 ──
+    # standard: 默认布局（主文字居中，下滑提示在底部）
+    # compact: 紧凑布局（主文字在左上，下滑提示占满键帽中部）
+    button_layout: standard
+    layout:
+      rows:
+        - [q, w, e, r, t, y, u, i, o, p]
+        - [a, s, d, f, g, h, j, k, l]
+        - [z, x, c, v, b, n, m]
     keys:
       # ── 第一行 ──
       # long_press 顺序：小写 → 大写 → 带变音符号的相似字母
@@ -150,6 +162,15 @@ keyboard:
   # ── 英文键盘 ──
   # 英文键盘相对简洁：无五笔字根、无变音符号，swipe_up 为简化符号
   qwerty_en:
+    # ── 按键布局模式 ──
+    # standard: 默认布局（主文字居中，下滑提示在底部）
+    # compact: 紧凑布局（主文字在左上，下滑提示占满键帽中部）
+    button_layout: standard
+    layout:
+      rows:
+        - [q, w, e, r, t, y, u, i, o, p]
+        - [a, s, d, f, g, h, j, k, l]
+        - [z, x, c, v, b, n, m]
     keys:
       # ── 第一行 ──
       q: { tap: "q", swipe_up: "1", long_press: { display: "bubble", values: ["q", "Q"] } }
