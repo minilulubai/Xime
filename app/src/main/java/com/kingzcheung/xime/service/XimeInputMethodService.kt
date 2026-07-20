@@ -620,7 +620,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     clipboardItemsState.value = items
                 }
             }
-
             serviceScope.launch {
                 clipboardManager.quickSendItems.collect { items ->
                     quickSendItemsState.value = items

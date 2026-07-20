@@ -60,6 +60,7 @@ class XimeApplication : Application(), ImageLoaderFactory {
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
+        val isDebug = BuildConfig.DEBUG
         Log.d(TAG, "Initializing PluginManager...")
         PluginManager.initialize(this, HOST_PROVIDER_AUTHORITY) {
             Log.d(TAG, "PluginManager onSetup callback executing...")
@@ -68,7 +69,7 @@ class XimeApplication : Application(), ImageLoaderFactory {
             val systemInstalled = PluginManager.scanAndInstallSystemPlugins()
             Log.d(TAG, "Installed $systemInstalled plugins from system")
             
-            if (BuildConfig.DEBUG) {
+            if (isDebug) {
                 val assetInstalled = PluginManager.installPluginsFromAssetsForDebug("plugins")
                 Log.d(TAG, "Installed $assetInstalled plugins from assets")
             }
