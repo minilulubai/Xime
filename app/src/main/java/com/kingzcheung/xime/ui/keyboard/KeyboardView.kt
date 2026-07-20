@@ -140,9 +140,6 @@ fun KeyboardView(
         if (keyboardState is KeyboardLayoutState.Number) {
             if (savedNumberAsciiMode == null) {
                 savedNumberAsciiMode = state.isAsciiMode
-                if (!state.isAsciiMode && page is KeyboardPage.Main) {
-                    callbacks.onKeyPress("ime_switch", false)
-                }
             }
         } else {
             savedNumberAsciiMode = null
@@ -459,6 +456,7 @@ fun KeyboardView(
                         val numberOnKeyPress: (String) -> Unit = { key ->
                             when (key) {
                                 "abc" -> {
+                                    callbacks.onKeyPress("abc", false)
                                     val saved = savedNumberAsciiMode
                                     savedNumberAsciiMode = null
                                     if (saved != null && saved != state.isAsciiMode) {
