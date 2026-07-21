@@ -181,7 +181,7 @@ fun KeyboardLayout(
             )
         )
     }
-    val effectiveSwipeDownHintsEnabled = if (isAsciiMode) false else swipeDownHintsEnabled
+    val effectiveSwipeDownHintsEnabled = swipeDownHintsEnabled
 
     // 监听设置变化
     DisposableEffect(context) {
@@ -423,7 +423,7 @@ fun KeyboardLayout(
                                     val swipeDownAction = swipeDownRaw?.action
                                     val swipeDownValue = swipeDownRaw?.value
                                     val swipeDownDisplay = swipeDownRaw?.display ?: DisplayMode.BOTH
-                                    val swipeDownBubbleText = if (!isAsciiMode && swipeDownDisplay != DisplayMode.KEY) swipeDownLabel else null
+                                    val swipeDownBubbleText = if (swipeDownDisplay != DisplayMode.KEY) swipeDownLabel else null
                                     val longPressConfig =
                                         KeysConfigHelper.getKeyGesture(key, isAsciiMode)?.longPress
                                     val longPressDisplay = longPressConfig?.display ?: "key"
@@ -450,7 +450,7 @@ fun KeyboardLayout(
                                     val onClick = remember(key, commitValue, onKeyPress) { { onKeyPress(commitValue) } }
                                     val onPress: (() -> Unit)? = remember(key, onKeyPressDown) { { onKeyPressDown?.invoke(key); Unit } }
                                     val onRelease: (() -> Unit)? = remember(key, onKeyRelease) { { onKeyRelease?.invoke(key); Unit } }
-                                    val onSwipeDown = if (!isAsciiMode && swipeDownAction != null && swipeDownLabel != null) {
+                                    val onSwipeDown = if (swipeDownAction != null && swipeDownLabel != null) {
                                         remember(key, onKeyPress, onGestureAction, onCommitText, swipeDownAction, swipeDownValue, swipeDownLabel) {
                                             val label = swipeDownLabel
                                             { _: String ->
@@ -488,7 +488,7 @@ fun KeyboardLayout(
                                         swipeText = swipeUpText,
                                         swipeDownText = swipeDownBubbleText,
                                         swipeUpKeyLabel = swipeUpKeyLabel,
-                                        swipeDownKeyLabel = if (!isAsciiMode && (swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH)) swipeDownLabel else null,
+                                        swipeDownKeyLabel = if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH)) swipeDownLabel else null,
                                         onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
                                         onSwipeDown = onSwipeDown,
                                         onSwipeStateChange = onSwipeStateChange,
@@ -593,7 +593,7 @@ fun KeyboardLayout(
                             val k2SwipeDownAction = k2SwipeDownRaw?.action
                             val k2SwipeDownValue = k2SwipeDownRaw?.value
                             val k2SwipeDownDisplay = k2SwipeDownRaw?.display ?: DisplayMode.BOTH
-                            val k2SwipeDownBubbleText = if (!isAsciiMode && k2SwipeDownDisplay != DisplayMode.KEY) k2SwipeDownLabel else null
+                            val k2SwipeDownBubbleText = if (k2SwipeDownDisplay != DisplayMode.KEY) k2SwipeDownLabel else null
                             val k2LongPressConfig = k2KeyGesture?.longPress
                             val k2LongPressDisplay = k2LongPressConfig?.display ?: "key"
                             val k2LongPressLabels = if (k2LongPressDisplay == "bubble") {
@@ -659,7 +659,7 @@ fun KeyboardLayout(
                                     modifier = Modifier.weight(0.8f),
                                     swipeText = k2SwipeUpLabel,
                                     swipeDownText = k2SwipeDownBubbleText,
-                                    swipeDownKeyLabel = if (!isAsciiMode && (k2SwipeDownDisplay == DisplayMode.KEY || k2SwipeDownDisplay == DisplayMode.BOTH)) k2SwipeDownLabel else null,
+                                    swipeDownKeyLabel = if ((k2SwipeDownDisplay == DisplayMode.KEY || k2SwipeDownDisplay == DisplayMode.BOTH)) k2SwipeDownLabel else null,
                                     onSwipe = if (k2SwipeUpCommitValue != null) { { onKeyPress(k2SwipeUpCommitValue) } } else null,
                                     onSwipeDown = k2OnSwipeDown,
                                     onSwipeStateChange = { state, bounds ->
@@ -728,7 +728,7 @@ fun KeyboardLayout(
                             val k4SwipeDownAction = k4SwipeDownRaw?.action
                             val k4SwipeDownValue = k4SwipeDownRaw?.value
                             val k4SwipeDownDisplay = k4SwipeDownRaw?.display ?: DisplayMode.BOTH
-                            val k4SwipeDownBubbleText = if (!isAsciiMode && k4SwipeDownDisplay != DisplayMode.KEY) k4SwipeDownLabel else null
+                            val k4SwipeDownBubbleText = if (k4SwipeDownDisplay != DisplayMode.KEY) k4SwipeDownLabel else null
                             val k4LongPressConfig = k4KeyGesture?.longPress
                             val k4LongPressDisplay = k4LongPressConfig?.display ?: "key"
                             val k4LongPressLabels = if (k4LongPressDisplay == "bubble") {
@@ -798,7 +798,7 @@ fun KeyboardLayout(
                                     icon = k4Icon,
                                     swipeText = k4SwipeUpLabel.takeIf { it.isNotEmpty() },
                                     swipeDownText = k4SwipeDownBubbleText,
-                                    swipeDownKeyLabel = if (!isAsciiMode && (k4SwipeDownDisplay == DisplayMode.KEY || k4SwipeDownDisplay == DisplayMode.BOTH)) k4SwipeDownLabel else null,
+                                    swipeDownKeyLabel = if ((k4SwipeDownDisplay == DisplayMode.KEY || k4SwipeDownDisplay == DisplayMode.BOTH)) k4SwipeDownLabel else null,
                                     onSwipe = k4OnSwipe,
                                     onSwipeDown = k4OnSwipeDown,
                                     onSwipeStateChange = { state, bounds ->
