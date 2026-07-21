@@ -620,7 +620,6 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     clipboardItemsState.value = items
                 }
             }
-
             serviceScope.launch {
                 clipboardManager.quickSendItems.collect { items ->
                     quickSendItemsState.value = items
@@ -1311,6 +1310,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             val availableSchemas = rimeEngine.getAvailableSchemas()
             Log.d(TAG, "onStartInput: saved=$savedSchema, current=$currentSchema, available=${availableSchemas.joinToString()}")
             
+            // switchSchema 会重置 ASCII 模式为 schema 默认值，先保存以便后续恢复
+            val asciiModeBeforeSchemaSwitch = rimeEngine.isAsciiMode()
+            
             val actualSchema: String
             when {
                 savedSchema == HANDWRITING_SCHEMA_ID -> {
@@ -1367,6 +1369,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 else -> actualSchema = savedSchema
             }
             updateSchemaName()
+            
+            // switchSchema 可能会重置 ASCII 模式，恢复之以保持引擎与 UI 状态同步
+            if (rimeEngine.isAsciiMode() != asciiModeBeforeSchemaSwitch) {
+                rimeEngine.toggleAsciiMode()
+            }
         }
 
         uiState.value = uiState.value.copy(
@@ -1874,15 +1881,30 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     return
                 }
                 "delete" -> {
-                    QuickSendFormEditTextHolder.editText?.let { et ->
-                        val start = et.selectionStart.coerceAtLeast(0)
-                        val end = et.selectionEnd.coerceAtLeast(start)
-                        if (start == end && start > 0) {
-                            et.text?.delete(start - 1, start)
-                            try { et.setSelection(start - 1) } catch (_: Exception) {}
-                        } else if (end > start) {
-                            et.text?.delete(start, end)
-                            try { et.setSelection(start) } catch (_: Exception) {}
+                    val candState = candidateState.value
+                    val isComposing = candState.isComposing || candState.inputText.isNotEmpty()
+                    if (isComposing) {
+                        // Rime 有组合态 → 转发退格到 Rime 清空候选字母/联想词
+                        rimeEngine.processKey(0xff08, 0)
+                        val result = rimeEngine.getProcessResult(true)
+                        if (result.inputText.isEmpty()) {
+                            rimeEngine.clearComposition()
+                        }
+                        uiEventChannel.trySend {
+                            updateUIWithResult(result)
+                        }
+                    } else {
+                        // 无组合态 → 直接操作 EditText 删除已上屏文字
+                        QuickSendFormEditTextHolder.editText?.let { et ->
+                            val start = et.selectionStart.coerceAtLeast(0)
+                            val end = et.selectionEnd.coerceAtLeast(start)
+                            if (start == end && start > 0) {
+                                et.text?.delete(start - 1, start)
+                                try { et.setSelection(start - 1) } catch (_: Exception) {}
+                            } else if (end > start) {
+                                et.text?.delete(start, end)
+                                try { et.setSelection(start) } catch (_: Exception) {}
+                            }
                         }
                     }
                     return
@@ -2539,8 +2561,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     private fun selectCandidate(index: Int) {
         composeViewRef?.let { feedbackManager.performKeyPressEffect(view = it) }
 
-        // 计算器模式
-        if (calculatorEngine.isActive()) {
+        // 计算器模式（仅在数字/常用符号键盘下生效，防止状态残留导致其他键盘候选词点击异常）
+        val layoutState = keyboardViewModel.keyboardState.value
+        val isCalculatorKeyboard = layoutState is com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState.Number
+                || layoutState is com.kingzcheung.xime.ui.keyboard.KeyboardLayoutState.CommonSymbol
+        if (calculatorEngine.isActive() && isCalculatorKeyboard) {
             val result = calculatorEngine.getResult()
             val expression = calculatorEngine.getExpression()
             val formulaResult = calculatorEngine.getFormulaResult()
