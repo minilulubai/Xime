@@ -79,6 +79,7 @@ translator:
   dictionary: pinyin_simp
   prism: t9_pinyin
   spelling_hints: 100
+  always_show_comments: true
   comment_format: []
   preedit_format:
     - xlit/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/
