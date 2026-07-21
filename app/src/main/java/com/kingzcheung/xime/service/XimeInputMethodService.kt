@@ -2458,77 +2458,82 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             index
         }
 
-        if (rimeEngine.selectCandidate(rimeIndex)) {
-            val committedText = rimeEngine.commit()
-            // T9 模式下 fullyConsumed 是判断 full/partial commit 的唯一权威：
-            // 当控制器明确 partial commit 时，即使 RIME commit() 返回非空文本
-            // （RIME 内部做了 partial commit），也不应走 full commit 路径。
-            val isFullCommit = if (isT9) {
-                fullyConsumed && selectedCandidate != null
-            } else {
-                committedText.isNotEmpty()
+        // T9：跳过 rimeEngine.selectCandidate，消费已由 T9 处理器
+        // （T9RightCommitHandler）独立完成。selectCandidate 会遗留
+        // [confirmed, phony] 残留 composition 状态，导致后续 forceSendToRime
+        // 的 setInput 无法正常重建候选项。
+        val selectSucceeded = isT9 || rimeEngine.selectCandidate(rimeIndex)
+        if (!selectSucceeded) return
+        val committedText = if (isT9) "" else rimeEngine.commit()
+        // T9 模式下 fullyConsumed 是判断 full/partial commit 的唯一权威：
+        // 当控制器明确 partial commit 时，即使 RIME commit() 返回非空文本
+        // （RIME 内部做了 partial commit），也不应走 full commit 路径。
+        val isFullCommit = if (isT9) {
+            fullyConsumed && selectedCandidate != null
+        } else {
+            committedText.isNotEmpty()
+        }
+        if (isFullCommit) {
+            if (SettingsPreferences.isSmartPredictionEnabled(this) && selectedCandidate != null && AssociationManager.isInitialized()) {
+                if (predictionManager.lastCommittedText.isNotEmpty()) {
+                    val lastChar = predictionManager.lastCommittedText.last().toString()
+                    predictionManager.recordInputPair(lastChar, selectedCandidate)
+                    Log.d(TAG, "Learned: '$lastChar' + '$selectedCandidate'")
+                }
             }
-            if (isFullCommit) {
-                if (SettingsPreferences.isSmartPredictionEnabled(this) && selectedCandidate != null && AssociationManager.isInitialized()) {
-                    if (predictionManager.lastCommittedText.isNotEmpty()) {
-                        val lastChar = predictionManager.lastCommittedText.last().toString()
-                        predictionManager.recordInputPair(lastChar, selectedCandidate)
-                        Log.d(TAG, "Learned: '$lastChar' + '$selectedCandidate'")
-                    }
-                }
-                // T9 full commit：优先使用用户明确选中的候选词文本作为上屏文本。
-                // UI 候选词列表经 filterCandidatesBySelectionHistory 过滤/重排序后 index
-                // 可能与 RIME 原始候选词 index 不对应。即使已通过 resolveRimeCandidateIndex
-                // 修正了 selectCandidate 的 index，仍以用户选中的 selectedCandidate 为权威
-                // 上屏文本（双保险），避免 RIME commit() 因任何原因返回错误文本。
-                // 非 T9 模式仍保持 RIME committedText 优先（可能含简繁转换等处理）。
-                val textToMerge = if (isT9 && fullyConsumed && selectedCandidate != null) {
-                    selectedCandidate
-                } else if (committedText.isNotEmpty()) {
-                    committedText
-                } else {
-                    selectedCandidate!!
-                }
-                val fullCommitText = if (isT9) {
-                    PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, textToMerge)
-                } else {
-                    textToMerge
-                }
-                withContext(Dispatchers.Main) {
-                    commitText(fullCommitText)
-                    t9PartialCommitTexts.clear()
-                    candidateState.value = candidateState.value.copy(
-                        inputText = "",
-                        candidates = emptyList(),
-                        candidateComments = emptyList(),
-                        isComposing = false,
-                        hasNextPage = false,
-                        hasPrevPage = false,
-                        isShowingRecentClipboard = false
-                    )
-                    uiState.value = uiState.value.copy(
-                        t9ResetSignal = uiState.value.t9ResetSignal + 1,
-                        t9RightCandidateSelectedCount = 0,
-                        t9SelectedCandidatePinyin = ""
-                    )
-                }
+            // T9 full commit：优先使用用户明确选中的候选词文本作为上屏文本。
+            // UI 候选词列表经 filterCandidatesBySelectionHistory 过滤/重排序后 index
+            // 可能与 RIME 原始候选词 index 不对应。即使已通过 resolveRimeCandidateIndex
+            // 修正了 selectCandidate 的 index，仍以用户选中的 selectedCandidate 为权威
+            // 上屏文本（双保险），避免 RIME commit() 因任何原因返回错误文本。
+            // 非 T9 模式仍保持 RIME committedText 优先（可能含简繁转换等处理）。
+            val textToMerge = if (isT9 && fullyConsumed && selectedCandidate != null) {
+                selectedCandidate
+            } else if (committedText.isNotEmpty()) {
+                committedText
             } else {
-                withContext(Dispatchers.Main) {
-                    if (isT9) {
-                        // partial commit：把本次选中的候选文本追加到累积列表，供后续合并显示
-                        if (selectedCandidate != null) {
-                            t9PartialCommitTexts.add(selectedCandidate)
-                        }
-                        // 保留状态字段，供 UI 层感知右侧选词事件
-                        uiState.value = uiState.value.copy(
-                            t9RightCandidateSelectedCount = uiState.value.t9RightCandidateSelectedCount + 1,
-                            t9SelectedCandidatePinyin = candidatePinyin ?: ""
-                        )
-                        // RIME commit() 已清除 composition，需要控制器重新发送剩余数字到 RIME
-                        keyboardCallbacks?.onT9ForceSendToRime?.invoke()
+                selectedCandidate!!
+            }
+            val fullCommitText = if (isT9) {
+                PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, textToMerge)
+            } else {
+                textToMerge
+            }
+            withContext(Dispatchers.Main) {
+                commitText(fullCommitText)
+                t9PartialCommitTexts.clear()
+                candidateState.value = candidateState.value.copy(
+                    inputText = "",
+                    candidates = emptyList(),
+                    candidateComments = emptyList(),
+                    isComposing = false,
+                    hasNextPage = false,
+                    hasPrevPage = false,
+                    isShowingRecentClipboard = false
+                )
+                uiState.value = uiState.value.copy(
+                    t9ResetSignal = uiState.value.t9ResetSignal + 1,
+                    t9RightCandidateSelectedCount = 0,
+                    t9SelectedCandidatePinyin = ""
+                )
+            }
+        } else {
+            withContext(Dispatchers.Main) {
+                if (isT9) {
+                    // partial commit：把本次选中的候选文本追加到累积列表，供后续合并显示
+                    if (selectedCandidate != null) {
+                        t9PartialCommitTexts.add(selectedCandidate)
                     }
-                    updateUI()
+                    // 保留状态字段，供 UI 层感知右侧选词事件
+                    uiState.value = uiState.value.copy(
+                        t9RightCandidateSelectedCount = uiState.value.t9RightCandidateSelectedCount + 1,
+                        t9SelectedCandidatePinyin = candidatePinyin ?: ""
+                    )
+                    // RIME composition 未被 selectCandidate 修改（已跳过），
+                    // 直接发送剩余数字到 RIME 重建 composition。
+                    keyboardCallbacks?.onT9ForceSendToRime?.invoke()
                 }
+                updateUI()
             }
         }
     }
