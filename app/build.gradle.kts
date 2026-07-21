@@ -1,6 +1,8 @@
 import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 import java.util.Properties
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -308,8 +310,8 @@ android {
         applicationId = "com.kingzcheung.xime"
         minSdk = 28
         targetSdk = 35
-        versionCode = 58.let { project.findProperty("nightlyVersionCode")?.toString()?.toIntOrNull() ?: it }
-        versionName = "2.5.3".let { project.findProperty("nightlyVersionName")?.toString() ?: it }
+        versionCode = 20260721
+        versionName = "2.5.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
@@ -413,6 +415,19 @@ android.applicationVariants.all {
     }
 }
 
+// Nightly 构建通过 androidComponents API 覆盖 versionCode/versionName
+androidComponents {
+    onVariants { variant ->
+        val vc = project.findProperty("versionCode")?.toString()?.toIntOrNull()
+        val vn = project.findProperty("versionName")?.toString()
+        if (vc != null && vn != null) {
+            variant.outputs.forEach { output ->
+                output.versionCode.set(vc)
+                output.versionName.set(vn)
+            }
+        }
+    }
+}
 dependencies {
     implementation(project(":plugin-core"))
     implementation(libs.androidx.core.ktx)

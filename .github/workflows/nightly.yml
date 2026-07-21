@@ -12,7 +12,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     outputs:
-      should_build: ${{ steps.check.outputs.should_build }}
+      should_build: ${{ steps.decide.outputs.should_build }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,12 +25,40 @@ jobs:
           CURRENT_COMMIT=$(git rev-parse HEAD)
 
           if [ -n "$LAST_COMMIT" ] && [ "$LAST_COMMIT" = "$CURRENT_COMMIT" ]; then
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "has_new_commits=false" >> "$GITHUB_OUTPUT"
           else
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "has_new_commits=true" >> "$GITHUB_OUTPUT"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if release was published today
+        id: release_check
+        run: |
+          TODAY=$(date +'%Y-%m-%d')
+          RELEASE_TAG=$(gh release list --limit 30 --json createdAt,tagName,isPrerelease --jq '.[] | select(.createdAt | startswith("'"$TODAY"'")) | select(.isPrerelease == false) | .tagName' | head -1)
+          if [ -n "$RELEASE_TAG" ]; then
+            echo "Today ($TODAY) has release $RELEASE_TAG, skipping nightly"
+            echo "release_today=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_today=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [ "${{ steps.release_check.outputs.release_today }}" = "true" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "reason=Release published today"
+          elif [ "${{ steps.check.outputs.has_new_commits }}" = "false" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "reason=No new commits since last nightly"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "reason=New commits to build"
+          fi
 
   nightly:
     needs: check
@@ -97,11 +125,11 @@ jobs:
         run: |
           DATE=$(date +'%Y%m%d')
           COMMIT=$(git rev-parse --short HEAD)
-          BASE_VERSION=$(grep -oP 'versionName.*\?:\s*"\K[\d.]+' app/build.gradle.kts)
+          BASE_VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
           echo "Base version: $BASE_VERSION"
           ./gradlew assembleRelease \
-            -PnightlyVersionCode=$DATE \
-            -PnightlyVersionName="${BASE_VERSION}-nightly-$DATE-$COMMIT" \
+            -PversionCode=$DATE \
+            -PversionName="${BASE_VERSION}-nightly-$DATE-$COMMIT" \
             --no-daemon
 
       - name: Sign Main App APKs
