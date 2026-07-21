@@ -709,6 +709,20 @@ object SchemaManager {
         name.endsWith(".tgz", ignoreCase = true)
 
     /**
+     * 某些 Android 内容提供器会将未知 MIME 类型的文件（如 .yaml）自动追加 .txt 后缀，
+     * 导致 xime.custom.yaml 变成 xime.custom.yaml.txt。此处修复已知情况。
+     */
+    fun sanitizeDisplayName(name: String): String {
+        return when {
+            name.endsWith(".yaml.txt", ignoreCase = true) ->
+                name.removeSuffix(".txt")
+            name.endsWith(".dict.yaml.txt", ignoreCase = true) ->
+                name.removeSuffix(".txt")
+            else -> name
+        }
+    }
+
+    /**
      * 统一保存导入的文件：
      * - 压缩包（zip/tar.gz/tgz）→ market/{importId}/，等待用户手动安装
      * - 非压缩包（yaml/txt/bin 等）→ 直接放入 rime/
@@ -720,20 +734,21 @@ object SchemaManager {
         inputStream: java.io.InputStream,
         autoEnable: Boolean = true,
     ): ImportResult = withContext(Dispatchers.IO) {
-        if (isArchive(displayName)) {
+        val name = sanitizeDisplayName(displayName)
+        if (isArchive(name)) {
             // 压缩包：保存到 market/ 等待用户手动安装
             val importId = generateImportId()
             val pkgDir = getMarketDir(context, importId)
             try {
                 pkgDir.mkdirs()
-                val archiveFile = File(pkgDir, displayName)
+                val archiveFile = File(pkgDir, name)
                 inputStream.use { input ->
                     archiveFile.outputStream().use { output -> input.copyTo(output) }
                 }
-                Log.i(TAG, "Imported $displayName -> $importId (not installed yet)")
+                Log.i(TAG, "Imported $name -> $importId (not installed yet)")
                 ImportResult(true)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to import archive $displayName", e)
+                Log.e(TAG, "Failed to import archive $name", e)
                 try { if (pkgDir.exists()) pkgDir.deleteRecursively() } catch (_: Exception) {}
                 ImportResult(false)
             }
@@ -742,23 +757,23 @@ object SchemaManager {
             val rimeDir = getRimeDir(context)
             try {
                 rimeDir.mkdirs()
-                val target = File(rimeDir, displayName)
+                val target = File(rimeDir, name)
                 inputStream.use { input ->
                     target.outputStream().use { output -> input.copyTo(output) }
                 }
                 // 如果是 .schema.yaml 文件，自动启用
-                if (autoEnable && displayName.endsWith(".schema.yaml")) {
-                    val schemaId = displayName.removeSuffix(".schema.yaml")
+                if (autoEnable && name.endsWith(".schema.yaml")) {
+                    val schemaId = name.removeSuffix(".schema.yaml")
                     val enabled = getEnabledSchemas(context).toMutableList()
                     if (schemaId !in enabled) {
                         enabled.add(schemaId)
                         setEnabledSchemas(context, enabled)
                     }
                 }
-                Log.i(TAG, "Imported $displayName -> rime/ (direct)")
+                Log.i(TAG, "Imported $name -> rime/ (direct)")
                 ImportResult(true, installedDirect = true)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to import $displayName directly", e)
+                Log.e(TAG, "Failed to import $name directly", e)
                 ImportResult(false)
             }
         }
