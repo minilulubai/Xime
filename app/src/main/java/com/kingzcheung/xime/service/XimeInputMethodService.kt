@@ -2637,6 +2637,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     
     private fun switchInputMethod() {
         Log.d(TAG, "Toggling ascii mode")
+        rimeEngine.commit()
         rimeEngine.toggleAsciiMode()
         updateUI()
     }
