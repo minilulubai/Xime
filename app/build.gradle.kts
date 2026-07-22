@@ -304,7 +304,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.kingzcheung.xime"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kingzcheung.xime"

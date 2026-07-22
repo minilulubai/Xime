@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.kingzcheung.xime.plugin.kaomoji"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kingzcheung.xime.plugin.kaomoji"
