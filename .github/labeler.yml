@@ -1,0 +1,17 @@
+android:
+  - app/**/*
+plugin:
+  - plugins/**/*
+  - plugin-core/**/*
+ci:
+  - .github/**/*
+  - gradle/**/*
+docs:
+  - docs/**/*
+  - '**/*.md'
+jni:
+  - app/src/main/jni/**/*
+theme:
+  - app/src/main/assets/themes/**/*
+schema:
+  - app/src/main/assets/schemas/**/*
