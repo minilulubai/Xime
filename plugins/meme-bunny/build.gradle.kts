@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.kingzcheung.xime.plugin.emoji"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kingzcheung.xime.plugin.emoji"

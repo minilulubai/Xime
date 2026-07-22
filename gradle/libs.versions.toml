@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.0"
+agp = "9.1.0"
 kotlin = "2.4.10"
 kotlinSerialization = "2.4.10"
 coreKtx = "1.18.0"
@@ -16,7 +16,7 @@ savedstate = "1.4.0"
 navigationCompose = "2.9.8"
 coil = "2.7.0"
 coroutines = "1.11.0"
-kaml = "0.104.0"
+kaml = "0.66.0"
 exp4j = "0.4.8"
 
 [libraries]

@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.kingzcheung.xime.plugin.core"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 28
