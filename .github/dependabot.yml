@@ -5,11 +5,44 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
+    groups:
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+      compose:
+        patterns:
+          - "androidx.compose*"
+          - "androidx.navigation*"
+          - "androidx.activity*"
+          - "androidx.lifecycle*"
+      coroutines:
+        patterns:
+          - "org.jetbrains.kotlinx:kotlinx-coroutines*"
+      android-x:
+        patterns:
+          - "androidx.*"
+          - "com.android.*"
+        exclude-patterns:
+          - "androidx.compose*"
+          - "androidx.navigation*"
+          - "androidx.activity*"
+          - "androidx.lifecycle*"
+      misc:
+        patterns:
+          - "com.charleskorn.kaml*"
+          - "com.microsoft.onnxruntime*"
+          - "io.coil-kt*"
+          - "net.objecthunter*"
+          - "junit*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns:
+          - "*"
