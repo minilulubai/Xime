@@ -1,4 +1,4 @@
-package com.kingzcheung.xime.service
+﻿package com.kingzcheung.xime.service
 
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
@@ -2635,9 +2635,29 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
         }
     }
     
-    private fun switchInputMethod() {
+    private suspend fun switchInputMethod() {
         Log.d(TAG, "Toggling ascii mode")
-        rimeEngine.commit()
+        val candState = candidateState.value
+        val pendingEnglish = candState.pendingEnglishText
+        if (pendingEnglish.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                commitText(pendingEnglish)
+                candidateState.value = candidateState.value.copy(
+                    pendingEnglishText = "",
+                    associationCandidates = emptyList()
+                )
+            }
+        } else if (candState.isComposing) {
+            if (candState.candidates.isNotEmpty()) {
+                selectCandidateAsync(0)
+            } else {
+                val input = candState.inputText
+                if (input.isNotEmpty()) {
+                    commitText(input)
+                    rimeEngine.clearComposition()
+                }
+            }
+        }
         rimeEngine.toggleAsciiMode()
         updateUI()
     }
