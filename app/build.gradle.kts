@@ -468,7 +468,7 @@ dependencies {
     // OkHttp for WebSocket and model download
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Apache Commons Compress for tar.bz2 extraction
-    implementation("org.apache.commons:commons-compress:1.26.0")
+    implementation("org.apache.commons:commons-compress:1.28.0")
     
     // Kaml for YAML parsing
     implementation(libs.kaml)
