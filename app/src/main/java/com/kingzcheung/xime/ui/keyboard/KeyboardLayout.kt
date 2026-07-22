@@ -1928,9 +1928,9 @@ fun SwipeableKeyButtonLandscape(
                     .padding(top = 2.dp, end = 4.dp)
             )
         }
-        if (swipeDownText != null) {
+        if (swipeDownKeyLabel != null) {
             Text(
-                text = swipeDownText,
+                text = swipeDownKeyLabel,
                 color = textColor.copy(alpha = 0.5f),
                 fontSize = swipeFontSize,
                 fontWeight = FontWeight.Normal,
@@ -1986,6 +1986,8 @@ fun CompactKeyboardRowWithConfig(
             val swipeDownDisplay = swipeDownRaw?.display ?: DisplayMode.BOTH
             val swipeDownBubbleText =
                 if (swipeDownDisplay != DisplayMode.KEY && swipeDownHintsEnabled) swipeDownLabel else null
+            val swipeDownKeyLabel =
+                if ((swipeDownDisplay == DisplayMode.KEY || swipeDownDisplay == DisplayMode.BOTH) && swipeDownHintsEnabled) swipeDownLabel else null
 
             val longPressConfig = KeysConfigHelper.getKeyGesture(key, isAsciiMode)?.longPress
             val longPressDisplay = longPressConfig?.display ?: "key"
@@ -2043,6 +2045,7 @@ fun CompactKeyboardRowWithConfig(
                 swipeText = swipeUpText,
                 swipeDownText = swipeDownBubbleText,
                 swipeUpKeyLabel = swipeUpKeyLabel,
+                swipeDownKeyLabel = swipeDownKeyLabel,
                 onSwipe = if (swipeUpCommitValue != null && swipeUpAction != GestureAction.NONE) { { onKeyPress(swipeUpCommitValue) } } else null,
                 onSwipeDown = compactOnSwipeDown,
                 onSwipeStateChange = onSwipeStateChange,
