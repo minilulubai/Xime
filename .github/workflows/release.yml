@@ -14,7 +14,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
@@ -41,7 +41,7 @@ jobs:
           sudo apt-get install -y cmake ninja-build
           
       - name: Cache sherpa-onnx build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             build/sherpa-onnx-*
@@ -55,7 +55,7 @@ jobs:
         run: ./gradlew downloadOnnx buildSherpaOnnx --no-daemon
         
       - name: Cache CMake build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             app/.cxx
@@ -127,7 +127,7 @@ jobs:
           fi
         
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           name: Xime ${{ steps.get_version.outputs.VERSION }}
           generate_release_notes: true
