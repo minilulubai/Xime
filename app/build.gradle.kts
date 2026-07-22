@@ -466,7 +466,7 @@ dependencies {
     implementation(libs.coil)
     
     // OkHttp for WebSocket and model download
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
     // Apache Commons Compress for tar.bz2 extraction
     implementation("org.apache.commons:commons-compress:1.26.0")
     
