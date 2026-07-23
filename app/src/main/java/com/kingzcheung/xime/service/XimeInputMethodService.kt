@@ -100,7 +100,6 @@ import kotlin.math.roundToInt
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.ui.theme.XimeTheme
 import com.kingzcheung.xime.util.FileLogger
-import com.kingzcheung.xime.util.PreeditMergeHelper
 import com.kingzcheung.xime.keyboard.ActionExecutor
 import com.kingzcheung.xime.keyboard.HANDWRITING_SCHEMA_ID
 import com.kingzcheung.xime.keyboard.OverlayRoute
@@ -2495,7 +2494,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 selectedCandidate!!
             }
             val fullCommitText = if (isT9) {
-                PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, textToMerge)
+                if (t9PartialCommitTexts.isNotEmpty()) {
+                    t9PartialCommitTexts.joinToString("") + textToMerge
+                } else {
+                    textToMerge
+                }
             } else {
                 textToMerge
             }
@@ -2517,6 +2520,10 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     t9SelectedCandidatePinyin = ""
                 )
             }
+            // T9 full commit 后清除 RIME composition，防止残留状态导致
+            // 后续按键（如左侧候选区标点符号）重新拉取旧 preedit 和候选词。
+            // 放在 keyProcessingDispatcher 上执行，避免阻塞 Main 线程。
+            rimeEngine.clearComposition()
         } else {
             withContext(Dispatchers.Main) {
                 if (isT9) {
