@@ -2520,6 +2520,10 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                     t9SelectedCandidatePinyin = ""
                 )
             }
+            // T9 full commit 后清除 RIME composition，防止残留状态导致
+            // 后续按键（如左侧候选区标点符号）重新拉取旧 preedit 和候选词。
+            // 放在 keyProcessingDispatcher 上执行，避免阻塞 Main 线程。
+            rimeEngine.clearComposition()
         } else {
             withContext(Dispatchers.Main) {
                 if (isT9) {
