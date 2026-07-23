@@ -2,6 +2,8 @@ package com.kingzcheung.xime.clipboard
 
 import android.content.ClipData
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,17 +48,31 @@ class ClipboardManager private constructor(private val context: Context) {
     private val androidClipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as AndroidClipboardManager
     
     private val clipboardListener = AndroidClipboardManager.OnPrimaryClipChangedListener {
+        readClipboard()
+    }
+
+    private fun readClipboard(retries: Int = 3) {
         try {
             val clipData = androidClipboardManager.primaryClip
             if (clipData != null && clipData.itemCount > 0) {
-                val text = clipData.getItemAt(0).text?.toString()
-                if (!text.isNullOrEmpty()) {
-                    addItem(text)
-                } else {
-                    Log.d(TAG, "Clipboard changed but text is null/empty")
+                val item = clipData.getItemAt(0)
+                val text = when {
+                    item.text != null -> item.text.toString()
+                    item.uri != null -> item.uri.toString()
+                    item.intent != null -> item.intent.toUri(0)
+                    else -> null
                 }
+                if (!text.isNullOrEmpty()) {
+                    if (retries < 3) Log.d(TAG, "Clipboard read succeeded after retry #${3 - retries}")
+                    addItem(text)
+                    return
+                }
+            }
+            if (retries > 0) {
+                Log.d(TAG, "Clipboard not ready, retrying in 100ms ($retries left)")
+                Handler(Looper.getMainLooper()).postDelayed({ readClipboard(retries - 1) }, 100L)
             } else {
-                Log.d(TAG, "Clipboard changed but primaryClip is null")
+                Log.w(TAG, "Failed to read clipboard after all retries")
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "Cannot read clipboard: missing permission", e)
