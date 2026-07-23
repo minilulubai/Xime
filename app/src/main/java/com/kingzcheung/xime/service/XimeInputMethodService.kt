@@ -100,7 +100,6 @@ import kotlin.math.roundToInt
 import com.kingzcheung.xime.settings.KeysConfigHelper
 import com.kingzcheung.xime.ui.theme.XimeTheme
 import com.kingzcheung.xime.util.FileLogger
-import com.kingzcheung.xime.util.PreeditMergeHelper
 import com.kingzcheung.xime.keyboard.ActionExecutor
 import com.kingzcheung.xime.keyboard.HANDWRITING_SCHEMA_ID
 import com.kingzcheung.xime.keyboard.OverlayRoute
@@ -2495,7 +2494,11 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 selectedCandidate!!
             }
             val fullCommitText = if (isT9) {
-                PreeditMergeHelper.mergePartialCommitText(t9PartialCommitTexts, textToMerge)
+                if (t9PartialCommitTexts.isNotEmpty()) {
+                    t9PartialCommitTexts.joinToString("") + textToMerge
+                } else {
+                    textToMerge
+                }
             } else {
                 textToMerge
             }
