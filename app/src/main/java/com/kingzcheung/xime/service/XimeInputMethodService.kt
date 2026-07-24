@@ -176,6 +176,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
     private val voiceAmplitudeState = mutableFloatStateOf(0f)
     private val quickSendItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
     private val recentClipboardItemsState = mutableStateOf<List<com.kingzcheung.xime.clipboard.ClipboardItem>>(emptyList())
+    private val bottomInsetPxState = mutableStateOf(0)
     private var hasHardwareKeyboard = false
     private var floatingWinX = 100
     private var floatingWinY = 300
@@ -294,15 +295,23 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 if (decorView != null) {
                     val insets = decorView.rootWindowInsets
                     if (insets != null) {
-                        return (insets.getInsetsIgnoringVisibility(
+                        val px = insets.getInsetsIgnoringVisibility(
                             android.view.WindowInsets.Type.navigationBars()
-                        ).bottom / resources.displayMetrics.density).roundToInt()
+                        ).bottom
+                        val dp = (px / resources.displayMetrics.density).roundToInt()
+                        Log.d(TAG, "NavBar: ignoringVisibility px=$px dp=$dp")
+                        return dp
                     }
                 }
             }
             val resId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-            if (resId > 0) (resources.getDimensionPixelSize(resId) / resources.displayMetrics.density).roundToInt() else 0
-        } catch (e: Exception) { 0 }
+            val dp = if (resId > 0) (resources.getDimensionPixelSize(resId) / resources.displayMetrics.density).roundToInt() else 0
+            Log.d(TAG, "NavBar: resourceFallback resId=$resId dp=$dp")
+            return dp
+        } catch (e: Exception) {
+            Log.w(TAG, "NavBar: error", e)
+            0
+        }
     }
 
     private fun tryGetVisibleNavBarHeightDp(): Int {
@@ -315,12 +324,18 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         val px = insets.getInsets(
                             android.view.WindowInsets.Type.navigationBars()
                         ).bottom
-                        if (px > 0) return (px / resources.displayMetrics.density).roundToInt()
+                        val dp = if (px > 0) (px / resources.displayMetrics.density).roundToInt() else 0
+                        Log.d(TAG, "NavBar: visibleOnly px=$px dp=$dp")
+                        return dp
                     }
                 }
             }
+            Log.d(TAG, "NavBar: visibleOnly 0 (no R or null)")
             0
-        } catch (e: Exception) { 0 }
+        } catch (e: Exception) {
+            Log.w(TAG, "NavBar: visibleOnly error", e)
+            0
+        }
     }
 
     private fun tryGetStatusBarHeightDp(): Int {
@@ -339,6 +354,62 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             }
             val resId = resources.getIdentifier("status_bar_height", "dimen", "android")
             if (resId > 0) (resources.getDimensionPixelSize(resId) / resources.displayMetrics.density).roundToInt() else 0
+        } catch (e: Exception) { 0 }
+    }
+
+    private fun dumpAllInsets() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            val decorView = window.window?.decorView ?: return
+            val insets = decorView.rootWindowInsets ?: return
+            val density = resources.displayMetrics.density
+            val types = mapOf(
+                "nav" to android.view.WindowInsets.Type.navigationBars(),
+                "status" to android.view.WindowInsets.Type.statusBars(),
+                "system" to android.view.WindowInsets.Type.systemBars(),
+                "tappable" to android.view.WindowInsets.Type.tappableElement(),
+                "sysGestures" to android.view.WindowInsets.Type.systemGestures(),
+                "mandatoryGest" to android.view.WindowInsets.Type.mandatorySystemGestures(),
+                "caption" to android.view.WindowInsets.Type.captionBar(),
+            )
+            val sb = StringBuilder("AllInsets:")
+            for ((name, type) in types) {
+                val ign = insets.getInsetsIgnoringVisibility(type)
+                val vis = insets.getInsets(type)
+                sb.append(" $name=b(ign=${(ign.bottom/density).roundToInt()},vis=${(vis.bottom/density).roundToInt()})")
+            }
+            sb.append(" decorH=${(decorView.height/density).roundToInt()}")
+            Log.d(TAG, sb.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "dumpAllInsets error", e)
+        }
+    }
+
+    private fun extractBottomInset(
+        insets: android.view.WindowInsets,
+        threshold: Int
+    ): Int {
+        // navigationBars 为 0 但仍有底部区域：检查 systemBars / tappableElement 等
+        val sys = insets.getInsets(android.view.WindowInsets.Type.systemBars()).bottom
+        if (sys > 0) return sys
+        val nav = insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+        if (nav > 0) return nav
+        val tappable = insets.getInsets(android.view.WindowInsets.Type.tappableElement()).bottom
+        if (tappable > 0) return tappable
+        val mandatory = insets.getInsets(android.view.WindowInsets.Type.mandatorySystemGestures()).bottom
+        if (mandatory > threshold) return mandatory
+        val gestures = insets.getInsets(android.view.WindowInsets.Type.systemGestures()).bottom
+        if (gestures > threshold) return gestures
+        return 0
+    }
+
+    private fun getActiveBottomInsetPx(): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return 0
+        return try {
+            val decorView = window.window?.decorView ?: return 0
+            val insets = decorView.rootWindowInsets ?: return 0
+            val threshold = (resources.displayMetrics.density * 40).toInt()
+            extractBottomInset(insets, threshold)
         } catch (e: Exception) { 0 }
     }
 
@@ -669,6 +740,20 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             }
         )
         
+        bottomInsetPxState.value = getActiveBottomInsetPx()
+        val threshold = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            (resources.displayMetrics.density * 40).toInt()
+        } else 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            keyboardContainer.setOnApplyWindowInsetsListener { v, insets ->
+                val px = extractBottomInset(insets, threshold)
+                if (px != bottomInsetPxState.value) {
+                    bottomInsetPxState.value = px
+                }
+                v.onApplyWindowInsets(insets)
+            }
+        }
+        
         val composeView = ComposeView(this).apply {
             isFocusable = true
             isFocusableInTouchMode = true
@@ -687,8 +772,8 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 // 用物理屏幕高度减去状态栏，保证不同 Android 版本一致
                 val effectiveScreenH = if (state.isFloatingMode) physicalScreenDp - statusBarHeightDp else screenHeightDp
                 val windowVisibleHeightDp = effectiveScreenH
-                // 检测 config.screenHeightDp 是否已排除导航栏（非全屏 + 3按钮导航）
                 val navBarAlreadyExcluded = (physicalScreenDp - screenHeightDp) >= (navBarHeightDp + statusBarHeightDp - 3)
+                Log.d(TAG, "ScreenInfo: physicalH=$physicalScreenDp configH=$screenHeightDp statusBar=$statusBarHeightDp navBar=$navBarHeightDp visibleNavBar=$visibleNavBarHeightDp navBarExcluded=$navBarAlreadyExcluded")
                 val floatingMinY = if (navBarAlreadyExcluded) 0 else visibleNavBarHeightDp
 
                 val screenWidthDp = resources.configuration.screenWidthDp
@@ -720,11 +805,17 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 Log.d(TAG, "ComposeHeight: showResize=${state.showKeyboardResize} orientHeight=$orientationHeight displayHeight=$displayHeight keyboardHeight=$keyboardHeight floatScale=$floatScale effectiveHeight=$effectiveKeyboardHeight isFloatingMode=${state.isFloatingMode} isLandscape=$isLandscape")
                 
                 val density = LocalDensity.current
-                val navBarInsetPx = WindowInsets.navigationBars.getBottom(density)
-                val navBarInsetDp = if (navBarInsetPx > 0) {
-                    with(density) { navBarInsetPx.toDp().value.toInt() }
+                // 优先使用 Compose 的 navigationBars 检测（标准设备正常返回值）
+                val composeNavPx = WindowInsets.navigationBars.getBottom(density)
+                // 如果 Compose 返回 0（如 iQOO 不把底部工具栏归为 nav），fallback 到 View 层多类型检测
+                val activeBottomPx = if (composeNavPx > 0) composeNavPx else bottomInsetPxState.value
+                val rawDp = if (activeBottomPx > 0) {
+                    with(density) { activeBottomPx.toDp().value.toInt() }
                 } else 0
-                val navBarDp = navBarInsetDp.dp
+                // 保证底部最小留白（替换原来键盘内部 10dp 的作用）
+                val minBottomDp = 26
+                val activeBottomDp = if (rawDp > 0 && rawDp < minBottomDp) minBottomDp else rawDp
+                val navBarDp = activeBottomDp.dp
                 val hasNavBar = navBarDp > 0.dp
 
                 val quickSendFormExtra = if (state.showQuickSendForm) 200 else 0
@@ -742,7 +833,7 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                         // Sync FrameLayout height with Compose content height
                         val contentHeight = if (state.showKeyboardResize) state.resizePreviewHeightDp else floatingCardContentHeight + quickSendFormExtra
                         val totalDp = if (state.isCompact || state.isFloatingMode) effectiveScreenH
-                            else contentHeight + state.keyboardBottomPaddingDp + navBarInsetDp
+                            else contentHeight + state.keyboardBottomPaddingDp + activeBottomDp
                         Log.d(TAG, "HeightSync: mode=${if (state.showKeyboardResize) "resize" else "normal"} height=$contentHeight navBarDp=${navBarDp.value} padding=${state.keyboardBottomPaddingDp} hasNavBar=$hasNavBar totalDp=$totalDp")
                         SideEffect {
                             keyboardContainer.updateHeight(totalDp)
@@ -2938,7 +3029,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
                 if (decor != null) {
                     val navBarBg = decor.findViewById<View>(android.R.id.navigationBarBackground)
                     val navBarH = navBarBg?.height ?: 0
-                    val h = (decor.height - navBarH).coerceAtLeast(0)
+                    val decorH = decor.height
+                    val h = (decorH - navBarH).coerceAtLeast(0)
+                    Log.d(TAG, "onComputeInsets: compactMode decorH=$decorH navBarBgH=$navBarH top=$h")
                     outInsets.contentTopInsets = h
                     outInsets.visibleTopInsets = h
                     outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_VISIBLE
@@ -2977,6 +3070,9 @@ class XimeInputMethodService : InputMethodService(), LifecycleOwner, SavedStateR
             }
         } else {
             super.onComputeInsets(outInsets)
+            val decor = window.window?.decorView
+            val decorH = decor?.height ?: -1
+            Log.d(TAG, "onComputeInsets: normalMode contentTop=${outInsets.contentTopInsets} visibleTop=${outInsets.visibleTopInsets} decorH=$decorH")
         }
     }
 
