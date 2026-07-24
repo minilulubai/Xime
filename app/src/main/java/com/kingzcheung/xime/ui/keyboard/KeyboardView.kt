@@ -119,7 +119,12 @@ fun KeyboardView(
 
     SideEffect {
         callbacks.onT9RightCandidateWillBeSelected = { pinyin, textLength ->
-            t9Controller.onRightCandidateSelected(pinyin, textLength)
+            if (pinyin.isNullOrBlank()) {
+                // emoji/符号等无拼音注释的候选词：直接提交上屏，不走消耗算法
+                t9Controller.onRightCandidateSelectedByDirectCommit()
+            } else {
+                t9Controller.onRightCandidateSelected(pinyin, textLength)
+            }
             t9Controller.inputBuffer.isEmpty
         }
         callbacks.onT9ForceSendToRime = {

@@ -4,6 +4,23 @@ package com.kingzcheung.xime.rime
 // 设计文档 6.2 节：三层消费算法 — 纯函数
 // ─────────────────────────────────────────────────────────
 
+// ── 公共扩展：候选拼音解析 ──
+
+/** 将候选词拼音注释按空格拆分为音节列表（仅含字母的音节） */
+internal fun String?.parseSyllables(): List<String> =
+    this?.trim()?.split("\\s+".toRegex())
+        ?.filter { it.any { c -> c.isLetter() } } ?: emptyList()
+
+/** 候选词拼音注释中的字母数（不含空格） */
+internal fun String?.candidateLetterCount(): Int =
+    this?.count { it.isLetter() } ?: 0
+
+/** 候选词拼音注释中仅保留字母（去除空格） */
+internal fun String?.candidateLettersOnly(): String =
+    this?.filter { it.isLetter() } ?: ""
+
+// ── 消费计算 ──
+
 /**
  * 根据候选拼音注释计算数字段中被消费的位数。
  *
@@ -18,10 +35,13 @@ package com.kingzcheung.xime.rime
  * 若音节匹配失败（pinyinToDigitCode 返回 null 或无前缀匹配），
  * 回退到字母数（每个字母对应一位数字），最终回退到贪婪最长匹配。
  */
-fun computeConsumedDigitsFromPinyin(segment: String, candidatePinyin: String?): Int {
+fun computeConsumedDigitsFromPinyin(
+    segment: String,
+    candidatePinyin: String?,
+    allowLongestPrefix: Boolean = false,
+): Int {
     if (!candidatePinyin.isNullOrEmpty()) {
-        val syllables = candidatePinyin.trim().split("\\s+".toRegex())
-            .filter { it.any { c -> c.isLetter() } }
+        val syllables = candidatePinyin.parseSyllables()
         if (syllables.isNotEmpty()) {
             var consumed = 0
             var remaining = segment
@@ -32,10 +52,37 @@ fun computeConsumedDigitsFromPinyin(segment: String, candidatePinyin: String?): 
                     consumed += sylCode.length
                     remaining = remaining.drop(sylCode.length)
                 } else {
-                    // 前缀匹配：声母场景，用户只输入了音节首字母对应的数字
                     var matchLen = 0
-                    for (len in 1..minOf(sylCode.length, remaining.length)) {
-                        if (remaining.startsWith(sylCode.take(len))) matchLen = len
+                    if (remaining.length >= sylCode.length) {
+                        // 精确匹配失败。derive rule 场景（digitSegment）使用最长公共前缀，
+                        // 避免 RIME 扩展拼音导致 T9 码不匹配（如 "yong"→"9664" vs "966"）。
+                        // apostrophe 场景仅 1 字符声母匹配，防止过度消费。
+                        if (allowLongestPrefix) {
+                            for (len in (sylCode.length - 1) downTo 1) {
+                                if (remaining.startsWith(sylCode.take(len))) {
+                                    matchLen = len
+                                    break
+                                }
+                            }
+                        }
+                        if (matchLen == 0 && remaining.startsWith(sylCode.take(1))) {
+                            matchLen = 1
+                        }
+                    } else {
+                        // apostrophe 场景仅匹配 1 字符声母，防止过度消费。
+                        // 例："guang"(48264) 匹配剩余 "482" 时，仅匹配声母 "4"(1 位)，
+                        // 而非最长匹配 "482"(3 位)，否则 "64" 无法与输入序列对应。
+                        if (allowLongestPrefix) {
+                            // 统一递减方向：最长匹配优先，找到即 break，与上方分支一致。
+                            for (len in remaining.length downTo 1) {
+                                if (sylCode.startsWith(remaining.take(len))) {
+                                    matchLen = len
+                                    break
+                                }
+                            }
+                        } else if (remaining.isNotEmpty() && sylCode.startsWith(remaining.take(1))) {
+                            matchLen = 1
+                        }
                     }
                     if (matchLen > 0) {
                         consumed += matchLen
@@ -45,10 +92,96 @@ fun computeConsumedDigitsFromPinyin(segment: String, candidatePinyin: String?): 
             }
             if (consumed > 0) return consumed
         }
-        val letterCount = candidatePinyin.count { it in 'a'..'z' || it in 'A'..'Z' }
+        val letterCount = candidatePinyin.candidateLetterCount()
         if (letterCount > 0 && letterCount <= segment.length) return letterCount
     }
     return T9PinyinMap.firstSyllableOptions(segment, maxResults = 1).firstOrNull()?.digitLength ?: 0
+}
+
+// ── 首音节跨越 selection 边界调整 ──
+
+/**
+ * 当第一音节跨越 selection 边界时，调整 consumedFromUnassigned 值。
+ *
+ * 第一音节的 digit code 精确匹配 effectiveSequence 前缀但长度超过
+ * 第一 selection 的 digit code 时，说明它跨越了 selection 边界，
+ * 错误地消费了后续 selection 的 digit code。此时限制只消费第一
+ * selection 的 digit code，剩余音节在剩余 effectiveSequence 中重匹配。
+ *
+ * 典型场景：54482 左选 j→g，右选"机构化(ji gou hua)"
+ *   "ji"(54) 精确匹配 "54482" 前缀（"j"+"g" 的拼接 "54"），
+ *   但应只消费 "j"(5) 而非 "j"+"g"(54)，否则后续消费错位。
+ *
+ * @param candidatePinyin 候选词拼音注释
+ * @param effectiveSequence selectionDigits 与 unassigned 的拼接
+ * @param selectionDigits 已确认 selection 的 digit code 拼接
+ * @param unassigned 未分配数字段
+ * @param currentConsumedFromUnassigned 当前计算的 consumedFromUnassigned
+ * @param firstSelectionPinyin 第一 selection 的拼音
+ * @return 调整后的 consumedFromUnassigned
+ */
+fun adjustConsumedForSelectionBoundary(
+    candidatePinyin: String?,
+    effectiveSequence: String,
+    selectionDigits: String,
+    unassigned: String,
+    currentConsumedFromUnassigned: Int,
+    firstSelectionPinyin: String,
+): Int {
+    if (currentConsumedFromUnassigned < 0) return currentConsumedFromUnassigned
+    val syls = candidatePinyin.parseSyllables()
+    if (syls.isEmpty()) return currentConsumedFromUnassigned
+
+    val firstSylCode = T9PinyinMap.pinyinToDigitCode(syls[0])
+    val firstSelCode = T9PinyinMap.pinyinToDigitCode(firstSelectionPinyin)
+    if (firstSylCode == null || firstSelCode == null) return currentConsumedFromUnassigned
+    if (firstSylCode.length <= firstSelCode.length) return currentConsumedFromUnassigned
+    if (!effectiveSequence.startsWith(firstSylCode)) return currentConsumedFromUnassigned
+
+    // 第一音节只消费第一 selection 的 digit code，剩余音节重匹配
+    val remainingSyls = syls.drop(1).joinToString(" ")
+    val remainingEff = effectiveSequence.drop(firstSelCode.length)
+    val restConsumed = computeConsumedDigitsFromPinyin(remainingEff, remainingSyls)
+    val newTotalConsumed = firstSelCode.length + restConsumed
+    return maxOf(0, newTotalConsumed - selectionDigits.length)
+}
+
+/**
+ * 首音节完全匹配守卫：当第一音节完全匹配 effectiveSequence 前缀但第二音节
+ * 无法匹配剩余 unassigned 时，限制消费仅到第一音节在 unassigned 中的部分。
+ *
+ * 避免声母前缀过度消费。典型场景：54482 左选 j → 右选"机会 ji hui"
+ * "ji"(54) 完全匹配 "54482" 但 "5" 已被 selection 消费，
+ * "hui"(484) 前缀匹配 "482" 的 "4" → 过度消费 → 需拦截。
+ *
+ * @param candidatePinyin 候选词拼音注释
+ * @param effectiveSequence selectionDigits 与 unassigned 的拼接
+ * @param selectionDigits 已确认 selection 的 digit code 拼接
+ * @param unassigned 未分配数字段
+ * @param consumedFromUnassigned 当前计算的 consumedFromUnassigned
+ * @return 调整后的 consumedFromUnassigned
+ */
+fun adjustForSecondSyllableMismatch(
+    candidatePinyin: String?,
+    effectiveSequence: String,
+    selectionDigits: String,
+    unassigned: String,
+    consumedFromUnassigned: Int,
+): Int {
+    if (consumedFromUnassigned <= 0) return consumedFromUnassigned
+    val syls = candidatePinyin.parseSyllables()
+    if (syls.size <= 1) return consumedFromUnassigned
+
+    val first = T9PinyinMap.pinyinToDigitCode(syls[0])
+    val second = T9PinyinMap.pinyinToDigitCode(syls[1])
+    if (first == null || second == null) return consumedFromUnassigned
+    if (!effectiveSequence.startsWith(first)) return consumedFromUnassigned
+
+    val firstFromUnassign = maxOf(0, first.length - selectionDigits.length)
+    if (firstFromUnassign <= 0) return consumedFromUnassigned
+    if (unassigned.drop(firstFromUnassign).startsWith(second)) return consumedFromUnassigned
+
+    return firstFromUnassign
 }
 
 /**
@@ -91,6 +224,109 @@ fun isFullCommitByJianpinAlignment(
         val sylCode = T9PinyinMap.pinyinToDigitCode(commentSyllables[i])
         sylCode != null && sylCode.take(1) == bufferDigits[i].toString()
     }
+}
+
+// ── 三层消费算法核心计算 ──
+
+/**
+ * 计算右侧候选选词时消费的数字段和剩余段。
+ *
+ * 三层消费算法：
+ *   层级1：apostrophe 模式（selections 非空 && unassigned 非空）
+ *     从 unassigned 中按候选词数字码匹配 digit_sequence 计算消费
+ *   层级2：digitSegment 模式（selections 为空 && unassigned 非空）
+ *     从 candidatePinyin 逐音节匹配 unassigned 前缀
+ *   层级3：letterBuffer 模式（selections 非空 && unassigned 为空）
+ *     通过 pinyinToDigitCode 回退转为数字，再按数字段模式处理
+ *
+ * @param buf 当前 T9Buffer
+ * @param candidatePinyin 候选词拼音注释
+ * @return Pair<consumedDigits, remainingDigits>
+ */
+fun computeRightCommitConsumption(
+    buf: T9Buffer,
+    candidatePinyin: String?,
+): Pair<String, String> {
+    val hasSelections = buf.selections.isNotEmpty()
+    val unassigned = buf.unassigned
+
+    // apostrophe 模式：基于候选词实际数字码匹配 digit_sequence 计算消费
+    if (hasSelections && unassigned.isNotEmpty()) {
+        val selectionDigits = buf.selections.joinToString("") {
+            T9PinyinMap.pinyinToDigitCode(it.pinyin) ?: ""
+        }
+        val effectiveSequence = selectionDigits + unassigned
+        val totalConsumed = computeConsumedDigitsFromPinyin(effectiveSequence, candidatePinyin)
+        if (totalConsumed > 0) {
+            var consumedFromUnassigned = totalConsumed - selectionDigits.length
+
+            // 首音节完全匹配守卫：当第一个音节完全匹配 effectiveSequence 前缀时，
+            // 需要确保第二个音节在剩余 unassigned 中有对应匹配（避免过度消费）。
+            if (consumedFromUnassigned > 0) {
+                consumedFromUnassigned = adjustForSecondSyllableMismatch(
+                    candidatePinyin = candidatePinyin,
+                    effectiveSequence = effectiveSequence,
+                    selectionDigits = selectionDigits,
+                    unassigned = unassigned,
+                    consumedFromUnassigned = consumedFromUnassigned,
+                )
+            }
+
+            // 首音节跨越 selection 边界守卫：当第一音节 digit code 精确匹配
+            // effectiveSequence 前缀且长度超过第一 selection 的 digit code 时，
+            // 限制只消费第一 selection 的 digit code，剩余音节在剩余序列中重匹配。
+            if (buf.selections.isNotEmpty()) {
+                consumedFromUnassigned = adjustConsumedForSelectionBoundary(
+                    candidatePinyin = candidatePinyin,
+                    effectiveSequence = effectiveSequence,
+                    selectionDigits = selectionDigits,
+                    unassigned = unassigned,
+                    currentConsumedFromUnassigned = consumedFromUnassigned,
+                    firstSelectionPinyin = buf.selections.first().pinyin,
+                )
+            }
+
+            if (consumedFromUnassigned in 1..unassigned.length) {
+                return unassigned.take(consumedFromUnassigned) to unassigned.drop(consumedFromUnassigned)
+            }
+            return "" to unassigned
+        }
+        // fallback：数字码匹配失败，回退到字母数差值
+        val candidateLetterCount = candidatePinyin.candidateLetterCount()
+        val consumedAfter = (candidateLetterCount - buf.selectedPinyin.length)
+            .coerceAtMost(unassigned.length)
+        if (consumedAfter > 0) {
+            return unassigned.take(consumedAfter) to unassigned.drop(consumedAfter)
+        }
+        return "" to unassigned
+    }
+
+    // digitSegment 模式
+    if (!hasSelections && unassigned.isNotEmpty()) {
+        val segment = unassigned
+        val consumedCount = computeConsumedDigitsFromPinyin(segment, candidatePinyin, allowLongestPrefix = true)
+        return segment.take(consumedCount) to segment.drop(consumedCount)
+    }
+
+    // letterBuffer 模式
+    val selectedPinyin = buf.selectedPinyin
+    val effectiveLetterCount = candidatePinyin.candidateLetterCount()
+    if (effectiveLetterCount > 0 && effectiveLetterCount < selectedPinyin.length) {
+        val consumedDig = T9PinyinMap.pinyinToDigitCode(selectedPinyin.take(effectiveLetterCount)) ?: ""
+        val remainingDig = T9PinyinMap.pinyinToDigitCode(selectedPinyin.drop(effectiveLetterCount)) ?: ""
+        return consumedDig to remainingDig
+    }
+    if (effectiveLetterCount >= selectedPinyin.length) return "" to ""
+
+    val digits = T9PinyinMap.pinyinToDigitCode(selectedPinyin)
+    if (digits != null) {
+        val consumedDigitCount = T9PinyinMap.firstSyllableOptions(digits, maxResults = 1)
+            .firstOrNull()?.digitLength ?: 0
+        if (consumedDigitCount in 1..<digits.length) {
+            return digits.take(consumedDigitCount) to digits.drop(consumedDigitCount)
+        }
+    }
+    return "" to ""
 }
 
 /**
@@ -143,8 +379,7 @@ fun shouldFullCommitInSelection(
 ): Boolean {
     if (consumedFromNonSelected < nonSelectedPinyinLength) return false
     if (remainingAfterCommit.isNotEmpty()) return false
-    val commentSyllables = candidatePinyin?.trim()?.split("\\s+".toRegex())
-        ?.filter { it.any { c -> c.isLetter() } } ?: emptyList()
+    val commentSyllables = candidatePinyin.parseSyllables()
     return commentSyllables.any { T9PinyinMap.areDigitCodesMatching(it, selectedPinyin) }
 }
 
@@ -179,4 +414,106 @@ fun resolveRimeCandidateIndex(
     if (selectedCandidate == null) return uiIndex
     val rawIdx = rawCandidates.indexOf(selectedCandidate)
     return if (rawIdx >= 0) rawIdx else uiIndex
+}
+
+// ── T9Buffer 扩展 ──
+
+/**
+ * 构造纯数字 T9Buffer（用于 digitSegment 模式的剩余数字）。
+ * 保留原始 digitSequence 和 totalDigitsEntered。
+ *
+ * consumedCount 计算为"原有已消费数 + 本次新消费数"，
+ * 即 originalBuf.consumedCount + (originalBuf.unassigned.length - remainingDigits.length)，
+ * 语义上等价于 originalBuf.digitSequence.length - remainingDigits.length，
+ * 但更清晰地表达了"追加消费"的意图。
+ */
+fun T9Buffer.withRemainingDigits(
+    remainingDigits: String,
+    originalBuf: T9Buffer,
+): T9Buffer {
+    if (remainingDigits.isEmpty()) return T9Buffer.EMPTY
+    val newlyConsumed = originalBuf.unassigned.length - remainingDigits.length
+    return T9Buffer(
+        digitSequence = originalBuf.digitSequence,
+        selections = emptyList(),
+        consumedCount = originalBuf.consumedCount + newlyConsumed,
+        totalDigitsEntered = originalBuf.totalDigitsEntered,
+    )
+}
+
+// ── 音节覆盖判定 ──
+
+/**
+ * 判断候选词音节数是否足以覆盖所有已确认选择及未分配数字段。
+ * apostrophe 模式下未分配数字至少需要一个额外音节。
+ */
+internal fun canCoverAllBySyllableCount(
+    commentSyllables: List<String>,
+    selectionCount: Int,
+    hasUnassigned: Boolean,
+): Boolean = commentSyllables.size >= selectionCount + (if (hasUnassigned) 1 else 0)
+
+// ── SELECTION 态消费计算 ──
+
+/**
+ * 计算非选中部分被候选词消费的位数（基于音节数溢出或字母数模型）。
+ */
+fun computeSelectionConsumedCount(
+    hasSyllableBoundaries: Boolean,
+    candidateTextLength: Int,
+    commentSyllables: List<String>,
+    effectiveLetterCount: Int,
+    prevSelectedOption: T9PinyinMap.SyllableOption,
+    nonSelectedDigits: String,
+    candidatePinyin: String?,
+): Int {
+    if (hasSyllableBoundaries && candidateTextLength > 0 && commentSyllables.size > candidateTextLength) {
+        return consumeBySyllableOverflow(commentSyllables, candidateTextLength)
+    }
+    return consumeByLetterOrDigits(
+        hasSyllableBoundaries, effectiveLetterCount, prevSelectedOption,
+        commentSyllables, nonSelectedDigits, candidatePinyin,
+    )
+}
+
+/** 音节数溢出：按候选字数对应的音节数字码总长度消费 */
+fun consumeBySyllableOverflow(
+    commentSyllables: List<String>,
+    candidateTextLength: Int,
+): Int {
+    var consumed = 0
+    for (i in 0 until minOf(candidateTextLength, commentSyllables.size)) {
+        consumed += T9PinyinMap.pinyinToDigitCode(commentSyllables[i])?.length ?: 0
+    }
+    return consumed
+}
+
+/**
+ * 字母数模型消费：以 (有效字母数 - 选中项拼音长度) 为基础，
+ * 有音节边界时用音节数字码总长度校验，避免字母数低估消费量。
+ */
+fun consumeByLetterOrDigits(
+    hasSyllableBoundaries: Boolean,
+    effectiveLetterCount: Int,
+    prevSelectedOption: T9PinyinMap.SyllableOption,
+    commentSyllables: List<String>,
+    nonSelectedDigits: String,
+    candidatePinyin: String?,
+): Int {
+    val candidateNonSelectedLetters = effectiveLetterCount - prevSelectedOption.pinyin.length
+    if (candidateNonSelectedLetters !in 1..nonSelectedDigits.length) {
+        return computeConsumedDigitsFromPinyin(nonSelectedDigits, candidatePinyin)
+    }
+    if (!hasSyllableBoundaries) return candidateNonSelectedLetters
+
+    val nonSelectedSyllables = if (commentSyllables.lastOrNull() == prevSelectedOption.pinyin)
+        commentSyllables.dropLast(1) else commentSyllables
+    val totalSyllableDigits = nonSelectedSyllables.sumOf {
+        T9PinyinMap.pinyinToDigitCode(it)?.length ?: 0
+    }
+    return if (totalSyllableDigits > candidateNonSelectedLetters) {
+        computeConsumedDigitsFromPinyin(nonSelectedDigits, candidatePinyin)
+    } else {
+        candidateNonSelectedLetters
+    }
 }

@@ -554,6 +554,17 @@ class T9InputController(
         return result
     }
 
+    /**
+     * 右侧候选直接提交上屏：不经过消耗算法，清空缓冲区并进入空闲状态。
+     * 用于 emoji/符号等无拼音注释的候选词，RIME 引擎已匹配输入序列到候选词，
+     * T9 控制器无需做音节级消费计算。
+     */
+    fun onRightCandidateSelectedByDirectCommit(): Boolean {
+        if (inputBuffer.isEmpty) return true
+        resetState(clearCache = true, clearRime = false)
+        return true
+    }
+
     fun clearRimeAndResend() {
         rimeBridge.clearRimeAndResend()
         sendToRime()

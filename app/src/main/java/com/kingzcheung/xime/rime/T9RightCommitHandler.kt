@@ -153,13 +153,33 @@ class T9RightCommitHandler {
         prevSelectedOption: T9PinyinMap.SyllableOption?,
         prevSelectionCandidateDigits: String?,
         prevConfirmedPinyin: String = "",
+    ): Boolean = commitState(ctx, ctx.inputBuffer, Triple(prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin))
+
+    /**
+     * 统一状态提交入口。替代分发的状态同步逻辑，消除状态同步不一致。
+     *
+     * 所有 handler 出口统一通过此方法进入最终状态，确保：
+     * - buffer 与 stateMachine 状态一致
+     * - consumedCount 与 selections 同步
+     * - UI 刷新与 RIME 输入同步
+     *
+     * @param ctx 上下文
+     * @param buffer 最终状态的 T9Buffer
+     * @param newState (selectedOption, selectionCandidateDigits, confirmedPinyin)
+     *         为 null 的 selectedOption 表示 INPUT 态，否则为 SELECTION 态
+     * @return buffer 是否为空（full commit → true）
+     */
+    private fun commitState(
+        ctx: Ctx,
+        buffer: T9Buffer,
+        newState: Triple<T9PinyinMap.SyllableOption?, String?, String>,
     ): Boolean {
-        if (prevSelectedOption != null) {
+        ctx.inputBuffer = buffer
+        ctx.leftColumnLocked = false
+        val (opt, digits, confirmed) = newState
+        if (opt != null) {
             ctx.stateMachine.restoreFrom(
-                T9StateMachine.State.SELECTION,
-                prevSelectedOption,
-                prevSelectionCandidateDigits ?: "",
-                prevConfirmedPinyin,
+                T9StateMachine.State.SELECTION, opt, digits ?: "", confirmed,
                 ctx.stateMachine.selectionHistory.toList(),
             )
         } else {
@@ -168,7 +188,7 @@ class T9RightCommitHandler {
         ctx.syncState()
         ctx.updateCandidates(true)
         ctx.setRimeInput(null)
-        return false
+        return buffer.isEmpty
     }
 
     /**
@@ -199,84 +219,6 @@ class T9RightCommitHandler {
         return buf.copy(selections = buf.selections.drop(cutIndex))
     }
 
-    /**
-     * 构造纯数字 T9Buffer（用于 digitSegment 模式的剩余数字）。
-     * 保留原始 digitSequence 和 totalDigitsEntered。
-     */
-    private fun T9Buffer.withRemainingDigits(
-        remainingDigits: String,
-        originalBuf: T9Buffer,
-    ): T9Buffer {
-        if (remainingDigits.isEmpty()) return T9Buffer.EMPTY
-        // 剩余数字是原始 digitSequence 的后缀
-        // consumedCount = digitSequence.length - remainingDigits.length
-        return T9Buffer(
-            digitSequence = originalBuf.digitSequence,
-            selections = emptyList(),
-            consumedCount = originalBuf.digitSequence.length - remainingDigits.length,
-            totalDigitsEntered = originalBuf.totalDigitsEntered,
-        )
-    }
-
-    // ── 三层消费算法实现（T9Buffer 版本） ──
-
-    /**
-     * 计算右侧候选选词时消费的数字段和剩余段（T9Buffer 版本）。
-     *
-     * 三层消费算法：
-     *   层级1：apostrophe 模式（selections 非空 && unassigned 非空）
-     *     从 unassigned 中按字母数消费
-     *   层级2：digitSegment 模式（selections 为空 && unassigned 非空）
-     *     从 candidatePinyin 逐音节匹配 unassigned 前缀
-     *   层级3：letterBuffer 模式（selections 非空 && unassigned 为空）
-     *     通过 pinyinToDigitCode 回退转为数字，再按数字段模式处理
-     */
-    private fun computeRightCommitConsumption(
-        buf: T9Buffer,
-        candidatePinyin: String?,
-    ): Pair<String, String> {
-        val hasSelections = buf.selections.isNotEmpty()
-        val unassigned = buf.unassigned
-
-        // apostrophe 模式
-        if (hasSelections && unassigned.isNotEmpty()) {
-            val candidateLetterCount = candidatePinyin?.count { it.isLetter() } ?: 0
-            val consumedAfter = candidateLetterCount - buf.selectedPinyin.length
-            if (consumedAfter > 0) {
-                val remaining = unassigned.drop(consumedAfter)
-                return unassigned.take(consumedAfter) to remaining
-            }
-            return unassigned to unassigned
-        }
-
-        // digitSegment 模式
-        if (!hasSelections && unassigned.isNotEmpty()) {
-            val segment = unassigned
-            val consumedCount = computeConsumedDigitsFromPinyin(segment, candidatePinyin)
-            return segment.take(consumedCount) to segment.drop(consumedCount)
-        }
-
-        // letterBuffer 模式
-        val selectedPinyin = buf.selectedPinyin
-        val effectiveLetterCount = candidatePinyin?.count { it.isLetter() } ?: 0
-        if (effectiveLetterCount > 0 && effectiveLetterCount < selectedPinyin.length) {
-            val consumedDig = T9PinyinMap.pinyinToDigitCode(selectedPinyin.take(effectiveLetterCount)) ?: ""
-            val remainingDig = T9PinyinMap.pinyinToDigitCode(selectedPinyin.drop(effectiveLetterCount)) ?: ""
-            return consumedDig to remainingDig
-        }
-        if (effectiveLetterCount >= selectedPinyin.length) return "" to ""
-
-        val digits = T9PinyinMap.pinyinToDigitCode(selectedPinyin)
-        if (digits != null) {
-            val consumedDigitCount = T9PinyinMap.firstSyllableOptions(digits, maxResults = 1)
-                .firstOrNull()?.digitLength ?: 0
-            if (consumedDigitCount in 1..<digits.length) {
-                return digits.take(consumedDigitCount) to digits.drop(consumedDigitCount)
-            }
-        }
-        return "" to ""
-    }
-
     private fun handleApostropheRightCommit(
         ctx: Ctx,
         remainingDigits: String,
@@ -293,86 +235,193 @@ class T9RightCommitHandler {
         ) {
             val selectedPinyin = prevSelectedOption.pinyin
             val nonSelectedPinyin = confirmedPinyin.dropLast(selectedPinyin.length)
-            val candidateLetterCount = candidatePinyin?.count { it.isLetter() } ?: 0
-            val consumedFromNonSelected = minOf(candidateLetterCount, nonSelectedPinyin.length)
-            val unconsumedPinyin = nonSelectedPinyin.drop(consumedFromNonSelected)
+            val candidateLetterCount = candidatePinyin.candidateLetterCount()
+            // 单音节候选词在 multi-selection 上下文中的 cap（对应 C++ CapToFirstSelectionDigitLength）：
+            // "jin"(546) 匹配 "54482" 时，字母数=3 → 贪婪消费 nonSelectedPinyin "jg"=2 位，
+            // 实际应只消费第一个非选中 selection "j"(1位)。
+            val consumedFromNonSelected = if (buf.selections.size > 1) {
+                val syllables = candidatePinyin.parseSyllables()
+                if (syllables.size <= 1) {
+                    minOf(buf.selections[0].pinyin.length, nonSelectedPinyin.length)
+                } else {
+                    // 多音节候选词在 apostrophe 模式下，音节数可能少于非选中
+                    // selections 数。字母数模型在此场景会过度消费（每个字母对应
+                    // 一个 selection），应使用音节数对应的 selection 长度之和。
+                    // 例：54482 左选 j→g→g→t，"价格(jia ge)" 2音节 vs 3个非选中
+                    // selection [j,g,g] → 消费前2个 "jg"=2，保留 "g"。
+                    val nonSelectedSelections = buf.selections.dropLast(1)
+                    if (syllables.size < nonSelectedSelections.size) {
+                        nonSelectedSelections.take(syllables.size)
+                            .sumOf { it.pinyin.length }
+                            .coerceAtMost(nonSelectedPinyin.length)
+                    } else {
+                        minOf(candidateLetterCount, nonSelectedPinyin.length)
+                    }
+                }
+            } else {
+                minOf(candidateLetterCount, nonSelectedPinyin.length)
+            }
 
             // apostrophe 模式下，候选词注释的音节数必须足以覆盖所有已确认选择
             // 以及未分配数字（至少一个额外音节）。若音节不足，即使字母数模型显示
             // remainingDigits 为空，也不能触发 full commit，否则会把未分配数字一并提交。
             // 典型场景：kg'3 + "客观(ke guan)" → ke/k, guan/g，剩余 3 未被覆盖。
-            val commentSyllables = candidatePinyin?.trim()?.split("\\s+".toRegex())
-                ?.filter { it.any { c -> c.isLetter() } } ?: emptyList()
-            val requiredSyllables = buf.selections.size + if (buf.unassigned.isNotEmpty()) 1 else 0
-            val canCoverAllBySyllableCount = commentSyllables.size >= requiredSyllables
+            val commentSyllables = candidatePinyin.parseSyllables()
+            val canCoverAll = canCoverAllBySyllableCount(commentSyllables, buf.selections.size, buf.unassigned.isNotEmpty())
 
-            if (canCoverAllBySyllableCount &&
+            if (canCoverAll &&
                 shouldFullCommitInSelection(consumedFromNonSelected, nonSelectedPinyin.length, remainingDigits, candidatePinyin, selectedPinyin)
             ) {
                 clearAndEnterIdle(ctx)
                 return true
+            }
+            // 当 canCoverAllBySyllableCount 为 true 且 remainingDigits 非空时，
+            // 检查候选词多余音节是否能覆盖剩余未分配数字。
+            // 条件：prevSelectedOption 的拼音在 commentSyllables 中（候选词包含选中项），
+            //   且多余音节的数字码以剩余数字开头。
+            // 例：54482 左选 j→g→hu，右选"价格湖北(jia ge hu bei)"，
+            //   "hu" 在 commentSyllables 中，多余音节"bei"(234) 以"2"开头 → full commit。
+            // 反例：k'43 右选"开户(kai hu)"，"k" 不在 commentSyllables 中 → 不触发。
+            if (canCoverAll && consumedFromNonSelected >= nonSelectedPinyin.length &&
+                remainingDigits.isNotEmpty() && commentSyllables.size > buf.selections.size &&
+                commentSyllables.contains(prevSelectedOption.pinyin)
+            ) {
+                val extraSyllables = commentSyllables.drop(buf.selections.size)
+                val extraCode = extraSyllables.joinToString("") { T9PinyinMap.pinyinToDigitCode(it) ?: "" }
+                if (extraCode.isNotEmpty() && extraCode.startsWith(remainingDigits)) {
+                    clearAndEnterIdle(ctx)
+                    return true
+                }
             }
             val consumedNonSelectedPinyin = nonSelectedPinyin.take(consumedFromNonSelected)
             // 移除被消费的前缀选择，保留 unassigned 不变
             ctx.inputBuffer = removeConsumedSelections(ctx, buf, consumedNonSelectedPinyin)
             ctx.leftColumnLocked = false
 
-            // 候选词消费选中项：当 nonSelected 已完全消费、候选词最后一个音节
-            // 与当前选中项匹配时，表示该选中项也被候选项消费。
-            // 两种匹配模式：
-            //   声母匹配：选中项为简拼(digitLength==1)，候选词最后音节声母数字码
-            //            与选中项数字码一致（如 g 匹配 guan 的声母 g）
-            //   全拼匹配：选中项为全拼(digitLength>1)，候选词最后音节数字码
-            //            与选中项数字码完全一致（如 shan 匹配 shan）
-            // 例如 kg'3 右选 "客观(ke guan)"：ke 消费 k，guan 的声母 g 消费选中项 g，
-            // 仅保留未分配数字 3 并进入 INPUT 态。
-            // 例如 yunshan'98726 右选 "云山(yun shan)"：yun 消费 yun，shan 消费选中项 shan，
-            // 仅保留未分配数字 98726 并进入 INPUT 态。
-            if (unconsumedPinyin.isEmpty() && commentSyllables.isNotEmpty()) {
-                val lastSyl = commentSyllables.last()
-                val lastSylCode = T9PinyinMap.pinyinToDigitCode(lastSyl)
-                val selCode = T9PinyinMap.pinyinToDigitCode(prevSelectedOption.pinyin)
-                val selDigits = prevSelectionCandidateDigits ?: ""
-
-                val isShengmuMatch = prevSelectedOption.digitLength == 1 &&
-                    lastSylCode != null && selCode != null &&
-                    lastSylCode.startsWith(selCode) &&
-                    selDigits.startsWith(selCode)
-
-                val isFullPinyinMatch = prevSelectedOption.digitLength > 1 &&
-                    lastSylCode != null && selCode != null &&
-                    lastSylCode == selCode
-
-                if (isShengmuMatch || isFullPinyinMatch) {
-                    ctx.inputBuffer = ctx.inputBuffer.copy(
-                        selections = ctx.inputBuffer.selections.dropLast(1),
-                    )
-                    ctx.stateMachine.clearSelectionHistory()
-                    ctx.stateMachine.enterInput()
-                    ctx.syncState()
-                    ctx.updateCandidates(true)
-                    ctx.setRimeInput(ctx.inputBuffer.toBufferString())
-                    return false
-                }
+            // 候选词消费选中项：提取为独立方法 [tryConsumeSelectedBySyllableMatch]
+            if (tryConsumeSelectedBySyllableMatch(
+                    ctx, buf, remainingDigits, commentSyllables,
+                    prevSelectedOption, prevSelectionCandidateDigits,
+                )) {
+                return false
             }
-
             return restorePrevState(ctx, prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin)
         }
         // 非 SELECTION 或 confirmedPinyin 不以 selectedPinyin 结尾：
         // 候选词消费了部分 unassigned 数字，新 buffer 为剩余数字。
-        // 与主分支一致地校验音节覆盖：即使 remainingDigits 为空，若候选词注释音节数
-        // 不足以覆盖 selections.size + unassigned 数字段，不能触发 full commit，
-        // 否则未分配数字会被一并提交（数据丢失）。
-        val commentSyllables = candidatePinyin?.trim()?.split("\\s+".toRegex())
-            ?.filter { it.any { c -> c.isLetter() } } ?: emptyList()
-        val requiredSyllables = buf.selections.size + if (buf.unassigned.isNotEmpty()) 1 else 0
-        val canCoverAllBySyllableCount = commentSyllables.size >= requiredSyllables
+        return handleNonSelectionApostropheFallback(
+            ctx, buf, remainingDigits, candidatePinyin,
+            prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin,
+        )
+    }
 
-        if (remainingDigits.isEmpty() && !canCoverAllBySyllableCount) {
+    // ── apostrophe 模式子方法 ──
+
+    /**
+     * 候选词消费选中项：当 nonSelected 已完全消费、候选词多余音节与当前选中项匹配时，
+     * 消费选中项并进入 INPUT 态（仅保留剩余数字）。
+     *
+     * 两种匹配模式：
+     *   声母匹配：选中项为简拼(digitLength==1)，候选词音节声母数字码与选中项一致
+     *   全拼匹配：选中项为全拼(digitLength>1)，候选词音节数字码与选中项完全一致
+     *
+     * 例如 kg'3 右选"客观(ke guan)"：ke 消费 k，guan 声母 g 消费选中项 g。
+     * 例如 yunshan'98726 右选"云山(yun shan)"：yun 消费 yun，shan 消费选中项 shan。
+     *
+     * @return true 表示已处理（选中项被消费，调用者应 return false）
+     */
+    private fun tryConsumeSelectedBySyllableMatch(
+        ctx: Ctx,
+        buf: T9Buffer,
+        remainingDigits: String,
+        commentSyllables: List<String>,
+        prevSelectedOption: T9PinyinMap.SyllableOption,
+        prevSelectionCandidateDigits: String?,
+    ): Boolean {
+        // 候选词消费选中项包含"unconsumedPinyin.isEmpty()"前置条件，
+        // 已在调用处保证（nonSelected 已完全消费）。
+        if (commentSyllables.isEmpty()) return false
+        val nonSelectedSelectionCount = buf.selections.size - 1
+        // 仅当候选词有多余音节（音节数 > 非选中 selections 数）时，
+        // 音节才可被视为消费选中项。否则该音节已用于非选中部分。
+        val hasExtraSyllableForSelected = commentSyllables.size > nonSelectedSelectionCount
+        if (!hasExtraSyllableForSelected) return false
+
+        val selCode = T9PinyinMap.pinyinToDigitCode(prevSelectedOption.pinyin)
+        val selDigits = prevSelectionCandidateDigits ?: ""
+        // 所有多余音节（非选中 selections 用完后剩余的）：
+        // 任一音节匹配选中项即消费选中项；否则只消费 unassigned。
+        val extraSyllables = commentSyllables.drop(nonSelectedSelectionCount)
+        val matchedSyllable = extraSyllables.firstOrNull { syl ->
+            val sylCode = T9PinyinMap.pinyinToDigitCode(syl) ?: return@firstOrNull false
+            if (prevSelectedOption.digitLength == 1) {
+                selCode != null && sylCode.startsWith(selCode) && selDigits.startsWith(selCode)
+            } else {
+                selCode != null && sylCode == selCode
+            }
+        }
+
+        if (matchedSyllable != null) {
+            ctx.inputBuffer = if (remainingDigits.isEmpty()) {
+                T9Buffer.EMPTY
+            } else {
+                buf.withRemainingDigits(remainingDigits, buf)
+            }
+            ctx.stateMachine.clearSelectionHistory()
+            ctx.stateMachine.enterInput()
+            ctx.syncState()
+            ctx.updateCandidates(true)
+            ctx.setRimeInput(ctx.inputBuffer.toBufferString())
+            return true
+        }
+
+        // 所有多余音节均不匹配选中项 → 仅消费 unassigned 部分
+        val unassignedConsumedDelta = buf.unassigned.length - remainingDigits.length
+        if (unassignedConsumedDelta > 0) {
+            ctx.inputBuffer = ctx.inputBuffer.copy(
+                consumedCount = buf.consumedCount + unassignedConsumedDelta,
+            )
+        }
+        return false
+    }
+
+    /**
+     * 非 SELECTION 态下的 apostrophe 模式降级处理：
+     * 候选词消费了部分 unassigned 数字，新 buffer 为剩余数字。
+     *
+     * 两种子情形：
+     *   1. remainingDigits 为空但音节覆盖不足：保留选中部分为字母形式，
+     *      避免 full commit 把未分配数字一并提交。
+     *   2. 正常情形：remainingDigits 为剩余数字段，进入 INPUT 态。
+     */
+    private fun handleNonSelectionApostropheFallback(
+        ctx: Ctx,
+        buf: T9Buffer,
+        remainingDigits: String,
+        candidatePinyin: String?,
+        prevSelectedOption: T9PinyinMap.SyllableOption?,
+        prevSelectionCandidateDigits: String?,
+        prevConfirmedPinyin: String,
+    ): Boolean {
+        val commentSyllables = candidatePinyin.parseSyllables()
+        val canCoverAll = canCoverAllBySyllableCount(commentSyllables, buf.selections.size, buf.unassigned.isNotEmpty())
+
+        if (remainingDigits.isEmpty() && !canCoverAll) {
             // 音节覆盖不足但字母数模型显示 remaining 为空：保留选中部分为字母形式，
             // 避免直接 full commit 把未分配数字一并提交。
             ctx.inputBuffer = removeConsumedSelections(ctx, buf, buf.selectedPinyin)
             ctx.leftColumnLocked = false
+            // 如果所有 selection 都被移除（只有一个 selection 且就是选中项），
+            // state 应进入 INPUT 而非 SELECTION，否则后续消费会错误地
+            // 受 SELECTION 态保护限制（lockedDigits）。
+            if (ctx.inputBuffer.selections.isEmpty()) {
+                ctx.stateMachine.clearSelectionHistory()
+                ctx.stateMachine.enterInput()
+                ctx.syncState()
+                ctx.updateCandidates(true)
+                ctx.setRimeInput(ctx.inputBuffer.toBufferString())
+                return false
+            }
             return restorePrevState(ctx, prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin)
         }
 
@@ -387,9 +436,7 @@ class T9RightCommitHandler {
         } else {
             // withRemainingDigits 创建 selections=emptyList()，已消费全部选择。
             // 必须同步清理 selectionHistory，否则残留条目会导致后续左选→右选时
-            // isFullCommitWithoutBoundaries 误判（场景17 根因：
-            // joinToString 拼接残留+新条目 ≠ selectedPinyin）。
-            // 与上方 isShengmuMatch/isFullPinyinMatch 分支 line 350-351 一致。
+            // isFullCommitWithoutBoundaries 误判（场景17 根因）。
             ctx.stateMachine.clearSelectionHistory()
             ctx.stateMachine.enterInput()
         }
@@ -408,7 +455,7 @@ class T9RightCommitHandler {
     ): Boolean {
         val buf = ctx.inputBuffer
         val segment = buf.unassigned
-        var consumedCount = computeConsumedDigitsFromPinyin(segment, candidatePinyin)
+        var consumedCount = computeConsumedDigitsFromPinyin(segment, candidatePinyin, allowLongestPrefix = true)
         val lockedDigits = if (prevSelectedOption != null) {
             // prevSelectionCandidateDigits 为 null 时（异常状态）视为全部 segment 被锁定，
             // 走 maxConsumable <= 0 分支恢复状态，避免消费本应被锁定的数字
@@ -466,10 +513,62 @@ class T9RightCommitHandler {
     ): Boolean {
         val buf = ctx.inputBuffer
         val selectedPinyin = buf.selectedPinyin
-        val effectiveLetterCount = candidatePinyin?.count { it.isLetter() } ?: 0
+        val effectiveLetterCount = candidatePinyin.candidateLetterCount()
+
+        // 单音节候选词在 multi-selection 上下文中，防止消费跨越 selection 边界
+        if (effectiveLetterCount > 0 && buf.selections.size > 1 && prevSelectedOption != null) {
+            val syllables = candidatePinyin.parseSyllables()
+            if (syllables.size <= 1) {
+                // 无空格的全匹配注释（如 "ligua" == "li"+"gua"）→ 不 cap
+                val candidateClean = candidatePinyin.candidateLettersOnly()
+                val joinedSelections = buf.selections.joinToString("") { it.pinyin }
+                if (candidateClean != joinedSelections) {
+                    val consumedLen = buf.selections[0].pinyin.length
+                    val consumedPinyin = selectedPinyin.take(consumedLen)
+                    // 场景18守卫：候选词拼音是选中项拼音的真前缀时，
+                    // 切换选择并保留剩余数字（如 "ti" 是 "tian" 的前缀）。
+                    val isCandidateShorterPrefix = candidateClean.length < prevSelectedOption.pinyin.length &&
+                        prevSelectedOption.pinyin.startsWith(candidateClean)
+                    if (isCandidateShorterPrefix) {
+                        val remainingDigits = T9PinyinMap.pinyinToDigitCode(
+                            selectedPinyin.drop(consumedLen))
+                        if (remainingDigits != null) {
+                            ctx.inputBuffer = T9Buffer(
+                                digitSequence = remainingDigits,
+                                selections = emptyList(),
+                                consumedCount = 0,
+                                totalDigitsEntered = remainingDigits.length,
+                            )
+                            ctx.leftColumnLocked = false
+                            ctx.stateMachine.clearSelectionHistory()
+                            ctx.stateMachine.enterInput()
+                            ctx.syncState()
+                            ctx.updateCandidates(true)
+                            ctx.setRimeInput(ctx.inputBuffer.toBufferString())
+                            return false
+                        }
+                    }
+                    ctx.inputBuffer = removeConsumedSelections(ctx, buf, consumedPinyin)
+                    ctx.leftColumnLocked = false
+                    return restorePrevState(ctx, prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin)
+                }
+            }
+        }
+
         if (effectiveLetterCount > 0) {
             if (effectiveLetterCount < selectedPinyin.length) {
                 if (prevSelectedOption != null) {
+                    // 多音节候选词 + 音节数 < selections 数 + EndsWith → HSLBC（音节匹配路径）
+                    val commentSyllables = candidatePinyin.parseSyllables()
+                    val syllableCount = commentSyllables.size
+                    val selectionCount = buf.selections.size
+                    if (syllableCount > 1 && syllableCount < selectionCount &&
+                        selectedPinyin.endsWith(prevSelectedOption.pinyin)) {
+                        return handleSelectionLetterBufferCommit(
+                            ctx, candidatePinyin, candidateTextLength, effectiveLetterCount,
+                            prevSelectedOption, prevSelectionCandidateDigits, prevConfirmedPinyin, prevBuf,
+                        )
+                    }
                     val consumedPinyin = selectedPinyin.take(effectiveLetterCount)
                     // 场景18：候选词 pinyin 是 prevSelectedOption.pinyin 的真前缀
                     // （如 candidatePinyin="ti", prevSelectedOption.pinyin="tian"）。
@@ -552,8 +651,7 @@ class T9RightCommitHandler {
         val buf = ctx.inputBuffer
         val selectedPinyin = buf.selectedPinyin
 
-        val commentSyllables = candidatePinyin?.trim()?.split("\\s+".toRegex())
-            ?.filter { it.any { c -> c.isLetter() } } ?: emptyList()
+        val commentSyllables = candidatePinyin.parseSyllables()
         val hasSyllableBoundaries = commentSyllables.size > 1
 
         val isFullCommitWithoutBoundaries = !hasSyllableBoundaries &&
@@ -568,10 +666,26 @@ class T9RightCommitHandler {
             candidateTextLength > 0 &&
             candidateTextLength >= commentSyllables.size &&
             isFullCommitByJianpinAlignment(selectedPinyin, commentSyllables)
+        // 简拼转全拼匹配：当 selection 为简拼(digitLength==1)时，候选词音节数字码
+        // 前缀匹配即可；当 selection 为全拼(digitLength>1)时，需要精确匹配。
+        // 例：54482 左选 j→g→hu→b，右选"价格湖北(jia ge hu bei)"，
+        //   jia(542) 前缀匹配 j(5), ge(43) 前缀匹配 g(4),
+        //   hu(48) 精确匹配 hu(48), bei(234) 前缀匹配 b(2) → full commit。
+        val isPrefixMatchAllSelected = hasSyllableBoundaries && candidateTextLength > 0 &&
+            candidateTextLength >= commentSyllables.size &&
+            commentSyllables.size == ctx.stateMachine.selectionHistory.size &&
+            commentSyllables.indices.all { i ->
+                val sylCode = T9PinyinMap.pinyinToDigitCode(commentSyllables[i])
+                val selCode = T9PinyinMap.pinyinToDigitCode(ctx.stateMachine.selectionHistory[i].pinyin)
+                val sel = ctx.stateMachine.selectionHistory[i]
+                sylCode != null && selCode != null &&
+                    if (sel.digitLength == 1) sylCode.startsWith(selCode) else sylCode == selCode
+            }
         val isFullCommit = (hasSyllableBoundaries && candidateTextLength > 0 &&
             candidateTextLength >= commentSyllables.size &&
             (selectedPinyin.dropLast(prevSelectedOption.pinyin.length).isEmpty() ||
                 isAllSelectedConsumed(selectedPinyin, commentSyllables, ctx.stateMachine.selectionHistory) ||
+                isPrefixMatchAllSelected ||
                 isJianpinAlignedFullCommit)) ||
             isFullCommitWithoutBoundaries
         if (isFullCommit) {
@@ -642,42 +756,6 @@ class T9RightCommitHandler {
         return true
     }
 
-    private fun computeSelectionConsumedCount(
-        hasSyllableBoundaries: Boolean,
-        candidateTextLength: Int,
-        commentSyllables: List<String>,
-        effectiveLetterCount: Int,
-        prevSelectedOption: T9PinyinMap.SyllableOption,
-        nonSelectedDigits: String,
-        candidatePinyin: String?,
-    ): Int {
-        if (hasSyllableBoundaries && candidateTextLength > 0 && commentSyllables.size > candidateTextLength) {
-            var consumed = 0
-            for (i in 0 until minOf(candidateTextLength, commentSyllables.size)) {
-                consumed += T9PinyinMap.pinyinToDigitCode(commentSyllables[i])?.length ?: 0
-            }
-            return consumed
-        }
-
-        val candidateNonSelectedLetters = effectiveLetterCount - prevSelectedOption.pinyin.length
-        if (candidateNonSelectedLetters in 1..nonSelectedDigits.length) {
-            if (hasSyllableBoundaries && candidateNonSelectedLetters >= nonSelectedDigits.length) {
-                val nonSelectedSyllables = if (commentSyllables.lastOrNull() == prevSelectedOption.pinyin)
-                    commentSyllables.dropLast(1) else commentSyllables
-                val totalSyllableDigits = nonSelectedSyllables.sumOf {
-                    T9PinyinMap.pinyinToDigitCode(it)?.length ?: 0
-                }
-                return if (totalSyllableDigits > nonSelectedDigits.length) {
-                    computeConsumedDigitsFromPinyin(nonSelectedDigits, candidatePinyin)
-                } else {
-                    candidateNonSelectedLetters
-                }
-            }
-            return candidateNonSelectedLetters
-        }
-        return computeConsumedDigitsFromPinyin(nonSelectedDigits, candidatePinyin)
-    }
-
     private fun handleConsumedAllNonSelected(
         ctx: Ctx,
         hasSyllableBoundaries: Boolean,
@@ -695,7 +773,7 @@ class T9RightCommitHandler {
         val selectedPinyin = buf.selectedPinyin
         if (hasSyllableBoundaries && candidateTextLength >= commentSyllables.size &&
             commentSyllables.size >= ctx.stateMachine.selectionHistory.size) {
-            val candidateClean = candidatePinyin?.filter { it.isLetter() } ?: ""
+            val candidateClean = candidatePinyin.candidateLettersOnly()
             if (candidateClean.isNotEmpty()) {
                 val candidateDigitCode = T9PinyinMap.pinyinToDigitCode(candidateClean)
                 val fullBufferDigitCode = T9PinyinMap.pinyinToDigitCode(selectedPinyin)
@@ -719,6 +797,28 @@ class T9RightCommitHandler {
                     }
                 }
             }
+        }
+
+        // 候选词所有音节已被非选中 selections 覆盖时，跳过 shengmu 回退。
+        // 例："ji ge"(2音节) + [j,g,hua] → "jg" 匹配 j 和 g(2个) = 2音节全匹配
+        //   → 不应额外消费 hua。反例："ke hen"(2音节) + [k,he] → "k" 仅匹配
+        //   1个 < 2音节 → 需要 shengmu 回退消费 he 的声母。
+        val matchedNonSelectedCount = if (hasSyllableBoundaries) {
+            var remaining = nonSelectedPart
+            buf.selections.count { sel ->
+                if (remaining.isEmpty()) false
+                else if (sel.pinyin.length <= remaining.length && remaining.startsWith(sel.pinyin)) {
+                    remaining = remaining.drop(sel.pinyin.length)
+                    true
+                } else false
+            }
+        } else 0
+
+        // 所有音节已被非选中 selections 覆盖 → 保留剩余选择，进入 SELECTION 态
+        if (matchedNonSelectedCount > 0 && matchedNonSelectedCount >= commentSyllables.size) {
+            ctx.inputBuffer = removeConsumedSelections(ctx, buf, nonSelectedPart)
+            ctx.leftColumnLocked = false
+            return restorePrevState(ctx, prevSelectedOption, prevSelectionCandidateDigits)
         }
 
         if (tryShengmuFallback(ctx, hasSyllableBoundaries, commentSyllables, prevSelectedOption,
@@ -753,7 +853,15 @@ class T9RightCommitHandler {
             return false
         }
 
-        val remainingFromSelected = selDigits.drop(initialCode.length)
+        // 候选最后音节可能完整消费选中项前缀（如 "gu"(48) 完全匹配 "gua"(482) 前缀），
+        // 不仅限于首字母。优先使用完整数字码长度，回退到声母长度。
+        val lastSylFullCode = T9PinyinMap.pinyinToDigitCode(lastSyl)
+        val consumedFromSelected = if (lastSylFullCode != null && selDigits.startsWith(lastSylFullCode)) {
+            lastSylFullCode.length
+        } else {
+            initialCode.length
+        }
+        val remainingFromSelected = selDigits.drop(consumedFromSelected)
         // 消费全部非选中部分 + 移除最后一个选择（prevSelectedOption）
         ctx.inputBuffer = removeConsumedSelections(ctx, buf, nonSelectedPart)
         // removeConsumedSelections 只移除非选中部分的选择，需要额外移除 prevSelectedOption
