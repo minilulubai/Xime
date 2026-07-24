@@ -250,7 +250,7 @@ fun KeyboardLayout(
                 drawContent()
                 bubbleData?.let { drawSwipeBubble(it) }
             }
-            .padding(bottom = if (uiState.isFloatingMode || isLandscape) {0.dp} else {10.dp})
+            .padding(bottom = if (uiState.isFloatingMode || isLandscape) {0.dp} else {0.dp})
     ) {
             if (isLandscape) {
             LandscapeKeyboardContent(
